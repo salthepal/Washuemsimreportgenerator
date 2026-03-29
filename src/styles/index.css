@@ -1,0 +1,54 @@
+@import './fonts.css';
+@import './tailwind.css';
+@import './theme.css';
+
+/* Formatted report styles */
+.formatted-report {
+  line-height: 1.6;
+}
+
+.formatted-report h1 {
+  font-size: 2em;
+  font-weight: bold;
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+}
+
+.formatted-report h2 {
+  font-size: 1.5em;
+  font-weight: bold;
+  margin-top: 0.8em;
+  margin-bottom: 0.4em;
+}
+
+.formatted-report h3 {
+  font-size: 1.25em;
+  font-weight: bold;
+  margin-top: 0.6em;
+  margin-bottom: 0.3em;
+}
+
+.formatted-report p {
+  margin-bottom: 1em;
+}
+
+.formatted-report ul, .formatted-report ol {
+  margin-left: 1.5em;
+  margin-bottom: 1em;
+}
+
+.formatted-report li {
+  margin-bottom: 0.5em;
+}
+
+.formatted-report strong, .formatted-report b {
+  font-weight: bold;
+}
+
+.formatted-report em, .formatted-report i {
+  font-style: italic;
+}
+
+.formatted-report u {
+  text-decoration: underline;
+}
