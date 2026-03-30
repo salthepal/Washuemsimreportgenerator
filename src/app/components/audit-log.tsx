@@ -82,9 +82,9 @@ export function AuditLog() {
 
   const filteredLog = auditLog.filter(
     (entry) =>
-      entry.itemTitle.toLowerCase().includes(search.toLowerCase()) ||
-      entry.action.toLowerCase().includes(search.toLowerCase()) ||
-      entry.itemType.toLowerCase().includes(search.toLowerCase())
+      (entry.itemTitle || '').toLowerCase().includes(search.toLowerCase()) ||
+      (entry.action || '').toLowerCase().includes(search.toLowerCase()) ||
+      (entry.itemType || '').toLowerCase().includes(search.toLowerCase())
   );
 
   return (

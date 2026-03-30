@@ -4,6 +4,11 @@ import { SessionNote, API_BASE, API_HEADERS } from '../App';
 import { toast } from 'sonner';
 import { useConfirmDialog } from './ui/confirm-dialog';
 import { DocumentPreviewModal } from './document-preview-modal';
+import { FormField, TextAreaField } from './ui/form-field';
+import { ActionButton } from './ui/action-button';
+import { sanitizeJSON } from '../utils/sanitize';
+import { validateMinLength } from '../utils/validation';
+import { formatDate } from '../utils/document';
 
 interface SessionNotesProps {
   sessionNotes: SessionNote[];
@@ -83,8 +88,8 @@ export function SessionNotes({ sessionNotes, onRefresh }: SessionNotesProps) {
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!uploaderName.trim() || !sessionName.trim() || !sessionDate || !notes.trim()) {
-      toast.error('Please fill in all fields');
+    if (!notes.trim()) {
+      toast.error('Please enter session notes');
       return;
     }
 
@@ -104,19 +109,22 @@ export function SessionNotes({ sessionNotes, onRefresh }: SessionNotesProps) {
   const submitNotes = async () => {
     setAdding(true);
     try {
+      // Sanitize all data before sending
+      const payload = sanitizeJSON({
+        sessionName, 
+        notes, 
+        participants: [],
+        tags: [],
+        metadata: {
+          uploaderName,
+          sessionDate,
+        }
+      });
+
       const response = await fetch(`${API_BASE}/notes/add`, {
         method: 'POST',
         headers: API_HEADERS,
-        body: JSON.stringify({ 
-          sessionName, 
-          notes, 
-          participants: [],
-          tags: [],
-          metadata: {
-            uploaderName,
-            sessionDate,
-          }
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (response.ok) {
@@ -213,7 +221,7 @@ export function SessionNotes({ sessionNotes, onRefresh }: SessionNotesProps) {
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Uploader Name
+              Uploader Name <span className="text-slate-400">(optional)</span>
             </label>
             <input
               type="text"
@@ -226,7 +234,7 @@ export function SessionNotes({ sessionNotes, onRefresh }: SessionNotesProps) {
 
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Session Name
+              Session Name <span className="text-slate-400">(optional)</span>
             </label>
             <input
               type="text"
@@ -239,7 +247,7 @@ export function SessionNotes({ sessionNotes, onRefresh }: SessionNotesProps) {
 
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Session Date
+              Session Date <span className="text-slate-400">(optional)</span>
             </label>
             <input
               type="date"
@@ -279,23 +287,16 @@ export function SessionNotes({ sessionNotes, onRefresh }: SessionNotesProps) {
             )}
           </div>
 
-          <button
+          <ActionButton
             type="submit"
             disabled={adding}
-            className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-semibold py-3 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm md:text-base"
+            loading={adding}
+            variant="success"
+            fullWidth
+            icon={<Plus className="w-4 h-4 md:w-5 md:h-5" />}
           >
-            {adding ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Adding...
-              </>
-            ) : (
-              <>
-                <Plus className="w-4 h-4 md:w-5 md:h-5" />
-                Add Session Notes
-              </>
-            )}
-          </button>
+            Add Session Notes
+          </ActionButton>
         </div>
       </form>
 

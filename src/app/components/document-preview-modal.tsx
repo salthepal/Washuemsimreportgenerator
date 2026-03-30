@@ -1,14 +1,15 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Button } from './ui/button';
-import { Copy, Calendar, User, FileText, X } from 'lucide-react';
+import { Copy, Calendar, User, FileText, X, FolderOpen } from 'lucide-react';
 import { Report, SessionNote } from '../App';
+import { CaseFile } from './case-files';
 import { toast } from 'sonner';
 
 interface DocumentPreviewModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  document: Report | SessionNote | null;
-  type: 'report' | 'note';
+  document: Report | SessionNote | CaseFile | null;
+  type: 'report' | 'note' | 'case';
 }
 
 export function DocumentPreviewModal({
@@ -20,9 +21,14 @@ export function DocumentPreviewModal({
   if (!document) return null;
 
   const handleCopy = async () => {
-    const content = type === 'report' 
-      ? (document as Report).content 
-      : (document as SessionNote).notes;
+    let content = '';
+    if (type === 'report') {
+      content = (document as Report).content;
+    } else if (type === 'note') {
+      content = (document as SessionNote).notes;
+    } else if (type === 'case') {
+      content = (document as CaseFile).content;
+    }
     
     try {
       await navigator.clipboard.writeText(content);
@@ -33,8 +39,11 @@ export function DocumentPreviewModal({
   };
 
   const isReport = type === 'report';
+  const isNote = type === 'note';
+  const isCase = type === 'case';
   const report = document as Report;
   const note = document as SessionNote;
+  const caseFile = document as CaseFile;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -43,7 +52,7 @@ export function DocumentPreviewModal({
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
               <DialogTitle className="text-xl md:text-2xl truncate">
-                {isReport ? report.title : note.sessionName}
+                {isReport ? report.title : isNote ? note.sessionName : caseFile.title}
               </DialogTitle>
               <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-slate-600 dark:text-slate-400">
                 <span className="flex items-center gap-1">
@@ -102,7 +111,7 @@ export function DocumentPreviewModal({
           <div className="prose prose-sm dark:prose-invert max-w-none">
             <div className="bg-white dark:bg-slate-900 rounded-lg p-4 md:p-6 border border-slate-200 dark:border-slate-700">
               <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-slate-900 dark:text-slate-100">
-                {isReport ? report.content : note.notes}
+                {isReport ? report.content : isNote ? note.notes : caseFile.content}
               </pre>
             </div>
           </div>

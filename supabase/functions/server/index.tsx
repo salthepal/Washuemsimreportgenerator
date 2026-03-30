@@ -3,10 +3,11 @@ import { cors } from 'npm:hono/cors';
 import { logger } from 'npm:hono/logger';
 import * as kv from './kv_store.tsx';
 import { createClient } from 'jsr:@supabase/supabase-js@2.49.8';
+import { sanitizeText, sanitizeObject, validateText } from './text-sanitizer.tsx';
 
 const app = new Hono();
 
-// Initialize database table - verify it exists
+// Initialize database table
 async function initializeDatabase() {
   try {
     const supabase = createClient(
@@ -14,33 +15,33 @@ async function initializeDatabase() {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
     );
 
-    // Try to query the table to see if it exists
-    const { error: checkError } = await supabase
-      .from('kv_store_7fe18c53')
-      .select('key')
-      .limit(1);
+    // Create table if it doesn't exist using SQL
+    const { error } = await supabase.rpc('exec_sql', {
+      sql: `
+        CREATE TABLE IF NOT EXISTS kv_store_7fe18c53 (
+          key TEXT NOT NULL PRIMARY KEY,
+          value JSONB NOT NULL
+        );
+      `
+    });
 
-    if (checkError) {
-      console.error('❌ Database table not found!');
-      console.log('');
-      console.log('═══════════════════════════════════════════════════════════');
-      console.log('  DATABASE SETUP REQUIRED');
-      console.log('═══════════════════════════════════════════════════════════');
-      console.log('');
-      console.log('Please create the table in your Supabase SQL Editor:');
-      console.log('');
-      console.log('CREATE TABLE IF NOT EXISTS kv_store_7fe18c53 (');
-      console.log('  key TEXT NOT NULL PRIMARY KEY,');
-      console.log('  value JSONB NOT NULL');
-      console.log(');');
-      console.log('');
-      console.log('═══════════════════════════════════════════════════════════');
-      console.log('');
+    if (error) {
+      console.error('Table initialization error (this is OK if table exists):', error.message);
+      // Try alternative method - direct SQL execution
+      const { error: sqlError } = await supabase.from('kv_store_7fe18c53').select('key').limit(1);
+      if (sqlError) {
+        console.error('Table does not exist. Please create it manually in Supabase dashboard.');
+        console.log('Run this SQL in Supabase SQL Editor:');
+        console.log('CREATE TABLE IF NOT EXISTS kv_store_7fe18c53 (key TEXT NOT NULL PRIMARY KEY, value JSONB NOT NULL);');
+      } else {
+        console.log('Database table verified successfully');
+      }
     } else {
-      console.log('✅ Database table verified successfully');
+      console.log('Database table initialized successfully');
     }
   } catch (error) {
-    console.error('Database initialization check failed:', error.message);
+    console.error('Database initialization error:', error);
+    console.log('Please ensure the kv_store_7fe18c53 table exists in your Supabase database');
   }
 }
 
@@ -94,10 +95,40 @@ app.get('/make-server-7fe18c53/debug/all-keys', async (c) => {
 // Upload a prior report
 app.post('/make-server-7fe18c53/reports/upload', async (c) => {
   try {
-    const { title, content, htmlContent, date, tags, metadata } = await c.req.json();
+    let { title, content, htmlContent, date, tags, metadata } = await c.req.json();
     
     if (!title || !content) {
       return c.json({ error: 'Title and content are required' }, 400);
+    }
+
+    // Sanitize all text inputs to remove problematic Unicode characters
+    title = sanitizeText(title);
+    content = sanitizeText(content);
+    if (htmlContent) {
+      htmlContent = sanitizeText(htmlContent);
+    }
+    
+    // Sanitize metadata object
+    if (metadata) {
+      metadata = sanitizeObject(metadata);
+    }
+    
+    // Sanitize tags array
+    if (tags && Array.isArray(tags)) {
+      tags = tags.map((tag: string) => sanitizeText(tag));
+    }
+    
+    // Validate that critical fields don't contain problematic characters
+    const titleValidation = validateText(title);
+    if (titleValidation) {
+      console.error('Title validation error:', titleValidation);
+      return c.json({ error: `Title contains invalid characters: ${titleValidation}` }, 400);
+    }
+    
+    const contentValidation = validateText(content);
+    if (contentValidation) {
+      console.error('Content validation error:', contentValidation);
+      return c.json({ error: `Content contains invalid characters: ${contentValidation}` }, 400);
     }
 
     const reportId = `report_${Date.now()}_${Math.random().toString(36).substring(7)}`;
@@ -113,7 +144,7 @@ app.post('/make-server-7fe18c53/reports/upload', async (c) => {
       createdAt: new Date().toISOString(),
     };
 
-    console.log('Saving report with ID:', reportId, 'type:', report.type);
+    console.log('Saving sanitized report with ID:', reportId, 'type:', report.type);
     await kv.set(reportId, report);
     console.log('Report saved successfully');
     
@@ -125,6 +156,7 @@ app.post('/make-server-7fe18c53/reports/upload', async (c) => {
     return c.json({ success: true, report });
   } catch (error) {
     console.log(`Error uploading report: ${error}`);
+    console.log(`Stack trace: ${error.stack}`);
     return c.json({ error: `Failed to upload report: ${error.message}` }, 500);
   }
 });
@@ -132,10 +164,42 @@ app.post('/make-server-7fe18c53/reports/upload', async (c) => {
 // Add session notes
 app.post('/make-server-7fe18c53/notes/add', async (c) => {
   try {
-    const { sessionName, notes, participants, tags, metadata } = await c.req.json();
+    let { sessionName, notes, participants, tags, metadata } = await c.req.json();
     
     if (!sessionName || !notes) {
       return c.json({ error: 'Session name and notes are required' }, 400);
+    }
+
+    // Sanitize all text inputs to remove problematic Unicode characters
+    sessionName = sanitizeText(sessionName);
+    notes = sanitizeText(notes);
+    
+    // Sanitize participants array
+    if (participants && Array.isArray(participants)) {
+      participants = participants.map((p: string) => sanitizeText(p));
+    }
+    
+    // Sanitize tags array
+    if (tags && Array.isArray(tags)) {
+      tags = tags.map((tag: string) => sanitizeText(tag));
+    }
+    
+    // Sanitize metadata object
+    if (metadata) {
+      metadata = sanitizeObject(metadata);
+    }
+    
+    // Validate critical fields
+    const sessionNameValidation = validateText(sessionName);
+    if (sessionNameValidation) {
+      console.error('Session name validation error:', sessionNameValidation);
+      return c.json({ error: `Session name contains invalid characters: ${sessionNameValidation}` }, 400);
+    }
+    
+    const notesValidation = validateText(notes);
+    if (notesValidation) {
+      console.error('Notes validation error:', notesValidation);
+      return c.json({ error: `Notes contain invalid characters: ${notesValidation}` }, 400);
     }
 
     const noteId = `notes_${Date.now()}_${Math.random().toString(36).substring(7)}`;
@@ -150,12 +214,15 @@ app.post('/make-server-7fe18c53/notes/add', async (c) => {
       createdAt: new Date().toISOString(),
     };
 
+    console.log('Saving sanitized session notes with ID:', noteId);
     await kv.set(noteId, sessionNotes);
+    console.log('Session notes saved successfully');
     
     await logAudit('create', 'note', sessionName, noteId);
     return c.json({ success: true, notes: sessionNotes });
   } catch (error) {
     console.log(`Error adding session notes: ${error}`);
+    console.log(`Stack trace: ${error.stack}`);
     return c.json({ error: `Failed to add session notes: ${error.message}` }, 500);
   }
 });
@@ -225,72 +292,10 @@ app.delete('/make-server-7fe18c53/notes/:id', async (c) => {
   }
 });
 
-// Upload a case file
-app.post('/make-server-7fe18c53/case_files/upload', async (c) => {
-  try {
-    const { fileName, content, metadata } = await c.req.json();
-    
-    if (!fileName || !content) {
-      return c.json({ error: 'File name and content are required' }, 400);
-    }
-
-    const caseFileId = `casefile_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-    const caseFile = {
-      id: caseFileId,
-      fileName,
-      content,
-      uploadDate: new Date().toISOString(),
-      type: 'case_file',
-      createdAt: new Date().toISOString(),
-      metadata: metadata || {},
-    };
-
-    console.log('Saving case file with ID:', caseFileId);
-    await kv.set(caseFileId, caseFile);
-    console.log('Case file saved successfully');
-    
-    await logAudit('create', 'case_file', fileName, caseFileId);
-    return c.json({ success: true, caseFile });
-  } catch (error) {
-    console.log('Error uploading case file:', error);
-    const errorMsg = error?.message || String(error) || 'Unknown error';
-    return c.json({ error: `Failed to upload case file: ${errorMsg}` }, 500);
-  }
-});
-
-// Get all case files
-app.get('/make-server-7fe18c53/case_files', async (c) => {
-  try {
-    const allCaseFiles = await kv.getByPrefix('casefile_');
-    const caseFiles = allCaseFiles
-      .filter(item => item.type === 'case_file')
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    
-    return c.json({ case_files: caseFiles });
-  } catch (error) {
-    console.log(`Error fetching case files: ${error}`);
-    return c.json({ error: `Failed to fetch case files: ${error.message}` }, 500);
-  }
-});
-
-// Delete a case file
-app.delete('/make-server-7fe18c53/case_files/:id', async (c) => {
-  try {
-    const id = c.req.param('id');
-    const caseFile = await kv.get(id);
-    await kv.del(id);
-    await logAudit('delete', 'case_file', caseFile?.fileName || 'Unknown', id);
-    return c.json({ success: true });
-  } catch (error) {
-    console.log(`Error deleting case file: ${error}`);
-    return c.json({ error: `Failed to delete case file: ${error.message}` }, 500);
-  }
-});
-
 // Generate new report using Gemini
 app.post('/make-server-7fe18c53/reports/generate', async (c) => {
   try {
-    const { selectedReports, selectedNotes, selectedCaseFiles } = await c.req.json();
+    const { selectedReports, selectedNotes, selectedCases } = await c.req.json();
     
     if (!selectedReports || selectedReports.length === 0) {
       return c.json({ error: 'At least one prior report must be selected for style reference' }, 400);
@@ -305,10 +310,13 @@ app.post('/make-server-7fe18c53/reports/generate', async (c) => {
       return c.json({ error: 'Gemini API key not configured' }, 500);
     }
 
-    // Fetch the selected reports and notes
+    // Get the user's preferred model
+    const modelPreference = await kv.get('ai_model_preference') || 'gemini-flash-latest';
+
+    // Fetch the selected reports, notes, and case files
     const reports = await kv.mget(selectedReports);
     const notes = await kv.mget(selectedNotes);
-    const caseFiles = selectedCaseFiles ? await kv.mget(selectedCaseFiles) : [];
+    const cases = selectedCases && selectedCases.length > 0 ? await kv.mget(selectedCases) : [];
 
     // Build the prompt for Gemini
     const priorReportsContext = reports
@@ -322,79 +330,97 @@ app.post('/make-server-7fe18c53/reports/generate', async (c) => {
       .map((n, i) => `=== SESSION ${i + 1}: ${n.sessionName} ===\nParticipants: ${n.participants.join(', ')}\nNotes:\n${n.notes}\n`)
       .join('\n');
 
-    const caseFilesContext = caseFiles
-      .map((cf, i) => `=== CASE FILE ${i + 1}: ${cf.fileName} ===\nContent:\n${cf.content}\n`)
-      .join('\n');
+    // Build case files context if provided
+    const caseFilesContext = cases.length > 0
+      ? '\n\nCASE SCENARIO DETAILS (Reference for patient details and scenario context):\n\n' + 
+        cases.map((c, i) => `=== CASE FILE ${i + 1}: ${c.title} ===\n${c.metadata?.caseType ? `Case Type: ${c.metadata.caseType}\n` : ''}${c.content}\n`)
+          .join('\n')
+      : '';
 
-    const prompt = `You are an expert in generating Post-Session Reports for the Washington University Emergency Medicine Simulation program based on in-situ simulation sessions.
+    const prompt = `Role: You are an expert Medical Simulation Specialist and Education Consultant for the Washington University Department of Emergency Medicine. Your goal is to generate professional, actionable Post-Session Reports that prioritize psychological safety and a "Just Culture" framework.
 
-Your task is to generate a NEW Post-Session Report that:
-1. Follows the EXACT writing style, tone, structure, and formatting of the prior reports provided
-2. Incorporates and synthesizes insights from the new session notes
-3. Identifies and discusses:
-   - LATENT SAFETY THREATS discovered during the simulation
-   - KEY EDUCATIONAL LEARNING POINTS for participants
-   - COMMON THREADS noted by multiple observers/facilitators
-   - System-level issues and individual performance insights
-   - Recommendations for improvement
-4. Maintains consistency with how prior reports were formatted and presented
-5. Uses the SAME section headings, organization, and narrative structure as the prior reports
+Objective: Generate a Post-Session Report based on the provided session notes and case files that mirrors the structure of the prior reports while maintaining a supportive, growth-oriented tone.
 
-CRITICAL INSTRUCTIONS FOR FORMATTING AND STRUCTURE:
-- Analyze the prior reports carefully to identify their EXACT structure (section headings, subsections, paragraph organization)
-- Use the IDENTICAL section headings found in the prior reports (e.g., if they use "Background," you must use "Background")
-- Match the EXACT writing style, tone, and voice (formal vs conversational, first person vs third person, etc.)
-- Replicate their paragraph length, sentence structure, and narrative flow
-- If prior reports use bullet points, use them the same way; if they use numbered lists, follow that pattern
-- Preserve any special formatting conventions like capitalization, emphasis, or organizational patterns
-- Match the level of detail and depth - if prior reports are concise, be concise; if detailed, be detailed
+CRITICAL FORMATTING REQUIREMENT: You MUST output the entire report using strict Markdown formatting. Follow these rules exactly:
 
-CONTENT GENERATION RULES:
-- Generate COMPLETELY NEW CONTENT based on the session notes provided
-- DO NOT copy-paste sentences from the prior reports (they are style guides only)
-- Synthesize information from multiple observers/facilitators to identify common themes
-- Focus on latent safety threats (system-level vulnerabilities, not individual mistakes)
-- Emphasize actionable recommendations for systemic improvement
-- Include specific examples and observations from the session notes
-- Identify patterns and recurring issues mentioned by multiple people
-- Connect observations to broader patient safety and educational outcomes
+1. MARKDOWN STRUCTURE:
+   - Use # for the main report title (e.g., # WUCS FACULTY DEV Report)
+   - Use ## for major sections (e.g., ## Latent Safety Threats, ## Best Practice Supports)
+   - Use ### for specific findings and subsections (e.g., ### Chest Tube Tray Availability, ### Massive Transfusion Protocol)
+   - Use **bold text** for inline labels like **Current State:**, **Impact:**, **Recommendations:**, and **Definition:**
+   - Use bullet points with - for lists (Objectives, Attendance, etc.)
+   - Use italics with *text* for direct quotes or "voice of the room" statements
 
-OUTPUT FORMAT REQUIREMENTS:
-- Generate the report as PLAIN TEXT with clear section breaks
-- Use line breaks and whitespace exactly as the prior reports do
-- DO NOT include HTML tags, CSS, or any markup
-- DO NOT add meta-commentary like "Here is the report:" or "Based on the style..."
-- Start directly with the report content
-- Use simple text formatting (spacing, line breaks, capitalization) to match the prior reports
-- Include ALL sections that were present in the prior reports (if they have 5 sections, your report should have 5 sections)
+2. STANDARD DEFINITIONS SECTION:
+   Always include these three definitions near the top of the report (after title and session info, before main content):
 
-QUALITY STANDARDS:
-- Ensure the report is comprehensive and addresses all key points from the session notes
-- Balance detail with readability - avoid overly technical jargon unless prior reports use it
-- Provide specific, actionable recommendations (not generic advice)
-- Maintain professional medical/educational tone throughout
-- Ensure logical flow and clear transitions between sections
-- Cross-reference multiple observer notes to validate key findings
+   **In-Situ Simulation:** A simulation conducted in the actual clinical environment where care is typically delivered, using real equipment and spaces to identify system-level issues.
 
-PRIOR COMPLETED REPORTS (for style and structure reference ONLY):
+   **Latent Safety Threat:** A system-level condition or gap that increases the likelihood of errors or adverse events. These are environmental, equipment, or process-related issues rather than individual performance problems.
+
+   **Best Practice Support:** An existing system, resource, or process that effectively facilitates safe and high-quality care delivery.
+
+Phase 1: Structural Analysis (Internal)
+Analyze the prior reports to identify the sequence of headings, typical narrative flow, and the level of detail expected in each section.
+
+Phase 2: Content Synthesis & Tone Guardrails
+
+Just Culture Perspective: Focus heavily on Latent Safety Threats (LSTs). These are system-level issues like equipment availability, cognitive load, or environmental factors.
+
+Non-Punitive Language: Use objective and constructive phrasing. Replace "The resident failed to..." with "The team encountered challenges with..." or "An opportunity for optimized workflow was identified in...".
+
+Psychological Safety: Acknowledge the complexity of the scenario. Frame findings as "Learning Points" and "Opportunities for System Improvement" rather than "Mistakes" or "Errors."
+
+Observer Synthesis: Aggregate feedback from multiple facilitators to highlight "Common Threads" in a way that feels like a collective learning experience.
+
+Phase 3: Formatting & Constraints
+
+MARKDOWN ONLY: Use strict Markdown formatting as specified above. The # symbols for headers, ** for bold, * for italics.
+
+No Preamble: Start immediately with the # main title.
+
+Identical Structure: Replicate the exact section headers and organizational flow from the prior reports.
+
+Plain Text with Markdown: Output plain text with Markdown formatting only. No HTML or other markup.
+
+Tone: Professional, objective, and encouraging. Avoid "harsh" or judgmental adjectives.
+
+No Em Dashes: Do not use em dashes; utilize commas, colons, or parentheses instead.
+
+Hierarchy Example:
+# WUCS FACULTY DEV Report
+
+**Date:** [date]
+**Session Type:** In-Situ Simulation
+...
+
+**In-Situ Simulation:** A simulation conducted in the actual clinical environment...
+
+## Latent Safety Threats
+
+### Chest Tube Tray Availability
+
+**Current State:** The chest tube insertion tray was not immediately available in the resuscitation bay.
+
+**Impact:** This delay created a 3-minute gap during which the team had to search for equipment while managing a deteriorating patient.
+
+**Recommendations:** Consider pre-positioning chest tube trays in each resuscitation bay or implementing a visual checklist system.
+
+Input Data:
+PRIOR REPORTS (Style Guide):
 ${priorReportsContext}
 
-NEW SESSION NOTES TO INCORPORATE (the actual content for your report):
+NEW SESSION NOTES:
 ${sessionNotesContext}
 
-CASE FILES TO INCORPORATE (additional context for your report):
+CASE FILE DATA:
 ${caseFilesContext}
 
-Generate a comprehensive Post-Session Report now. Remember:
-1. Structure and style MUST exactly match the prior reports
-2. Content MUST be completely new, synthesized from the session notes
-3. Focus on latent safety threats, learning points, and common threads
-4. Output ONLY the report content with no preamble or commentary
-5. Include ALL sections present in the prior reports`;
+Generate the Post-Session Report now using strict Markdown formatting.`;
 
     // Call Gemini API
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${geminiApiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelPreference}:generateContent?key=${geminiApiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -439,7 +465,6 @@ Generate a comprehensive Post-Session Report now. Remember:
       createdAt: new Date().toISOString(),
       basedOnReports: selectedReports,
       basedOnNotes: selectedNotes,
-      basedOnCaseFiles: selectedCaseFiles || [],
     };
 
     await kv.set(reportId, newReport);
@@ -751,52 +776,6 @@ app.post('/make-server-7fe18c53/find-similar', async (c) => {
   }
 });
 
-// Report quality scoring endpoint
-app.post('/make-server-7fe18c53/score-quality', async (c) => {
-  try {
-    const { content } = await c.req.json();
-    const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
-    
-    if (!geminiApiKey) {
-      return c.json({ score: 7, feedback: 'Quality scoring unavailable' });
-    }
-
-    const prompt = `Rate this Latent Safety Threat Report on a scale of 1-10 for:
-- Completeness (has all necessary sections)
-- Clarity (easy to understand)
-- Actionability (provides clear recommendations)
-
-Content:
-${content.slice(0, 2000)}
-
-Return ONLY a JSON object: {"score": 8, "feedback": "Brief feedback here"}`;
-
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${geminiApiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.3, maxOutputTokens: 200 },
-        }),
-      }
-    );
-
-    if (response.ok) {
-      const data = await response.json();
-      const text = data.candidates[0].content.parts[0].text;
-      const result = JSON.parse(text.match(/\{.*\}/s)?.[0] || '{"score": 7, "feedback": "Unable to analyze"}');
-      return c.json(result);
-    } else {
-      return c.json({ score: 7, feedback: 'Quality scoring unavailable' });
-    }
-  } catch (error) {
-    console.log(`Error scoring quality: ${error}`);
-    return c.json({ score: 7, feedback: 'Quality scoring error' });
-  }
-});
-
 // Smart recommendations - suggest prior reports based on session notes
 app.post('/make-server-7fe18c53/recommend-reports', async (c) => {
   try {
@@ -872,6 +851,244 @@ app.post('/make-server-7fe18c53/bulk-operation', async (c) => {
   } catch (error) {
     console.log(`Error in bulk operation: ${error}`);
     return c.json({ error: `Bulk operation failed: ${error.message}` }, 500);
+  }
+});
+
+// ============= CASE FILES ENDPOINTS =============
+
+// Upload a case file
+app.post('/make-server-7fe18c53/case-files/upload', async (c) => {
+  try {
+    let { title, content, htmlContent, date, tags, metadata } = await c.req.json();
+    
+    if (!title || !content) {
+      return c.json({ error: 'Title and content are required' }, 400);
+    }
+
+    // Sanitize all text inputs to remove problematic Unicode characters
+    title = sanitizeText(title);
+    content = sanitizeText(content);
+    if (htmlContent) {
+      htmlContent = sanitizeText(htmlContent);
+    }
+    
+    // Sanitize metadata object
+    if (metadata) {
+      metadata = sanitizeObject(metadata);
+    }
+    
+    // Sanitize tags array
+    if (tags && Array.isArray(tags)) {
+      tags = tags.map((tag: string) => sanitizeText(tag));
+    }
+    
+    // Validate that critical fields don't contain problematic characters
+    const titleValidation = validateText(title);
+    if (titleValidation) {
+      console.error('Title validation error:', titleValidation);
+      return c.json({ error: `Title contains invalid characters: ${titleValidation}` }, 400);
+    }
+    
+    const contentValidation = validateText(content);
+    if (contentValidation) {
+      console.error('Content validation error:', contentValidation);
+      return c.json({ error: `Content contains invalid characters: ${contentValidation}` }, 400);
+    }
+
+    const caseFileId = `case_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const caseFile = {
+      id: caseFileId,
+      title,
+      content,
+      htmlContent: htmlContent || null,
+      date: date || new Date().toISOString(),
+      tags: tags || [],
+      metadata: metadata || {},
+      type: 'case_file',
+      createdAt: new Date().toISOString(),
+    };
+
+    console.log('Saving sanitized case file with ID:', caseFileId, 'type:', caseFile.type);
+    await kv.set(caseFileId, caseFile);
+    console.log('Case file saved successfully');
+    
+    // Verify it was saved by reading it back
+    const savedCaseFile = await kv.get(caseFileId);
+    console.log('Verification read:', savedCaseFile ? 'Success' : 'Failed', savedCaseFile);
+    
+    await logAudit('create', 'case_file', title, caseFileId);
+    return c.json({ success: true, caseFile });
+  } catch (error) {
+    console.log(`Error uploading case file: ${error}`);
+    console.log(`Stack trace: ${error.stack}`);
+    return c.json({ error: `Failed to upload case file: ${error.message}` }, 500);
+  }
+});
+
+// Get all case files
+app.get('/make-server-7fe18c53/case-files', async (c) => {
+  try {
+    console.log('Fetching case files with prefix: case_');
+    const allCaseFiles = await kv.getByPrefix('case_');
+    console.log('All case files from KV:', allCaseFiles.length, 'items found');
+    
+    const caseFiles = allCaseFiles
+      .filter(item => {
+        console.log('Checking item:', item.id, 'type:', item.type);
+        return item.type === 'case_file';
+      })
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    
+    console.log('Filtered case files:', caseFiles.length);
+    return c.json({ caseFiles });
+  } catch (error) {
+    console.log(`Error fetching case files: ${error}`);
+    return c.json({ error: `Failed to fetch case files: ${error.message}` }, 500);
+  }
+});
+
+// Delete a case file
+app.delete('/make-server-7fe18c53/case-files/:id', async (c) => {
+  try {
+    const id = c.req.param('id');
+    const caseFile = await kv.get(id);
+    await kv.del(id);
+    await logAudit('delete', 'case_file', caseFile?.title || 'Unknown', id);
+    return c.json({ success: true });
+  } catch (error) {
+    console.log(`Error deleting case file: ${error}`);
+    return c.json({ error: `Failed to delete case file: ${error.message}` }, 500);
+  }
+});
+
+// Get AI Prompt Template (view-only)
+app.get('/make-server-7fe18c53/prompt-template', (c) => {
+  const template = `Role: You are an expert Medical Simulation Specialist and Education Consultant for the Washington University Department of Emergency Medicine. Your goal is to generate professional, actionable Post-Session Reports that prioritize psychological safety and a "Just Culture" framework.
+
+Objective: Generate a Post-Session Report based on the provided session notes and case files that mirrors the structure of the prior reports while maintaining a supportive, growth-oriented tone.
+
+CRITICAL FORMATTING REQUIREMENT: You MUST output the entire report using strict Markdown formatting. Follow these rules exactly:
+
+1. MARKDOWN STRUCTURE:
+   - Use # for the main report title (e.g., # WUCS FACULTY DEV Report)
+   - Use ## for major sections (e.g., ## Latent Safety Threats, ## Best Practice Supports)
+   - Use ### for specific findings and subsections (e.g., ### Chest Tube Tray Availability, ### Massive Transfusion Protocol)
+   - Use **bold text** for inline labels like **Current State:**, **Impact:**, **Recommendations:**, and **Definition:**
+   - Use bullet points with - for lists (Objectives, Attendance, etc.)
+   - Use italics with *text* for direct quotes or "voice of the room" statements
+
+2. STANDARD DEFINITIONS SECTION:
+   Always include these three definitions near the top of the report (after title and session info, before main content):
+
+   **In-Situ Simulation:** A simulation conducted in the actual clinical environment where care is typically delivered, using real equipment and spaces to identify system-level issues.
+
+   **Latent Safety Threat:** A system-level condition or gap that increases the likelihood of errors or adverse events. These are environmental, equipment, or process-related issues rather than individual performance problems.
+
+   **Best Practice Support:** An existing system, resource, or process that effectively facilitates safe and high-quality care delivery.
+
+Phase 1: Structural Analysis (Internal)
+Analyze the prior reports to identify the sequence of headings, typical narrative flow, and the level of detail expected in each section.
+
+Phase 2: Content Synthesis & Tone Guardrails
+
+Just Culture Perspective: Focus heavily on Latent Safety Threats (LSTs). These are system-level issues like equipment availability, cognitive load, or environmental factors.
+
+Non-Punitive Language: Use objective and constructive phrasing. Replace "The resident failed to..." with "The team encountered challenges with..." or "An opportunity for optimized workflow was identified in...".
+
+Psychological Safety: Acknowledge the complexity of the scenario. Frame findings as "Learning Points" and "Opportunities for System Improvement" rather than "Mistakes" or "Errors."
+
+Observer Synthesis: Aggregate feedback from multiple facilitators to highlight "Common Threads" in a way that feels like a collective learning experience.
+
+Phase 3: Formatting & Constraints
+
+MARKDOWN ONLY: Use strict Markdown formatting as specified above. The # symbols for headers, ** for bold, * for italics.
+
+No Preamble: Start immediately with the # main title.
+
+Identical Structure: Replicate the exact section headers and organizational flow from the prior reports.
+
+Plain Text with Markdown: Output plain text with Markdown formatting only. No HTML or other markup.
+
+Tone: Professional, objective, and encouraging. Avoid "harsh" or judgmental adjectives.
+
+No Em Dashes: Do not use em dashes; utilize commas, colons, or parentheses instead.
+
+Hierarchy Example:
+# WUCS FACULTY DEV Report
+
+**Date:** [date]
+**Session Type:** In-Situ Simulation
+...
+
+**In-Situ Simulation:** A simulation conducted in the actual clinical environment...
+
+## Latent Safety Threats
+
+### Chest Tube Tray Availability
+
+**Current State:** The chest tube insertion tray was not immediately available in the resuscitation bay.
+
+**Impact:** This delay created a 3-minute gap during which the team had to search for equipment while managing a deteriorating patient.
+
+**Recommendations:** Consider pre-positioning chest tube trays in each resuscitation bay or implementing a visual checklist system.
+
+Input Data:
+PRIOR REPORTS (Style Guide):
+\${priorReportsContext}
+
+NEW SESSION NOTES:
+\${sessionNotesContext}
+
+CASE FILE DATA:
+\${caseFilesContext}
+
+Generate the Post-Session Report now using strict Markdown formatting.`;
+
+  return c.json({ 
+    template,
+    model: 'gemini-3-flash-preview',
+    temperature: 0.7,
+    maxOutputTokens: 8192,
+    version: '2.0',
+    lastUpdated: '2026-03-30'
+  });
+});
+
+// Get AI model preference
+app.get('/make-server-7fe18c53/model-preference', async (c) => {
+  try {
+    const preference = await kv.get('ai_model_preference');
+    return c.json({ model: preference || 'gemini-flash-latest' });
+  } catch (error) {
+    console.log(`Error fetching model preference: ${error}`);
+    return c.json({ model: 'gemini-flash-latest' });
+  }
+});
+
+// Set AI model preference
+app.post('/make-server-7fe18c53/model-preference', async (c) => {
+  try {
+    const { model } = await c.req.json();
+    
+    // Validate model
+    const validModels = ['gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-pro-latest'];
+    if (!validModels.includes(model)) {
+      return c.json({ error: 'Invalid model' }, 400);
+    }
+    
+    await kv.set('ai_model_preference', model);
+    
+    // Log audit event
+    await kv.set(`audit_${Date.now()}_model_change`, {
+      action: 'model_preference_changed',
+      model,
+      timestamp: new Date().toISOString(),
+    });
+    
+    return c.json({ success: true, model });
+  } catch (error) {
+    console.log(`Error setting model preference: ${error}`);
+    return c.json({ error: `Failed to set model preference: ${error.message}` }, 500);
   }
 });
 

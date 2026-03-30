@@ -16,6 +16,15 @@ export function useKeyboardShortcut(
     if (!enabled) return;
 
     const handleKeyPress = (e: KeyboardEvent) => {
+      // Ignore keyboard shortcuts when user is typing in an input field
+      const target = e.target as HTMLElement;
+      const isInputField = 
+        target.tagName === 'INPUT' || 
+        target.tagName === 'TEXTAREA' || 
+        target.isContentEditable;
+      
+      if (isInputField) return;
+
       const ctrlMatch = ctrl ? (e.ctrlKey || e.metaKey) : !e.ctrlKey && !e.metaKey;
       const shiftMatch = shift ? e.shiftKey : !e.shiftKey;
       const altMatch = alt ? e.altKey : !e.altKey;

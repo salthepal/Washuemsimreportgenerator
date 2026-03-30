@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
-import { Sparkles, CheckCircle2, AlertCircle, Download, Copy, Lightbulb, Target, Star } from 'lucide-react';
-import { Report, SessionNote, CaseFile, API_BASE, API_HEADERS } from '../App';
+import { Sparkles, CheckCircle2, AlertCircle, Download, Copy, Lightbulb, Target, FolderOpen } from 'lucide-react';
+import { Report, SessionNote, API_BASE, API_HEADERS } from '../App';
+import { CaseFile } from './case-files';
 import { toast } from 'sonner';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
 import { useSelection } from '../hooks/useSelection';
@@ -15,13 +16,11 @@ interface GenerateReportProps {
 export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: GenerateReportProps) {
   const reportSelection = useSelection<string>();
   const noteSelection = useSelection<string>();
-  const caseFileSelection = useSelection<string>();
+  const caseSelection = useSelection<string>();
   const [generating, setGenerating] = useState(false);
   const [generatedReport, setGeneratedReport] = useState<string | null>(null);
-  const [qualityScore, setQualityScore] = useState<number | null>(null);
   const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
   const [similarReports, setSimilarReports] = useState<Report[]>([]);
-  const [recommendations, setRecommendations] = useState<Report[]>([]);
 
   // Memoized selections
   const selectedReportsList = useMemo(() => 
@@ -34,9 +33,9 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
     [sessionNotes, noteSelection.selected]
   );
 
-  const selectedCaseFilesList = useMemo(() => 
-    caseFiles.filter(cf => caseFileSelection.selected.includes(cf.id)), 
-    [caseFiles, caseFileSelection.selected]
+  const selectedCasesList = useMemo(() => 
+    caseFiles.filter(c => caseSelection.selected.includes(c.id)), 
+    [caseFiles, caseSelection.selected]
   );
 
   // Load smart recommendations on mount
@@ -74,7 +73,6 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
 
     setGenerating(true);
     setGeneratedReport(null);
-    setQualityScore(null);
     setSuggestedTags([]);
     setSimilarReports([]);
     
@@ -85,7 +83,7 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
         body: JSON.stringify({
           selectedReports: reportSelection.selected,
           selectedNotes: noteSelection.selected,
-          selectedCaseFiles: caseFileSelection.selected,
+          selectedCases: caseSelection.selected,
         }),
       });
 
@@ -109,21 +107,6 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
           }
         } catch (err) {
           console.error('Failed to generate tags:', err);
-        }
-
-        // Calculate quality score
-        try {
-          const scoreResponse = await fetch(`${API_BASE}/score-quality`, {
-            method: 'POST',
-            headers: API_HEADERS,
-            body: JSON.stringify({ content: reportContent }),
-          });
-          if (scoreResponse.ok) {
-            const scoreData = await scoreResponse.json();
-            setQualityScore(scoreData.score || 0);
-          }
-        } catch (err) {
-          console.error('Failed to calculate quality score:', err);
         }
 
         // Find similar reports
@@ -177,78 +160,114 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
     if (!generatedReport) return;
 
     try {
-      // Parse the text content into structured paragraphs
+      // Parse the Markdown content into structured paragraphs
       const lines = generatedReport.split('\n');
       const children: any[] = [];
+      let currentFindingLevel = 0; // Track if we're in a ### subsection
 
       for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
+        const line = lines[i];
+        const trimmedLine = line.trim();
         
-        if (!line) {
+        if (!trimmedLine) {
           // Add spacing for empty lines
           children.push(new Paragraph({ text: '' }));
+          currentFindingLevel = 0;
           continue;
         }
 
-        // Detect headings based on patterns
-        // All caps lines are likely section headers
-        if (line === line.toUpperCase() && line.length > 3 && line.length < 100) {
+        // H1: Main title with # 
+        if (trimmedLine.startsWith('# ') && !trimmedLine.startsWith('##')) {
           children.push(
             new Paragraph({
-              text: line,
+              text: trimmedLine.substring(2).trim(),
               heading: HeadingLevel.HEADING_1,
               spacing: { before: 240, after: 120 },
             })
           );
+          currentFindingLevel = 0;
         }
-        // Lines ending with colon are likely subheadings
-        else if (line.endsWith(':') && !line.includes('  ')) {
+        // H2: Major sections with ##
+        else if (trimmedLine.startsWith('## ') && !trimmedLine.startsWith('###')) {
           children.push(
             new Paragraph({
-              text: line,
+              text: trimmedLine.substring(3).trim(),
               heading: HeadingLevel.HEADING_2,
-              spacing: { before: 200, after: 100 },
+              spacing: { before: 240, after: 120 },
             })
           );
+          currentFindingLevel = 0;
         }
-        // Bullet points
-        else if (line.match(/^[•\-\*]\s+/)) {
+        // H3: Specific findings with ###
+        else if (trimmedLine.startsWith('### ')) {
           children.push(
             new Paragraph({
-              text: line.replace(/^[•\-\*]\s+/, ''),
+              text: trimmedLine.substring(4).trim(),
+              heading: HeadingLevel.HEADING_3,
+              spacing: { before: 240, after: 120 },
+            })
+          );
+          currentFindingLevel = 1; // We're now in a finding subsection
+        }
+        // Bullet points with - (or -, •, *)
+        else if (trimmedLine.match(/^[-•*]\s+/)) {
+          children.push(
+            new Paragraph({
+              text: trimmedLine.replace(/^[-•*]\s+/, ''),
               bullet: { level: 0 },
+              spacing: { after: 80 },
             })
           );
         }
         // Numbered lists
-        else if (line.match(/^\d+[\.\)]\s+/)) {
+        else if (trimmedLine.match(/^\d+[\.)]\s+/)) {
           children.push(
             new Paragraph({
-              text: line.replace(/^\d+[\.\)]\s+/, ''),
+              text: trimmedLine.replace(/^\d+[\.)]\s+/, ''),
               numbering: { reference: 'default-numbering', level: 0 },
+              spacing: { after: 80 },
             })
           );
         }
-        // Regular paragraphs
+        // Regular paragraphs with inline formatting
         else {
           const textRuns: TextRun[] = [];
           
-          // Simple bold detection for **text** or ALL CAPS words
-          const parts = line.split(/(\*\*[^*]+\*\*|\b[A-Z]{4,}\b)/);
+          // Parse inline bold (**text**) and italics (*text*)
+          // Split by both bold and italic markers
+          const parts = trimmedLine.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/);
+          
           parts.forEach(part => {
+            if (!part) return;
+            
+            // Bold text
             if (part.startsWith('**') && part.endsWith('**')) {
-              textRuns.push(new TextRun({ text: part.slice(2, -2), bold: true }));
-            } else if (part.match(/^[A-Z]{4,}$/)) {
-              textRuns.push(new TextRun({ text: part, bold: true }));
-            } else if (part) {
+              textRuns.push(new TextRun({ 
+                text: part.slice(2, -2), 
+                bold: true 
+              }));
+            }
+            // Italic text (but not bold)
+            else if (part.startsWith('*') && part.endsWith('*') && !part.startsWith('**')) {
+              textRuns.push(new TextRun({ 
+                text: part.slice(1, -1), 
+                italics: true 
+              }));
+            }
+            // Regular text
+            else {
               textRuns.push(new TextRun(part));
             }
           });
 
+          // Apply indentation for paragraphs under ### findings
+          const indentLevel = currentFindingLevel > 0 ? 720 : 0;
+
           children.push(
             new Paragraph({
-              children: textRuns.length > 0 ? textRuns : [new TextRun(line)],
+              children: textRuns.length > 0 ? textRuns : [new TextRun(trimmedLine)],
               spacing: { after: 120 },
+              indent: indentLevel > 0 ? { left: indentLevel } : undefined,
             })
           );
         }
@@ -275,10 +294,10 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
             properties: {
               page: {
                 margin: {
-                  top: 1440,
-                  right: 1440,
-                  bottom: 1440,
-                  left: 1440,
+                  top: 1440,    // 1 inch
+                  right: 1440,  // 1 inch
+                  bottom: 1440, // 1 inch
+                  left: 1440,   // 1 inch
                 },
               },
             },
@@ -331,7 +350,7 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
         </div>
       ) : (
         <>
-          <div className="grid md:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-2 gap-6">
             {/* Select Prior Reports */}
             <div className="bg-slate-50 rounded-lg p-5 border border-slate-200">
               <h3 className="font-semibold text-slate-900 mb-3 flex items-center justify-between">
@@ -435,68 +454,74 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
                 </button>
               </div>
             </div>
-
-            {/* Select Case Files (Optional) */}
-            <div className="bg-slate-50 rounded-lg p-5 border border-slate-200">
-              <h3 className="font-semibold text-slate-900 mb-3 flex items-center justify-between">
-                <span>Select Case Files <span className="text-sm font-normal text-slate-500"> (Optional)</span></span>
-                <span className="text-sm font-normal text-slate-600">
-                  {caseFileSelection.selected.length} selected
-                </span>
-              </h3>
-              {caseFiles.length === 0 ? (
-                <div className="text-center py-8 text-slate-500 text-sm">
-                  <p className="mb-2">No case files uploaded</p>
-                  <p className="text-xs">Upload case files in the Upload tab for additional context</p>
-                </div>
-              ) : (
-                <>
-                  <div className="space-y-2 max-h-96 overflow-y-auto">
-                    {caseFiles.map((caseFile) => (
-                      <label
-                        key={caseFile.id}
-                        className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                          caseFileSelection.selected.includes(caseFile.id)
-                            ? 'bg-purple-50 border-purple-300'
-                            : 'bg-white border-slate-200 hover:border-slate-300'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={caseFileSelection.selected.includes(caseFile.id)}
-                          onChange={() => caseFileSelection.toggle(caseFile.id)}
-                          className="mt-1 w-4 h-4 text-purple-600 rounded focus:ring-2 focus:ring-purple-500"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-slate-900 text-sm">{caseFile.fileName}</div>
-                          <div className="text-xs text-slate-500 mt-0.5">
-                            {new Date(caseFile.uploadDate).toLocaleDateString()}
-                          </div>
-                        </div>
-                        {caseFileSelection.selected.includes(caseFile.id) && (
-                          <CheckCircle2 className="w-5 h-5 text-purple-600 flex-shrink-0" />
-                        )}
-                      </label>
-                    ))}
-                  </div>
-                  <div className="flex justify-between mt-4">
-                    <button
-                      onClick={() => caseFileSelection.selectAll(caseFiles.map(cf => cf.id))}
-                      className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors text-sm font-medium"
-                    >
-                      Select All
-                    </button>
-                    <button
-                      onClick={caseFileSelection.deselectAll}
-                      className="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-700 rounded-lg transition-colors text-sm font-medium"
-                    >
-                      Deselect All
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
           </div>
+
+          {/* Select Case Files (Optional) */}
+          {caseFiles.length > 0 && (
+            <div className="bg-gradient-to-br from-[#007A33]/5 to-[#007A33]/10 rounded-lg p-5 border-2 border-[#007A33]/30">
+              <div className="flex items-start gap-3 mb-4">
+                <FolderOpen className="w-6 h-6 text-[#007A33] flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <h3 className="font-semibold text-slate-900 flex items-center justify-between">
+                    <span>Select Case Files (Optional Context)</span>
+                    <span className="text-sm font-normal text-slate-600">
+                      {caseSelection.selected.length} selected
+                    </span>
+                  </h3>
+                  <p className="text-sm text-slate-600 mt-1">
+                    Case files provide patient scenario details to the AI for more accurate and contextually relevant reports.
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {caseFiles.map((caseFile) => (
+                  <label
+                    key={caseFile.id}
+                    className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                      caseSelection.selected.includes(caseFile.id)
+                        ? 'bg-[#007A33]/10 border-[#007A33]'
+                        : 'bg-white border-slate-200 hover:border-[#007A33]/50'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={caseSelection.selected.includes(caseFile.id)}
+                      onChange={() => caseSelection.toggle(caseFile.id)}
+                      className="mt-1 w-4 h-4 text-[#007A33] rounded focus:ring-2 focus:ring-[#007A33]"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-slate-900 text-sm">{caseFile.title}</div>
+                      <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                        {caseFile.metadata?.caseType && (
+                          <span className="px-2 py-0.5 bg-[#007A33]/20 text-[#007A33] rounded font-medium">
+                            {caseFile.metadata.caseType}
+                          </span>
+                        )}
+                        <span>{new Date(caseFile.date).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                    {caseSelection.selected.includes(caseFile.id) && (
+                      <CheckCircle2 className="w-5 h-5 text-[#007A33] flex-shrink-0" />
+                    )}
+                  </label>
+                ))}
+              </div>
+              <div className="flex justify-between mt-4">
+                <button
+                  onClick={() => caseSelection.selectAll(caseFiles.map(c => c.id))}
+                  className="px-4 py-2 bg-[#007A33] hover:bg-[#006629] text-white rounded-lg transition-colors text-sm font-medium"
+                >
+                  Select All
+                </button>
+                <button
+                  onClick={caseSelection.deselectAll}
+                  className="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-700 rounded-lg transition-colors text-sm font-medium"
+                >
+                  Deselect All
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Generate Button */}
           <button
@@ -512,22 +537,8 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
           {generatedReport && (
             <>
               {/* AI Insights Section */}
-              {(qualityScore !== null || suggestedTags.length > 0 || similarReports.length > 0) && (
+              {(suggestedTags.length > 0 || similarReports.length > 0) && (
                 <div className="grid md:grid-cols-3 gap-4">
-                  {/* Quality Score */}
-                  {qualityScore !== null && (
-                    <div className="bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200 rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Star className="w-5 h-5 text-purple-600" />
-                        <h4 className="font-semibold text-purple-900">Quality Score</h4>
-                      </div>
-                      <div className="text-3xl font-bold text-purple-600">{qualityScore}/100</div>
-                      <p className="text-sm text-purple-700 mt-1">
-                        {qualityScore >= 80 ? 'Excellent' : qualityScore >= 60 ? 'Good' : 'Needs improvement'}
-                      </p>
-                    </div>
-                  )}
-
                   {/* Suggested Tags */}
                   {suggestedTags.length > 0 && (
                     <div className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-lg p-4">

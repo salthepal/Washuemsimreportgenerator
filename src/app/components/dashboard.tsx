@@ -53,9 +53,8 @@ export function Dashboard({ reports, sessionNotes, generatedReports }: Dashboard
   }, {} as Record<string, number>);
 
   const monthlyData = Object.entries(reportsByMonth).map(([month, count], index) => ({
-    id: `month-${month}-${index}`,
     month,
-    count
+    count,
   })).slice(-6);
 
   // Tags distribution
@@ -68,7 +67,7 @@ export function Dashboard({ reports, sessionNotes, generatedReports }: Dashboard
   }, {} as Record<string, number>);
 
   const tagData = Object.entries(tagCounts)
-    .map(([name, value], index) => ({ id: `tag-${name}-${index}`, name, value }))
+    .map(([name, value]) => ({ name, value }))
     .sort((a, b) => b.value - a.value)
     .slice(0, 5);
 
@@ -80,9 +79,9 @@ export function Dashboard({ reports, sessionNotes, generatedReports }: Dashboard
   }, {} as Record<string, number>);
 
   const statusData = [
-    { id: 'status-draft', name: 'Draft', value: statusCounts.draft || 0, color: '#94a3b8' },
-    { id: 'status-reviewed', name: 'Reviewed', value: statusCounts.reviewed || 0, color: '#60a5fa' },
-    { id: 'status-approved', name: 'Approved', value: statusCounts.approved || 0, color: '#34d399' },
+    { name: 'Draft', value: statusCounts.draft || 0, color: '#94a3b8' },
+    { name: 'Reviewed', value: statusCounts.reviewed || 0, color: '#60a5fa' },
+    { name: 'Approved', value: statusCounts.approved || 0, color: '#34d399' },
   ].filter(item => item.value > 0);
 
   // Department distribution
@@ -93,7 +92,7 @@ export function Dashboard({ reports, sessionNotes, generatedReports }: Dashboard
   }, {} as Record<string, number>);
 
   const departmentData = Object.entries(departmentCounts)
-    .map(([name, value], index) => ({ id: `dept-${name}-${index}`, name, value }))
+    .map(([name, value]) => ({ name, value }))
     .sort((a, b) => b.value - a.value)
     .slice(0, 5);
 
@@ -187,11 +186,9 @@ export function Dashboard({ reports, sessionNotes, generatedReports }: Dashboard
                   outerRadius={80}
                   fill="#8884d8"
                   dataKey="value"
-                  nameKey="name"
-                  isAnimationActive={false}
                 >
                   {statusData.map((entry) => (
-                    <Cell key={entry.id} fill={entry.color} />
+                    <Cell key={entry.name} fill={entry.color} />
                   ))}
                 </Pie>
                 <Tooltip />

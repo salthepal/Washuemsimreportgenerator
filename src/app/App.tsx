@@ -3,13 +3,14 @@ import Joyride, { Step } from 'react-joyride';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { UploadReports } from './components/upload-reports';
 import { SessionNotes } from './components/session-notes';
+import { CaseFiles, CaseFile } from './components/case-files';
 import { GenerateReport } from './components/generate-report';
 import { ViewRepository } from './components/view-repository';
 import { QuickActionsBar } from './components/quick-actions-bar';
 import { BackupRestore } from './components/backup-restore';
 import { AuditLog } from './components/audit-log';
+import { ViewAIPrompt } from './components/view-ai-prompt';
 import { ErrorBoundary } from './components/error-boundary';
-import { CaseFiles } from './components/case-files';
 import { Toaster } from './components/ui/sonner';
 import { FileText, Moon, Sun, HelpCircle } from 'lucide-react';
 import { Button } from './components/ui/button';
@@ -79,22 +80,6 @@ export interface SessionNote {
   };
 }
 
-export interface CaseFile {
-  id: string;
-  fileName: string;
-  content: string;
-  uploadDate: string;
-  type: 'case_file';
-  createdAt: string;
-  tags?: string[];
-  metadata?: {
-    uploaderName?: string;
-    caseType?: string;
-    clinicalArea?: string;
-    complexity?: string;
-  };
-}
-
 export const API_BASE = `https://${projectId}.supabase.co/functions/v1/make-server-7fe18c53`;
 export const API_HEADERS = {
   'Content-Type': 'application/json',
@@ -104,8 +89,8 @@ export const API_HEADERS = {
 export default function App() {
   const [reports, setReports] = useState<Report[]>([]);
   const [sessionNotes, setSessionNotes] = useState<SessionNote[]>([]);
-  const [generatedReports, setGeneratedReports] = useState<Report[]>([]);
   const [caseFiles, setCaseFiles] = useState<CaseFile[]>([]);
+  const [generatedReports, setGeneratedReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [tourRunning, setTourRunning] = useState(false);
   const [darkMode, setDarkMode] = useDarkMode();
@@ -160,6 +145,22 @@ export default function App() {
         console.error('Failed to fetch session notes:', errorText);
       }
 
+      // Fetch case files
+      const caseFilesRes = await fetch(`${API_BASE}/case-files`, {
+        headers: API_HEADERS,
+      });
+      
+      console.log('Case files response status:', caseFilesRes.status);
+      
+      if (caseFilesRes.ok) {
+        const caseFilesData = await caseFilesRes.json();
+        console.log('Case files data:', caseFilesData);
+        setCaseFiles(caseFilesData.caseFiles || []);
+      } else {
+        const errorText = await caseFilesRes.text();
+        console.error('Failed to fetch case files:', errorText);
+      }
+
       // Fetch generated reports
       const generatedRes = await fetch(`${API_BASE}/reports/generated`, {
         headers: API_HEADERS,
@@ -174,22 +175,6 @@ export default function App() {
       } else {
         const errorText = await generatedRes.text();
         console.error('Failed to fetch generated reports:', errorText);
-      }
-
-      // Fetch case files
-      const caseFilesRes = await fetch(`${API_BASE}/case_files`, {
-        headers: API_HEADERS,
-      });
-      
-      console.log('Case files response status:', caseFilesRes.status);
-      
-      if (caseFilesRes.ok) {
-        const caseFilesData = await caseFilesRes.json();
-        console.log('Case files data:', caseFilesData);
-        setCaseFiles(caseFilesData.case_files || []);
-      } else {
-        const errorText = await caseFilesRes.text();
-        console.error('Failed to fetch case files:', errorText);
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -264,23 +249,26 @@ export default function App() {
           {/* Main Content */}
           <main className="container mx-auto px-2 md:px-6 py-4 md:py-8">
             <Tabs defaultValue="dashboard" className="space-y-4 md:space-y-6">
-              <TabsList className="grid w-full grid-cols-3 md:grid-cols-6 gap-2 md:gap-3 bg-transparent p-0">
-                <TabsTrigger value="dashboard" className="dashboard-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+              <TabsList className="grid w-full grid-cols-3 md:grid-cols-7 gap-2 md:gap-3 bg-transparent p-0">
+                <TabsTrigger value="dashboard" className="dashboard-tab text-xs md:text-sm py-2.5 md:py-3 px-2 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
                   Dashboard
                 </TabsTrigger>
-                <TabsTrigger value="upload" className="upload-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+                <TabsTrigger value="upload" className="upload-tab text-xs md:text-sm py-2.5 md:py-3 px-2 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
                   Upload
                 </TabsTrigger>
-                <TabsTrigger value="notes" className="notes-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+                <TabsTrigger value="cases" className="cases-tab text-xs md:text-sm py-2.5 md:py-3 px-2 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+                  Cases
+                </TabsTrigger>
+                <TabsTrigger value="notes" className="notes-tab text-xs md:text-sm py-2.5 md:py-3 px-2 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
                   Notes
                 </TabsTrigger>
-                <TabsTrigger value="generate" className="generate-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+                <TabsTrigger value="generate" className="generate-tab text-xs md:text-sm py-2.5 md:py-3 px-2 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
                   Generate
                 </TabsTrigger>
-                <TabsTrigger value="repository" className="repository-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+                <TabsTrigger value="repository" className="repository-tab text-xs md:text-sm py-2.5 md:py-3 px-2 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
                   Repository
                 </TabsTrigger>
-                <TabsTrigger value="settings" className="settings-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+                <TabsTrigger value="settings" className="settings-tab text-xs md:text-sm py-2.5 md:py-3 px-2 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
                   Settings
                 </TabsTrigger>
               </TabsList>
@@ -310,18 +298,11 @@ export default function App() {
               </TabsContent>
 
               <TabsContent value="upload" className="p-2 md:p-6">
-                <Tabs defaultValue="style-guides" className="space-y-4">
-                  <TabsList className="grid w-full grid-cols-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
-                    <TabsTrigger value="style-guides" className="text-sm">Style Guides</TabsTrigger>
-                    <TabsTrigger value="case-files" className="text-sm">Case Files</TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="style-guides">
-                    <UploadReports reports={reports} onRefresh={fetchData} />
-                  </TabsContent>
-                  <TabsContent value="case-files">
-                    <CaseFiles caseFiles={caseFiles} onRefresh={fetchData} />
-                  </TabsContent>
-                </Tabs>
+                <UploadReports reports={reports} onRefresh={fetchData} />
+              </TabsContent>
+
+              <TabsContent value="cases" className="p-2 md:p-6">
+                <CaseFiles caseFiles={caseFiles} onRefresh={fetchData} />
               </TabsContent>
 
               <TabsContent value="notes" className="p-2 md:p-6">
@@ -354,6 +335,8 @@ export default function App() {
                       Manage backups, audit logs, and system configuration
                     </p>
                   </div>
+
+                  <ViewAIPrompt />
 
                   <BackupRestore />
 

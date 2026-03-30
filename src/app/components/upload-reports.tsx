@@ -1,10 +1,15 @@
 import { useState } from 'react';
-import { Upload, Trash2, FileText, Calendar, FileUp, User, AlertCircle, CheckCircle } from 'lucide-react';
+import { Upload, Trash2, Calendar, Eye, FolderOpen, User, CheckCircle, FileText, FileUp } from 'lucide-react';
 import { Report, API_BASE, API_HEADERS } from '../App';
 import { toast } from 'sonner';
-import mammoth from 'mammoth';
 import { useConfirmDialog } from './ui/confirm-dialog';
 import { DocumentPreviewModal } from './document-preview-modal';
+import { FileUpload } from './ui/file-upload';
+import { FormField } from './ui/form-field';
+import { ActionButton } from './ui/action-button';
+import { processDocxFile, formatDate } from '../utils/document';
+import { validateDocxFile, FILE_VALIDATIONS } from '../utils/validation';
+import { sanitizeJSON } from '../utils/sanitize';
 
 interface UploadReportsProps {
   reports: Report[];
@@ -26,19 +31,6 @@ export function UploadReports({ reports, onRefresh }: UploadReportsProps) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const { confirm, dialog } = useConfirmDialog();
 
-  const validateFile = (file: File): string | null => {
-    if (!file.name.endsWith('.docx')) {
-      return 'Please upload a .docx file';
-    }
-    if (file.size > MAX_FILE_SIZE) {
-      return `File size exceeds ${MAX_FILE_SIZE / (1024 * 1024)}MB limit`;
-    }
-    if (file.size === 0) {
-      return 'File appears to be empty or corrupted';
-    }
-    return null;
-  };
-
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -57,7 +49,7 @@ export function UploadReports({ reports, onRefresh }: UploadReportsProps) {
     const file = e.dataTransfer.files?.[0];
     if (!file) return;
 
-    const error = validateFile(file);
+    const error = validateDocxFile(file);
     if (error) {
       toast.error(error);
       return;
@@ -100,7 +92,7 @@ export function UploadReports({ reports, onRefresh }: UploadReportsProps) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const error = validateFile(file);
+    const error = validateDocxFile(file);
     if (error) {
       toast.error(error);
       return;
@@ -125,39 +117,36 @@ export function UploadReports({ reports, onRefresh }: UploadReportsProps) {
     setUploadProgress(10);
     
     try {
-      const arrayBuffer = await selectedFile.arrayBuffer();
       setUploadProgress(30);
       
-      const result = await mammoth.convertToHtml({ arrayBuffer });
-      setUploadProgress(50);
-      
-      // Extract plain text for content field
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = result.value;
-      const plainText = tempDiv.textContent || tempDiv.innerText || '';
-      
-      // Auto-extract title from first heading or filename
-      const firstHeading = tempDiv.querySelector('h1, h2, h3');
-      const title = firstHeading?.textContent?.trim() || selectedFile.name.replace('.docx', '');
-      
+      const processed = await processDocxFile(selectedFile);
       setUploadProgress(70);
-      console.log('Uploading report:', { title, contentLength: plainText.length, htmlLength: result.value.length, sessionDate });
+      
+      console.log('Uploading report:', { 
+        title: processed.title, 
+        contentLength: processed.content.length, 
+        htmlLength: processed.htmlContent.length,
+        sessionDate 
+      });
+      
+      // Sanitize data before sending
+      const payload = sanitizeJSON({
+        title: processed.title,
+        content: processed.content,
+        htmlContent: processed.htmlContent,
+        date: sessionDate,
+        metadata: {
+          uploaderName,
+          sessionName,
+          sessionDate,
+        }
+      });
       
       // Upload with metadata
       const response = await fetch(`${API_BASE}/reports/upload`, {
         method: 'POST',
         headers: API_HEADERS,
-        body: JSON.stringify({ 
-          title, 
-          content: plainText, 
-          htmlContent: result.value, 
-          date: sessionDate,
-          metadata: {
-            uploaderName,
-            sessionName,
-            sessionDate,
-          }
-        }),
+        body: JSON.stringify(payload),
       });
 
       setUploadProgress(90);
@@ -166,7 +155,7 @@ export function UploadReports({ reports, onRefresh }: UploadReportsProps) {
 
       if (response.ok) {
         setUploadProgress(100);
-        toast.success(`Report "${title}" uploaded successfully`);
+        toast.success(`Report "${processed.title}" uploaded successfully`);
         // Reset form
         setSelectedFile(null);
         setUploaderName('');
@@ -312,58 +301,37 @@ export function UploadReports({ reports, onRefresh }: UploadReportsProps) {
         {/* Upload Form Fields */}
         {selectedFile && (
           <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Uploader Name
-              </label>
-              <input
-                type="text"
-                value={uploaderName}
-                onChange={(e) => setUploaderName(e.target.value)}
-                placeholder="Enter your name"
-                className="w-full px-3 md:px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm md:text-base"
-              />
-            </div>
+            <FormField
+              label="Uploader Name"
+              value={uploaderName}
+              onChange={setUploaderName}
+              placeholder="Enter your name"
+            />
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Session Name
-              </label>
-              <input
-                type="text"
-                value={sessionName}
-                onChange={(e) => setSessionName(e.target.value)}
-                placeholder="e.g., Cardiac Arrest Simulation"
-                className="w-full px-3 md:px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm md:text-base"
-              />
-            </div>
+            <FormField
+              label="Session Name"
+              value={sessionName}
+              onChange={setSessionName}
+              placeholder="e.g., Cardiac Arrest Simulation"
+            />
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Session Date
-              </label>
-              <input
-                type="date"
-                value={sessionDate}
-                onChange={(e) => setSessionDate(e.target.value)}
-                className="w-full px-3 md:px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm md:text-base"
-              />
-            </div>
+            <FormField
+              label="Session Date"
+              value={sessionDate}
+              onChange={setSessionDate}
+              type="date"
+            />
 
-            <button
+            <ActionButton
               onClick={handleUpload}
               disabled={uploading}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base flex items-center justify-center gap-2"
+              loading={uploading}
+              variant="primary"
+              fullWidth
+              icon={<Upload className="w-4 h-4 md:w-5 md:h-5" />}
             >
-              {uploading ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Uploading... {uploadProgress}%
-                </>
-              ) : (
-                'Upload Report'
-              )}
-            </button>
+              Upload Report
+            </ActionButton>
           </div>
         )}
       </div>
@@ -404,7 +372,7 @@ export function UploadReports({ reports, onRefresh }: UploadReportsProps) {
                       )}
                       <span className="flex items-center gap-1">
                         <Calendar className="w-3 h-3 md:w-4 md:h-4 flex-shrink-0" />
-                        {new Date(report.date).toLocaleDateString()}
+                        {formatDate(report.date)}
                       </span>
                     </div>
                     <p className="text-xs md:text-sm text-slate-600 dark:text-slate-400 mt-2 line-clamp-2">
