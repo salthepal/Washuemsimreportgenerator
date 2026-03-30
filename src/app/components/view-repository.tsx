@@ -160,29 +160,29 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-slate-900 mb-2">Document Repository</h2>
-        <p className="text-slate-600">
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">Document Repository</h2>
+        <p className="text-slate-600 dark:text-slate-400">
           Search, filter, and manage all your documents
         </p>
       </div>
 
       {/* Search and Filter Bar */}
-      <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-3">
+      <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4 space-y-3">
         <div className="flex gap-3">
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400 dark:text-slate-500" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search documents..."
-              className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
             />
           </div>
           <select
             value={dateRange}
             onChange={(e) => setDateRange(e.target.value as any)}
-            className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
           >
             <option value="all">All Time</option>
             <option value="week">Past Week</option>
@@ -194,8 +194,8 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
         {/* Tag Filters */}
         {allTags.length > 0 && (
           <div className="flex items-center gap-2 flex-wrap">
-            <Filter className="w-4 h-4 text-slate-500" />
-            <span className="text-sm text-slate-600">Tags:</span>
+            <Filter className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+            <span className="text-sm text-slate-600 dark:text-slate-400">Tags:</span>
             {allTags.map(tag => (
               <button
                 key={tag}
@@ -205,7 +205,7 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
                 className={`px-3 py-1 rounded text-sm transition-all ${
                   selectedTags.includes(tag)
                     ? 'bg-indigo-600 text-white'
-                    : 'bg-white border border-slate-300 text-slate-700 hover:border-indigo-400'
+                    : 'bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:border-indigo-400 dark:hover:border-indigo-500'
                 }`}
               >
                 {tag}
@@ -214,7 +214,7 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
             {selectedTags.length > 0 && (
               <button
                 onClick={() => setSelectedTags([])}
-                className="text-sm text-red-600 hover:text-red-700 ml-2"
+                className="text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 ml-2"
               >
                 Clear filters
               </button>
@@ -317,20 +317,20 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
       {filteredGenerated.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-              <Sparkles className="w-6 h-6 text-purple-600" />
+            <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+              <Sparkles className="w-6 h-6 text-purple-600 dark:text-purple-400" />
               AI-Generated Reports
             </h3>
             <div className="flex gap-2">
               <button
                 onClick={() => selectAllInCategory(filteredGenerated)}
-                className="text-sm px-3 py-1 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded"
+                className="text-sm px-3 py-1 bg-purple-100 dark:bg-purple-900/30 hover:bg-purple-200 dark:hover:bg-purple-900/50 text-purple-700 dark:text-purple-300 rounded"
               >
                 Select All
               </button>
               <button
                 onClick={() => deselectAllInCategory(filteredGenerated)}
-                className="text-sm px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded"
+                className="text-sm px-3 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded"
               >
                 Deselect All
               </button>
@@ -340,11 +340,11 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
             {filteredGenerated.map((report) => (
               <div
                 key={report.id}
-                className="bg-white border-2 border-purple-200 rounded-lg overflow-hidden"
+                className="bg-white dark:bg-slate-800 border-2 border-purple-200 dark:border-purple-700 rounded-lg overflow-hidden"
               >
                 <button
                   onClick={() => toggleGenerated(report.id)}
-                  className="w-full p-4 flex items-center justify-between hover:bg-purple-50 transition-colors"
+                  className="w-full p-4 flex items-center justify-between hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors"
                 >
                   <div className="flex items-start gap-3 flex-1 text-left">
                     <input
@@ -356,16 +356,16 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
                       }}
                       className="mt-1 w-4 h-4 text-purple-600 rounded"
                     />
-                    <FileText className="w-5 h-5 text-purple-600 mt-1 flex-shrink-0" />
+                    <FileText className="w-5 h-5 text-purple-600 dark:text-purple-400 mt-1 flex-shrink-0" />
                     <div>
-                      <h4 className="font-semibold text-slate-900">{report.title}</h4>
-                      <div className="text-sm text-slate-600 mt-1">
+                      <h4 className="font-semibold text-slate-900 dark:text-slate-100">{report.title}</h4>
+                      <div className="text-sm text-slate-600 dark:text-slate-400 mt-1">
                         Generated on {new Date(report.createdAt).toLocaleDateString()}
                       </div>
                       {report.tags && report.tags.length > 0 && (
                         <div className="flex gap-1 mt-2">
                           {report.tags.map(tag => (
-                            <span key={tag} className="px-2 py-1 bg-indigo-100 text-indigo-700 text-xs rounded">
+                            <span key={tag} className="px-2 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-xs rounded">
                               {tag}
                             </span>
                           ))}
@@ -374,13 +374,13 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
                     </div>
                   </div>
                   {expandedGenerated === report.id ? (
-                    <ChevronUp className="w-5 h-5 text-slate-400" />
+                    <ChevronUp className="w-5 h-5 text-slate-400 dark:text-slate-500" />
                   ) : (
-                    <ChevronDown className="w-5 h-5 text-slate-400" />
+                    <ChevronDown className="w-5 h-5 text-slate-400 dark:text-slate-500" />
                   )}
                 </button>
                 {expandedGenerated === report.id && (
-                  <div className="p-4 bg-slate-50 border-t border-purple-200 space-y-3">
+                  <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border-t border-purple-200 dark:border-purple-700 space-y-3">
                     <div className="flex gap-2">
                       <button
                         onClick={() => setViewingReport(report)}
@@ -394,7 +394,7 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
                         className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
                           comparingReports.find(r => r.id === report.id)
                             ? 'bg-amber-600 text-white'
-                            : 'bg-amber-100 hover:bg-amber-200 text-amber-700'
+                            : 'bg-amber-100 dark:bg-amber-900/30 hover:bg-amber-200 dark:hover:bg-amber-900/50 text-amber-700 dark:text-amber-300'
                         }`}
                       >
                         <GitCompare className="w-4 h-4" />
@@ -402,13 +402,13 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
                       </button>
                       <button
                         onClick={() => deleteReport(report.id, 'report')}
-                        className="bg-red-100 hover:bg-red-200 text-red-700 px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                        className="bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 text-red-700 dark:text-red-300 px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
                       >
                         <Trash2 className="w-4 h-4" />
                         Delete
                       </button>
                     </div>
-                    <pre className="whitespace-pre-wrap font-sans text-sm text-slate-800 leading-relaxed max-h-96 overflow-y-auto">
+                    <pre className="whitespace-pre-wrap font-sans text-sm text-slate-800 dark:text-slate-200 leading-relaxed max-h-96 overflow-y-auto">
                       {report.content.substring(0, 500)}...
                     </pre>
                   </div>

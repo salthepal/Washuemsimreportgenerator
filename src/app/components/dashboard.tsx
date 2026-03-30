@@ -148,30 +148,36 @@ export function Dashboard({ reports, sessionNotes, generatedReports }: Dashboard
       {/* Charts Grid */}
       <div className="grid grid-cols-2 gap-6">
         {/* Reports Over Time */}
-        <div className="bg-white border border-slate-200 rounded-lg p-6">
-          <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-blue-600" />
+        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-6">
+          <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-4 flex items-center gap-2">
+            <Calendar className="w-5 h-5 text-blue-600 dark:text-blue-400" />
             Reports Over Time
           </h3>
           {monthlyData.length > 0 ? (
             <ResponsiveContainer width="100%" height={250}>
               <LineChart data={monthlyData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
-                <Tooltip />
+                <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" className="dark:stroke-slate-600" />
+                <XAxis dataKey="month" stroke="#64748b" className="dark:stroke-slate-400" />
+                <YAxis stroke="#64748b" className="dark:stroke-slate-400" />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: 'var(--tooltip-bg, #ffffff)', 
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '0.5rem'
+                  }}
+                />
                 <Line type="monotone" dataKey="count" stroke="#3b82f6" strokeWidth={2} />
               </LineChart>
             </ResponsiveContainer>
           ) : (
-            <div className="text-center text-slate-500 py-12">No data available</div>
+            <div className="text-center text-slate-500 dark:text-slate-400 py-12">No data available</div>
           )}
         </div>
 
         {/* Report Status Distribution */}
-        <div className="bg-white border border-slate-200 rounded-lg p-6">
-          <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-purple-600" />
+        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-6">
+          <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-4 flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-purple-600 dark:text-purple-400" />
             Generated Report Status
           </h3>
           {statusData.length > 0 ? (
@@ -191,76 +197,94 @@ export function Dashboard({ reports, sessionNotes, generatedReports }: Dashboard
                     <Cell key={entry.name} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: 'var(--tooltip-bg, #ffffff)', 
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '0.5rem'
+                  }}
+                />
               </PieChart>
             </ResponsiveContainer>
           ) : (
-            <div className="text-center text-slate-500 py-12">No generated reports yet</div>
+            <div className="text-center text-slate-500 dark:text-slate-400 py-12">No generated reports yet</div>
           )}
         </div>
 
         {/* Top Tags */}
-        <div className="bg-white border border-slate-200 rounded-lg p-6">
-          <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-            <Tag className="w-5 h-5 text-indigo-600" />
+        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-6">
+          <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-4 flex items-center gap-2">
+            <Tag className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
             Most Used Tags
           </h3>
           {tagData.length > 0 ? (
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={tagData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
+                <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" className="dark:stroke-slate-600" />
+                <XAxis dataKey="name" stroke="#64748b" className="dark:stroke-slate-400" />
+                <YAxis stroke="#64748b" className="dark:stroke-slate-400" />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: 'var(--tooltip-bg, #ffffff)', 
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '0.5rem'
+                  }}
+                />
                 <Bar dataKey="value" fill="#6366f1" />
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div className="text-center text-slate-500 py-12">No tags added yet</div>
+            <div className="text-center text-slate-500 dark:text-slate-400 py-12">No tags added yet</div>
           )}
         </div>
 
         {/* Department Distribution */}
-        <div className="bg-white border border-slate-200 rounded-lg p-6">
-          <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-            <Users className="w-5 h-5 text-green-600" />
+        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-6">
+          <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-4 flex items-center gap-2">
+            <Users className="w-5 h-5 text-green-600 dark:text-green-400" />
             Sessions by Department
           </h3>
           {departmentData.length > 0 ? (
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={departmentData} layout="horizontal">
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" />
-                <YAxis dataKey="name" type="category" width={100} />
-                <Tooltip />
+                <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" className="dark:stroke-slate-600" />
+                <XAxis type="number" stroke="#64748b" className="dark:stroke-slate-400" />
+                <YAxis dataKey="name" type="category" width={100} stroke="#64748b" className="dark:stroke-slate-400" />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: 'var(--tooltip-bg, #ffffff)', 
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '0.5rem'
+                  }}
+                />
                 <Bar dataKey="value" fill="#10b981" />
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div className="text-center text-slate-500 py-12">No department data available</div>
+            <div className="text-center text-slate-500 dark:text-slate-400 py-12">No department data available</div>
           )}
         </div>
       </div>
 
       {/* Recent Activity */}
-      <div className="bg-white border border-slate-200 rounded-lg p-6">
-        <h3 className="text-lg font-bold text-slate-900 mb-4">Recent Activity</h3>
+      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-6">
+        <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-4">Recent Activity</h3>
         <div className="space-y-3">
           {allActivity.map((item) => (
-            <div key={item.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
+            <div key={item.id} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg">
               {getActivityIcon(item.type)}
               <div className="flex-1">
-                <div className="font-medium text-slate-900">
+                <div className="font-medium text-slate-900 dark:text-slate-100">
                   {getActivityTitle(item)}
                 </div>
-                <div className="text-sm text-slate-500">
+                <div className="text-sm text-slate-500 dark:text-slate-400">
                   {new Date(item.createdAt).toLocaleString()}
                 </div>
               </div>
               {item.tags && item.tags.length > 0 && (
                 <div className="flex gap-1">
                   {item.tags.slice(0, 2).map(tag => (
-                    <span key={tag} className="px-2 py-1 bg-indigo-100 text-indigo-700 text-xs rounded">
+                    <span key={tag} className="px-2 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-xs rounded">
                       {tag}
                     </span>
                   ))}
