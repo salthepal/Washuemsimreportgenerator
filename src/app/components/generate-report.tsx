@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Sparkles, CheckCircle2, AlertCircle, Download, Copy, Lightbulb, Target, FolderOpen, Search, Edit3 } from 'lucide-react';
+import { Sparkles, CheckCircle2, AlertCircle, Download, Copy, Lightbulb, Target, FolderOpen, Search, Edit3, FileText } from 'lucide-react';
 import { Report, SessionNote, API_BASE, API_HEADERS } from '../App';
 import { CaseFile } from './case-files';
 import { toast } from 'sonner';
@@ -8,6 +8,7 @@ import { useSelection } from '../hooks/useSelection';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useDebounce } from 'use-debounce';
 import { FixedSizeList as List } from 'react-window';
+import jsPDF from 'jspdf';
 
 interface GenerateReportProps {
   reports: Report[];
@@ -205,6 +206,20 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
     } catch (error) {
       console.error('Error generating DOCX:', error);
       toast.error('Failed to generate DOCX file');
+    }
+  };
+
+  const handleDownloadPDF = async () => {
+    if (!generatedReport) return;
+
+    try {
+      const doc = new jsPDF();
+      doc.text(generatedReport, 10, 10);
+      doc.save(`post-session-report-${new Date().toISOString().split('T')[0]}.pdf`);
+      toast.success('Report downloaded as PDF');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast.error('Failed to generate PDF file');
     }
   };
 
@@ -510,6 +525,13 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
                     >
                       <Download className="w-4 h-4" />
                       Download DOCX
+                    </button>
+                    <button
+                      onClick={handleDownloadPDF}
+                      className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm font-medium flex items-center gap-2"
+                    >
+                      <FileText className="w-4 h-4" />
+                      Download PDF
                     </button>
                   </div>
                 </div>

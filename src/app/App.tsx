@@ -240,29 +240,31 @@ export default function App() {
           {/* Main Content */}
           <main className="container mx-auto px-2 md:px-6 py-4 md:py-8">
             <Tabs defaultValue="dashboard" className="space-y-4 md:space-y-6">
-              <TabsList className="grid w-full grid-cols-3 md:grid-cols-7 gap-2 md:gap-3 bg-transparent p-0">
-                <TabsTrigger value="dashboard" className="dashboard-tab text-xs md:text-sm py-2.5 md:py-3 px-2 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
-                  Dashboard
-                </TabsTrigger>
-                <TabsTrigger value="upload" className="upload-tab text-xs md:text-sm py-2.5 md:py-3 px-2 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
-                  Upload
-                </TabsTrigger>
-                <TabsTrigger value="cases" className="cases-tab text-xs md:text-sm py-2.5 md:py-3 px-2 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
-                  Cases
-                </TabsTrigger>
-                <TabsTrigger value="notes" className="notes-tab text-xs md:text-sm py-2.5 md:py-3 px-2 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
-                  Notes
-                </TabsTrigger>
-                <TabsTrigger value="generate" className="generate-tab text-xs md:text-sm py-2.5 md:py-3 px-2 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
-                  Generate
-                </TabsTrigger>
-                <TabsTrigger value="repository" className="repository-tab text-xs md:text-sm py-2.5 md:py-3 px-2 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
-                  Repository
-                </TabsTrigger>
-                <TabsTrigger value="settings" className="settings-tab text-xs md:text-sm py-2.5 md:py-3 px-2 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
-                  Settings
-                </TabsTrigger>
-              </TabsList>
+              <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0">
+                <TabsList className="inline-flex md:grid w-auto md:w-full md:grid-cols-7 gap-2 md:gap-3 bg-transparent p-0 min-w-full md:min-w-0">
+                  <TabsTrigger value="dashboard" className="dashboard-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+                    Dashboard
+                  </TabsTrigger>
+                  <TabsTrigger value="upload" className="upload-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+                    Upload
+                  </TabsTrigger>
+                  <TabsTrigger value="cases" className="cases-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+                    Cases
+                  </TabsTrigger>
+                  <TabsTrigger value="notes" className="notes-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+                    Notes
+                  </TabsTrigger>
+                  <TabsTrigger value="generate" className="generate-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+                    Generate
+                  </TabsTrigger>
+                  <TabsTrigger value="repository" className="repository-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+                    Repository
+                  </TabsTrigger>
+                  <TabsTrigger value="settings" className="settings-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+                    Settings
+                  </TabsTrigger>
+                </TabsList>
+              </div>
 
               <TabsContent value="dashboard" className="p-2 md:p-6">
                 <Suspense fallback={
@@ -322,7 +324,7 @@ export default function App() {
                 <div className="space-y-4 md:space-y-6">
                   <div>
                     <h2 className="text-xl md:text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">Settings & Administration</h2>
-                    <p className="text-sm md:text-base text-slate-600 dark:text-slate-300">
+                    <p className="text-sm md:text-base text-slate-600 dark:text-slate-400">
                       Manage backups, audit logs, and system configuration
                     </p>
                   </div>
@@ -338,16 +340,16 @@ export default function App() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs md:text-sm">
                       {KEYBOARD_SHORTCUTS.map((shortcut) => (
                         <div key={shortcut.key} className="flex justify-between items-center">
-                          <span className="text-slate-600 dark:text-slate-300">{shortcut.label}</span>
-                          <kbd className="px-2 py-1 bg-white dark:bg-slate-800 border rounded text-xs">{shortcut.key}</kbd>
+                          <span className="text-slate-600 dark:text-slate-400">{shortcut.label}</span>
+                          <kbd className="px-2 py-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded text-xs text-slate-900 dark:text-slate-100">{shortcut.key}</kbd>
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 md:p-6 border border-blue-200 dark:border-blue-800">
-                    <h3 className="text-base md:text-lg font-bold text-blue-900 dark:text-blue-100 mb-2">System Information</h3>
-                    <div className="space-y-2 text-xs md:text-sm text-blue-800 dark:text-blue-200">
+                  <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-4 md:p-6 border border-blue-200 dark:border-blue-800">
+                    <h3 className="text-base md:text-lg font-bold text-blue-900 dark:text-blue-200 mb-2">System Information</h3>
+                    <div className="space-y-2 text-xs md:text-sm text-blue-800 dark:text-blue-300">
                       <p><strong>Version:</strong> 2.0.0 (Optimized)</p>
                       <p><strong>Total Documents:</strong> {reports.length + sessionNotes.length + generatedReports.length}</p>
                       <p><strong>Gemini Model:</strong> gemini-3-flash-preview</p>
