@@ -92,6 +92,13 @@ export function UploadReports({ reports, onRefresh }: UploadReportsProps) {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Client-side filter for .docx files only
+    if (!file.name.toLowerCase().endsWith('.docx')) {
+      toast.error('Only .docx files are allowed');
+      e.target.value = ''; // Clear the input
+      return;
+    }
+
     const error = validateDocxFile(file);
     if (error) {
       toast.error(error);
@@ -100,6 +107,13 @@ export function UploadReports({ reports, onRefresh }: UploadReportsProps) {
 
     setSelectedFile(file);
     toast.success(`File selected: ${file.name}`);
+  };
+  
+  const handleClearFile = () => {
+    setSelectedFile(null);
+    const fileInput = document.getElementById('docx-upload') as HTMLInputElement;
+    if (fileInput) fileInput.value = '';
+    toast.success('File cleared');
   };
 
   const handleUpload = async () => {
@@ -322,16 +336,26 @@ export function UploadReports({ reports, onRefresh }: UploadReportsProps) {
               type="date"
             />
 
-            <ActionButton
-              onClick={handleUpload}
-              disabled={uploading}
-              loading={uploading}
-              variant="primary"
-              fullWidth
-              icon={<Upload className="w-4 h-4 md:w-5 md:h-5" />}
-            >
-              Upload Report
-            </ActionButton>
+            <div className="flex gap-3">
+              <ActionButton
+                onClick={handleUpload}
+                disabled={uploading}
+                loading={uploading}
+                variant="primary"
+                fullWidth
+                icon={<Upload className="w-4 h-4 md:w-5 md:h-5" />}
+              >
+                Upload Report
+              </ActionButton>
+              <button
+                onClick={handleClearFile}
+                disabled={uploading}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
+              >
+                <Trash2 className="w-4 h-4" />
+                Clear
+              </button>
+            </div>
           </div>
         )}
       </div>

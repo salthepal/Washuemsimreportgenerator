@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Upload, Trash2, Calendar, Eye, FolderOpen, User, CheckCircle } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Upload, Trash2, Calendar, Eye, FolderOpen, User, CheckCircle, Save } from 'lucide-react';
 import { API_BASE, API_HEADERS } from '../App';
 import { toast } from 'sonner';
 import { useConfirmDialog } from './ui/confirm-dialog';
@@ -43,7 +43,66 @@ export function CaseFiles({ caseFiles, onRefresh }: CaseFilesProps) {
   const [dragActive, setDragActive] = useState(false);
   const [previewDocument, setPreviewDocument] = useState<CaseFile | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [autoSaving, setAutoSaving] = useState(false);
   const { confirm, dialog } = useConfirmDialog();
+
+  // Auto-save to localStorage
+  const saveToLocalStorage = useCallback(() => {
+    if (uploaderName.trim() || caseType.trim() || selectedFile) {
+      setAutoSaving(true);
+      localStorage.setItem('caseFileDraft', JSON.stringify({
+        uploaderName,
+        caseType,
+        fileName: selectedFile?.name || null,
+        savedAt: new Date().toISOString(),
+      }));
+      setLastSaved(new Date());
+      setTimeout(() => setAutoSaving(false), 500);
+    }
+  }, [uploaderName, caseType, selectedFile]);
+
+  // Auto-save to localStorage every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      saveToLocalStorage();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [saveToLocalStorage]);
+
+  // Restore from localStorage on mount
+  useEffect(() => {
+    const draft = localStorage.getItem('caseFileDraft');
+    if (draft) {
+      try {
+        const parsed = JSON.parse(draft);
+        if (parsed.uploaderName || parsed.caseType) {
+          confirm({
+            title: 'Restore Draft',
+            description: `Found unsaved case file data from ${new Date(parsed.savedAt).toLocaleString()}. Would you like to restore it?`,
+            confirmText: 'Restore',
+            cancelText: 'Discard Draft',
+            onConfirm: () => {
+              setUploaderName(parsed.uploaderName || '');
+              setCaseType(parsed.caseType || '');
+              toast.success('Draft restored (note: file must be reselected)');
+            },
+            onCancel: () => {
+              localStorage.removeItem('caseFileDraft');
+              toast.success('Draft discarded');
+            },
+          });
+        }
+      } catch (e) {
+        console.error('Failed to parse draft:', e);
+      }
+    }
+  }, []);
+
+  const handleManualSave = () => {
+    saveToLocalStorage();
+    toast.success('Draft saved manually');
+  };
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -63,6 +122,12 @@ export function CaseFiles({ caseFiles, onRefresh }: CaseFilesProps) {
     const file = e.dataTransfer.files?.[0];
     if (!file) return;
 
+    // Client-side filter for .docx files only
+    if (!file.name.toLowerCase().endsWith('.docx')) {
+      toast.error('Only .docx files are allowed');
+      return;
+    }
+
     const error = validateDocxFile(file);
     if (error) {
       toast.error(error);
@@ -77,6 +142,13 @@ export function CaseFiles({ caseFiles, onRefresh }: CaseFilesProps) {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Client-side filter for .docx files only
+    if (!file.name.toLowerCase().endsWith('.docx')) {
+      toast.error('Only .docx files are allowed');
+      e.target.value = ''; // Clear the input
+      return;
+    }
+
     const error = validateDocxFile(file);
     if (error) {
       toast.error(error);
@@ -85,6 +157,13 @@ export function CaseFiles({ caseFiles, onRefresh }: CaseFilesProps) {
 
     setSelectedFile(file);
     toast.success(`File selected: ${file.name}`);
+  };
+
+  const handleClearFile = () => {
+    setSelectedFile(null);
+    const fileInput = document.getElementById('case-file-upload') as HTMLInputElement;
+    if (fileInput) fileInput.value = '';
+    toast.success('File cleared');
   };
 
   const handleUpload = async () => {
@@ -133,12 +212,14 @@ export function CaseFiles({ caseFiles, onRefresh }: CaseFilesProps) {
 
       if (response.ok) {
         setUploadProgress(100);
-        toast.success(`Case file "${processed.title}" uploaded successfully`);
-        // Reset form
+        toast.success(`Case file \"${processed.title}\" uploaded successfully`);
+        // Reset form and clear localStorage
         setSelectedFile(null);
         setUploaderName('');
         setCaseType('');
         setUploadProgress(0);
+        setLastSaved(null);
+        localStorage.removeItem('caseFileDraft');
         const fileInput = document.getElementById('case-file-upload') as HTMLInputElement;
         if (fileInput) fileInput.value = '';
         onRefresh();
@@ -158,7 +239,7 @@ export function CaseFiles({ caseFiles, onRefresh }: CaseFilesProps) {
   const handleDelete = async (id: string, title: string) => {
     confirm({
       title: 'Delete Case File',
-      description: `Are you sure you want to delete "${title}"? This action cannot be undone.`,
+      description: `Are you sure you want to delete \"${title}\"? This action cannot be undone.`,
       variant: 'destructive',
       confirmText: 'Delete',
       onConfirm: async () => {
@@ -207,6 +288,23 @@ export function CaseFiles({ caseFiles, onRefresh }: CaseFilesProps) {
 
       {/* Upload Form */}
       <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-4 md:p-6 border border-slate-200 dark:border-slate-700">
+        {/* Auto-save indicator */}
+        {lastSaved && (
+          <div className="mb-4 flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
+            {autoSaving ? (
+              <>
+                <div className="w-3 h-3 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
+                <span>Saving draft...</span>
+              </>
+            ) : (
+              <>
+                <Save className="w-3 h-3 text-green-600" />
+                <span>Draft saved at {lastSaved.toLocaleTimeString()}</span>
+              </>
+            )}
+          </div>
+        )}
+
         {/* Drag and Drop File Upload */}
         <div
           className={`text-center py-8 md:py-12 border-2 border-dashed rounded-lg transition-all bg-white dark:bg-slate-900 mb-4 ${
@@ -285,16 +383,36 @@ export function CaseFiles({ caseFiles, onRefresh }: CaseFilesProps) {
               optional
             />
 
-            <ActionButton
-              onClick={handleUpload}
-              disabled={uploading}
-              loading={uploading}
-              variant="success"
-              fullWidth
-              icon={<Upload className="w-4 h-4 md:w-5 md:h-5" />}
-            >
-              Upload Case File
-            </ActionButton>
+            <div className="flex gap-3">
+              <ActionButton
+                onClick={handleUpload}
+                disabled={uploading}
+                loading={uploading}
+                variant="success"
+                fullWidth
+                icon={<Upload className="w-4 h-4 md:w-5 md:h-5" />}
+              >
+                Upload Case File
+              </ActionButton>
+              <button
+                type="button"
+                onClick={handleManualSave}
+                disabled={uploading || (!uploaderName.trim() && !caseType.trim())}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-colors text-sm font-medium flex items-center gap-2 whitespace-nowrap disabled:cursor-not-allowed"
+                title="Save draft to localStorage"
+              >
+                <Save className="w-4 h-4" />
+                Save Draft
+              </button>
+              <button
+                onClick={handleClearFile}
+                disabled={uploading}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
+              >
+                <Trash2 className="w-4 h-4" />
+                Clear
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -310,7 +428,7 @@ export function CaseFiles({ caseFiles, onRefresh }: CaseFilesProps) {
               <FolderOpen className="w-10 h-10 md:w-12 md:h-12 text-slate-400 mx-auto mb-3" />
               <p className="text-sm md:text-base text-slate-500 dark:text-slate-400">No case files uploaded yet</p>
               <p className="text-xs md:text-sm text-slate-400 dark:text-slate-500 mt-1">
-                Upload your first case file to provide context for AI-generated reports
+                Upload your first case file to get started
               </p>
             </div>
           ) : (
@@ -331,7 +449,7 @@ export function CaseFiles({ caseFiles, onRefresh }: CaseFilesProps) {
                         </span>
                       )}
                       {caseFile.metadata?.caseType && (
-                        <span className="px-2 py-0.5 bg-[#007A33]/10 text-[#007A33] rounded text-xs font-medium">
+                        <span className="px-2 py-0.5 bg-[#007A33]/20 dark:bg-green-700/30 text-[#007A33] dark:text-green-300 rounded font-medium">
                           {caseFile.metadata.caseType}
                         </span>
                       )}
@@ -344,28 +462,15 @@ export function CaseFiles({ caseFiles, onRefresh }: CaseFilesProps) {
                       {caseFile.content.substring(0, 150)}...
                     </p>
                   </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handlePreview(caseFile);
-                      }}
-                      className="text-[#007A33] hover:text-[#006629] p-2 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors flex-shrink-0"
-                      title="Preview"
-                    >
-                      <Eye className="w-4 h-4 md:w-5 md:h-5" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(caseFile.id, caseFile.title);
-                      }}
-                      className="text-red-600 hover:text-red-700 p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors flex-shrink-0"
-                      title="Delete"
-                    >
-                      <Trash2 className="w-4 h-4 md:w-5 md:h-5" />
-                    </button>
-                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(caseFile.id, caseFile.title);
+                    }}
+                    className="ml-2 text-red-600 hover:text-red-700 p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors flex-shrink-0"
+                  >
+                    <Trash2 className="w-4 h-4 md:w-5 md:h-5" />
+                  </button>
                 </div>
               </div>
             ))

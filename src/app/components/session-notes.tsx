@@ -51,11 +51,11 @@ export function SessionNotes({ sessionNotes, onRefresh }: SessionNotesProps) {
     }
   }, [uploaderName, sessionName, sessionDate, notes]);
 
-  // Auto-save every 10 seconds
+  // Auto-save to localStorage every 30 seconds
   useEffect(() => {
     const interval = setInterval(() => {
       saveToLocalStorage();
-    }, 10000);
+    }, 30000); // Changed from 10000 to 30000 (30 seconds)
     return () => clearInterval(interval);
   }, [saveToLocalStorage]);
 
@@ -70,12 +70,17 @@ export function SessionNotes({ sessionNotes, onRefresh }: SessionNotesProps) {
             title: 'Restore Draft',
             description: `Found unsaved session notes from ${new Date(parsed.savedAt).toLocaleString()}. Would you like to restore them?`,
             confirmText: 'Restore',
+            cancelText: 'Discard Draft',
             onConfirm: () => {
               setUploaderName(parsed.uploaderName || '');
               setSessionName(parsed.sessionName || '');
               setSessionDate(parsed.sessionDate || '');
               setNotes(parsed.notes || '');
               toast.success('Draft restored');
+            },
+            onCancel: () => {
+              localStorage.removeItem('sessionNotesDraft');
+              toast.success('Draft discarded');
             },
           });
         }
@@ -180,6 +185,11 @@ export function SessionNotes({ sessionNotes, onRefresh }: SessionNotesProps) {
   const handlePreview = (note: SessionNote) => {
     setPreviewDocument(note);
     setPreviewOpen(true);
+  };
+
+  const handleManualSave = () => {
+    saveToLocalStorage();
+    toast.success('Draft saved manually');
   };
 
   return (
@@ -287,16 +297,28 @@ export function SessionNotes({ sessionNotes, onRefresh }: SessionNotesProps) {
             )}
           </div>
 
-          <ActionButton
-            type="submit"
-            disabled={adding}
-            loading={adding}
-            variant="success"
-            fullWidth
-            icon={<Plus className="w-4 h-4 md:w-5 md:h-5" />}
-          >
-            Add Session Notes
-          </ActionButton>
+          <div className="flex gap-3">
+            <ActionButton
+              type="submit"
+              disabled={adding}
+              loading={adding}
+              variant="success"
+              fullWidth
+              icon={<Plus className="w-4 h-4 md:w-5 md:h-5" />}
+            >
+              Add Session Notes
+            </ActionButton>
+            <button
+              type="button"
+              onClick={handleManualSave}
+              disabled={adding || (!notes.trim() && !sessionName.trim() && !uploaderName.trim())}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-colors text-sm font-medium flex items-center gap-2 whitespace-nowrap disabled:cursor-not-allowed"
+              title="Save draft to localStorage"
+            >
+              <Save className="w-4 h-4" />
+              Save Draft
+            </button>
+          </div>
         </div>
       </form>
 

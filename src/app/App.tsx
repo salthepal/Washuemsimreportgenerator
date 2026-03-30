@@ -6,6 +6,7 @@ import { SessionNotes } from './components/session-notes';
 import { CaseFiles, CaseFile } from './components/case-files';
 import { GenerateReport } from './components/generate-report';
 import { ViewRepository } from './components/view-repository';
+import { LSTTracker } from './components/lst-tracker';
 import { QuickActionsBar } from './components/quick-actions-bar';
 import { BackupRestore } from './components/backup-restore';
 import { AuditLog } from './components/audit-log';
@@ -80,6 +81,22 @@ export interface SessionNote {
   };
 }
 
+export interface LST {
+  id: string;
+  title: string;
+  description: string;
+  status: 'Identified' | 'In Progress' | 'Resolved' | 'Recurring';
+  severity: 'High' | 'Medium' | 'Low';
+  category: 'Equipment' | 'Process' | 'Resources' | 'Logistics';
+  identifiedDate: string;
+  lastSeenDate: string;
+  recommendation: string;
+  relatedReportId: string;
+  resolutionNote?: string;
+  resolvedDate?: string;
+  recurrenceCount?: number;
+}
+
 export const API_BASE = `https://${projectId}.supabase.co/functions/v1/make-server-7fe18c53`;
 export const API_HEADERS = {
   'Content-Type': 'application/json',
@@ -91,6 +108,7 @@ export default function App() {
   const [sessionNotes, setSessionNotes] = useState<SessionNote[]>([]);
   const [caseFiles, setCaseFiles] = useState<CaseFile[]>([]);
   const [generatedReports, setGeneratedReports] = useState<Report[]>([]);
+  const [lsts, setLsts] = useState<LST[]>([]);
   const [loading, setLoading] = useState(true);
   const [tourRunning, setTourRunning] = useState(false);
   const [darkMode, setDarkMode] = useDarkMode();
@@ -103,11 +121,12 @@ export default function App() {
       console.log('Fetching data from:', API_BASE);
       
       // Fetch all data in parallel for faster loading
-      const [reportsRes, notesRes, caseFilesRes, generatedRes] = await Promise.all([
+      const [reportsRes, notesRes, caseFilesRes, generatedRes, lstsRes] = await Promise.all([
         fetch(`${API_BASE}/reports`, { headers: API_HEADERS }),
         fetch(`${API_BASE}/notes`, { headers: API_HEADERS }),
         fetch(`${API_BASE}/case-files`, { headers: API_HEADERS }),
         fetch(`${API_BASE}/reports/generated`, { headers: API_HEADERS }),
+        fetch(`${API_BASE}/lsts`, { headers: API_HEADERS }),
       ]);
       
       console.log('All responses received - status codes:', {
@@ -115,6 +134,7 @@ export default function App() {
         notes: notesRes.status,
         caseFiles: caseFilesRes.status,
         generated: generatedRes.status,
+        lsts: lstsRes.status,
       });
       
       // Process reports
@@ -166,6 +186,16 @@ export default function App() {
       } else {
         const errorText = await generatedRes.text();
         console.error('Failed to fetch generated reports:', errorText);
+      }
+
+      // Process LSTs
+      if (lstsRes.ok) {
+        const lstsData = await lstsRes.json();
+        console.log('LSTs data:', lstsData);
+        setLsts(lstsData.lsts || []);
+      } else {
+        const errorText = await lstsRes.text();
+        console.error('Failed to fetch LSTs:', errorText);
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -240,31 +270,32 @@ export default function App() {
           {/* Main Content */}
           <main className="container mx-auto px-2 md:px-6 py-4 md:py-8">
             <Tabs defaultValue="dashboard" className="space-y-4 md:space-y-6">
-              <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0">
-                <TabsList className="inline-flex md:grid w-auto md:w-full md:grid-cols-7 gap-2 md:gap-3 bg-transparent p-0 min-w-full md:min-w-0">
-                  <TabsTrigger value="dashboard" className="dashboard-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
-                    Dashboard
-                  </TabsTrigger>
-                  <TabsTrigger value="upload" className="upload-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
-                    Upload
-                  </TabsTrigger>
-                  <TabsTrigger value="cases" className="cases-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
-                    Cases
-                  </TabsTrigger>
-                  <TabsTrigger value="notes" className="notes-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
-                    Notes
-                  </TabsTrigger>
-                  <TabsTrigger value="generate" className="generate-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
-                    Generate
-                  </TabsTrigger>
-                  <TabsTrigger value="repository" className="repository-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
-                    Repository
-                  </TabsTrigger>
-                  <TabsTrigger value="settings" className="settings-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
-                    Settings
-                  </TabsTrigger>
-                </TabsList>
-              </div>
+              <TabsList className="flex items-center justify-start overflow-x-auto overflow-y-hidden whitespace-nowrap bg-slate-100 dark:bg-slate-800 rounded-lg p-1 w-full no-scrollbar">
+                <TabsTrigger value="dashboard" className="dashboard-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+                  Dashboard
+                </TabsTrigger>
+                <TabsTrigger value="upload" className="upload-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+                  Upload
+                </TabsTrigger>
+                <TabsTrigger value="cases" className="cases-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+                  Cases
+                </TabsTrigger>
+                <TabsTrigger value="notes" className="notes-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+                  Notes
+                </TabsTrigger>
+                <TabsTrigger value="generate" className="generate-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+                  Generate
+                </TabsTrigger>
+                <TabsTrigger value="lst-tracker" className="lst-tracker-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+                  LST Tracker
+                </TabsTrigger>
+                <TabsTrigger value="repository" className="repository-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+                  Repository
+                </TabsTrigger>
+                <TabsTrigger value="settings" className="settings-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+                  Settings
+                </TabsTrigger>
+              </TabsList>
 
               <TabsContent value="dashboard" className="p-2 md:p-6">
                 <Suspense fallback={
@@ -309,6 +340,10 @@ export default function App() {
                   caseFiles={caseFiles}
                   onRefresh={fetchData}
                 />
+              </TabsContent>
+
+              <TabsContent value="lst-tracker" className="p-2 md:p-6">
+                <LSTTracker lsts={lsts} onRefresh={fetchData} />
               </TabsContent>
 
               <TabsContent value="repository" className="p-2 md:p-6">

@@ -406,6 +406,50 @@ Hierarchy Example:
 
 **Recommendations:** Consider pre-positioning chest tube trays in each resuscitation bay or implementing a visual checklist system.
 
+SECONDARY TASK - LST EXTRACTION:
+After generating the Markdown report, perform a secondary extraction task. Identify every discrete Latent Safety Threat (LST) mentioned in the report and format them into a structured JSON array.
+
+JSON Schema for each LST:
+- title: Short name (e.g., "Missing ETCO2 Bricks", "Manual BP Cuff Issues")
+- description: The 'Current State' observation from the report (detailed description)
+- severity: "High" (Immediate life/safety risk), "Medium" (Delay in care), or "Low" (System inefficiency)
+- category: "Equipment", "Process", "Logistics", or "Resources"
+- recommendation: The specific suggested fix from the report
+
+SEVERITY GUIDELINES:
+- High: Immediate patient safety risk, critical equipment missing, life-threatening delay potential
+- Medium: Significant workflow disruption, moderate safety concern, equipment malfunction
+- Low: Minor inefficiency, non-critical resource gap, optimization opportunity
+
+CRITICAL OUTPUT FORMAT:
+You MUST return your response in this EXACT format with these delimiters:
+
+REPORT_START
+[Your complete Markdown report here]
+REPORT_END
+
+LST_DATA_START
+[JSON array of extracted LSTs here - valid JSON only, no markdown]
+LST_DATA_END
+
+Example LST JSON format:
+[
+  {
+    "title": "Missing ETCO2 Monitoring Bricks",
+    "description": "The ETCO2 monitoring bricks were not available in the resuscitation bay, requiring staff to search for equipment during a critical intubation.",
+    "severity": "High",
+    "category": "Equipment",
+    "recommendation": "Stock ETCO2 bricks in all resuscitation bays and implement a daily equipment checklist."
+  },
+  {
+    "title": "Manual Blood Pressure Cuff Location",
+    "description": "Manual BP cuffs are stored in an unmarked drawer, leading to delays when automated systems fail.",
+    "severity": "Medium",
+    "category": "Logistics",
+    "recommendation": "Label the storage location clearly and add manual BP cuffs to the room orientation checklist."
+  }
+]
+
 Input Data:
 PRIOR REPORTS (Style Guide):
 ${priorReportsContext}
@@ -416,7 +460,7 @@ ${sessionNotesContext}
 CASE FILE DATA:
 ${caseFilesContext}
 
-Generate the Post-Session Report now using strict Markdown formatting.`;
+Generate the Post-Session Report now using strict Markdown formatting, followed by the extracted LST data in the format specified above.`;
 
     // Call Gemini API
     const response = await fetch(
@@ -445,7 +489,42 @@ Generate the Post-Session Report now using strict Markdown formatting.`;
       return c.json({ error: 'No content generated from Gemini API' }, 500);
     }
 
-    const generatedContent = data.candidates[0].content.parts[0].text;
+    const fullResponse = data.candidates[0].content.parts[0].text;
+
+    // Parse the dual response (Report + LST Data)
+    let reportContent = fullResponse;
+    let extractedLSTs = [];
+    
+    try {
+      // Check if response contains the delimiters
+      if (fullResponse.includes('REPORT_START') && fullResponse.includes('LST_DATA_START')) {
+        // Extract report content
+        const reportMatch = fullResponse.match(/REPORT_START\s*([\s\S]*?)\s*REPORT_END/);
+        if (reportMatch) {
+          reportContent = reportMatch[1].trim();
+        }
+        
+        // Extract LST data
+        const lstMatch = fullResponse.match(/LST_DATA_START\s*([\s\S]*?)\s*LST_DATA_END/);
+        if (lstMatch) {
+          const lstJson = lstMatch[1].trim();
+          try {
+            extractedLSTs = JSON.parse(lstJson);
+            console.log(`Successfully extracted ${extractedLSTs.length} LSTs from report`);
+          } catch (parseError) {
+            console.error('Failed to parse LST JSON:', parseError);
+            console.error('LST JSON content:', lstJson);
+            // Continue without LST data rather than failing the entire request
+          }
+        }
+      } else {
+        console.log('Response does not contain LST delimiters, using full response as report content');
+      }
+    } catch (parseError) {
+      console.error('Error parsing dual response:', parseError);
+      // Fall back to using the full response as report content
+      reportContent = fullResponse;
+    }
 
     // Collect tags from source reports and notes
     const allTags = new Set<string>();
@@ -457,7 +536,7 @@ Generate the Post-Session Report now using strict Markdown formatting.`;
     const newReport = {
       id: reportId,
       title: `Generated Report - ${new Date().toLocaleDateString()}`,
-      content: generatedContent,
+      content: reportContent,
       date: new Date().toISOString(),
       type: 'generated_report',
       status: 'draft',
@@ -468,9 +547,80 @@ Generate the Post-Session Report now using strict Markdown formatting.`;
     };
 
     await kv.set(reportId, newReport);
-
     await logAudit('create', 'report', newReport.title, reportId);
-    return c.json({ success: true, report: newReport });
+    
+    // Process extracted LSTs and sync to tracker
+    let lstStats = { new: 0, updated: 0, total: extractedLSTs.length };
+    
+    if (extractedLSTs.length > 0) {
+      try {
+        // Get existing LSTs to check for duplicates
+        const existingLSTs = await kv.getByPrefix('lst_');
+        const today = new Date().toISOString();
+        
+        for (const lstData of extractedLSTs) {
+          // Sanitize fields
+          const sanitizedLST = {
+            title: lstData.title || 'Untitled Threat',
+            description: lstData.description || '',
+            severity: lstData.severity || 'Medium',
+            category: lstData.category || 'Process',
+            recommendation: lstData.recommendation || '',
+          };
+          
+          // Check if similar LST already exists (fuzzy match on title)
+          const similarLST = existingLSTs.find(existing => {
+            const title1 = existing.title?.toLowerCase() || '';
+            const title2 = sanitizedLST.title.toLowerCase();
+            // Match if titles share significant overlap (first 20 chars or contained within)
+            return title1.includes(title2.slice(0, 20)) || title2.includes(title1.slice(0, 20));
+          });
+          
+          if (similarLST) {
+            // Update existing LST: increment recurrence, update lastSeenDate
+            const updatedLST = {
+              ...similarLST,
+              lastSeenDate: today,
+              recurrenceCount: (similarLST.recurrenceCount || 1) + 1,
+              status: 'Recurring',
+              relatedReportId: reportId,
+            };
+            
+            await kv.set(similarLST.id, updatedLST);
+            await logAudit('update', 'lst', updatedLST.title, similarLST.id);
+            lstStats.updated++;
+            console.log(`Updated recurring LST: ${similarLST.title} (count: ${updatedLST.recurrenceCount})`);
+          } else {
+            // Create new LST
+            const lstId = `lst_${crypto.randomUUID()}`;
+            const newLST = {
+              id: lstId,
+              ...sanitizedLST,
+              status: 'Identified',
+              identifiedDate: today,
+              lastSeenDate: today,
+              relatedReportId: reportId,
+              recurrenceCount: 1,
+              createdAt: today,
+            };
+            
+            await kv.set(lstId, newLST);
+            await logAudit('create', 'lst', newLST.title, lstId);
+            lstStats.new++;
+            console.log(`Created new LST: ${newLST.title}`);
+          }
+        }
+      } catch (lstError) {
+        console.error('Error processing LSTs:', lstError);
+        // Don't fail the entire request if LST processing fails
+      }
+    }
+    
+    return c.json({ 
+      success: true, 
+      report: newReport,
+      lstStats: lstStats
+    });
   } catch (error) {
     console.log(`Error generating report: ${error}`);
     return c.json({ error: `Failed to generate report: ${error.message}` }, 500);
@@ -958,6 +1108,282 @@ app.delete('/make-server-7fe18c53/case-files/:id', async (c) => {
   } catch (error) {
     console.log(`Error deleting case file: ${error}`);
     return c.json({ error: `Failed to delete case file: ${error.message}` }, 500);
+  }
+});
+
+// ============================
+// LST (Latent Safety Threat) Routes
+// ============================
+
+// Get all LSTs
+app.get('/make-server-7fe18c53/lsts', async (c) => {
+  try {
+    console.log('Fetching LSTs with prefix: lst_');
+    const allLSTs = await kv.getByPrefix('lst_');
+    console.log('All LSTs from KV:', allLSTs.length, 'items found');
+    
+    return c.json({ 
+      lsts: allLSTs,
+      count: allLSTs.length 
+    });
+  } catch (error) {
+    console.log(`Error fetching LSTs: ${error}`);
+    return c.json({ error: `Failed to fetch LSTs: ${error.message}` }, 500);
+  }
+});
+
+// Add a new LST
+app.post('/make-server-7fe18c53/lsts/add', async (c) => {
+  try {
+    let lst = await c.req.json();
+    
+    // Sanitize all text fields
+    if (lst.title) lst.title = sanitizeText(lst.title);
+    if (lst.description) lst.description = sanitizeText(lst.description);
+    if (lst.recommendation) lst.recommendation = sanitizeText(lst.recommendation);
+    if (lst.resolutionNote) lst.resolutionNote = sanitizeText(lst.resolutionNote);
+    
+    // Validate required fields
+    if (!lst.title || !lst.description) {
+      return c.json({ error: 'Title and description are required' }, 400);
+    }
+    
+    const id = `lst_${crypto.randomUUID()}`;
+    const newLST = {
+      id,
+      ...lst,
+      createdAt: new Date().toISOString(),
+      recurrenceCount: lst.recurrenceCount || 1,
+    };
+    
+    await kv.set(id, newLST);
+    await logAudit('create', 'lst', lst.title, id);
+    
+    console.log('LST added successfully:', id);
+    return c.json({ success: true, id });
+  } catch (error) {
+    console.log(`Error adding LST: ${error}`);
+    return c.json({ error: `Failed to add LST: ${error.message}` }, 500);
+  }
+});
+
+// Update an LST
+app.put('/make-server-7fe18c53/lsts/:id', async (c) => {
+  try {
+    const id = c.req.param('id');
+    let lst = await c.req.json();
+    
+    // Sanitize all text fields
+    if (lst.title) lst.title = sanitizeText(lst.title);
+    if (lst.description) lst.description = sanitizeText(lst.description);
+    if (lst.recommendation) lst.recommendation = sanitizeText(lst.recommendation);
+    if (lst.resolutionNote) lst.resolutionNote = sanitizeText(lst.resolutionNote);
+    
+    await kv.set(id, lst);
+    await logAudit('update', 'lst', lst.title, id);
+    
+    console.log('LST updated successfully:', id);
+    return c.json({ success: true });
+  } catch (error) {
+    console.log(`Error updating LST: ${error}`);
+    return c.json({ error: `Failed to update LST: ${error.message}` }, 500);
+  }
+});
+
+// Delete an LST
+app.delete('/make-server-7fe18c53/lsts/:id', async (c) => {
+  try {
+    const id = c.req.param('id');
+    const lst = await kv.get(id);
+    await kv.del(id);
+    await logAudit('delete', 'lst', lst?.title || 'Unknown', id);
+    return c.json({ success: true });
+  } catch (error) {
+    console.log(`Error deleting LST: ${error}`);
+    return c.json({ error: `Failed to delete LST: ${error.message}` }, 500);
+  }
+});
+
+// Batch extract LSTs from generated report text
+app.post('/make-server-7fe18c53/lsts/extract', async (c) => {
+  try {
+    const { reportId, reportText, reportTitle } = await c.req.json();
+    
+    if (!reportText) {
+      return c.json({ error: 'Report text is required' }, 400);
+    }
+    
+    // Get Gemini API key
+    const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+    if (!geminiApiKey) {
+      return c.json({ error: 'GEMINI_API_KEY not configured' }, 500);
+    }
+    
+    // Get selected model from settings (default to gemini-2.0-flash-exp)
+    const settingsKey = 'settings_model_selection';
+    const settings = await kv.get(settingsKey);
+    const selectedModel = settings?.selectedModel || 'gemini-2.0-flash-exp';
+    
+    console.log(`Extracting LSTs using model: ${selectedModel}`);
+    
+    // Create prompt for LST extraction
+    const extractionPrompt = `You are analyzing a simulation Post-Session Report to extract all Latent Safety Threats (LSTs) as discrete, actionable items.
+
+**TASK:** Extract every distinct Latent Safety Threat from the report below into a structured JSON array.
+
+**LATENT SAFETY THREAT DEFINITION:** A system-level condition or gap that increases the likelihood of errors or adverse events. These are environmental, equipment, or process-related issues rather than individual performance problems.
+
+**EXTRACTION RULES:**
+1. Extract ONLY system-level threats (equipment, process, resources, logistics)
+2. Do NOT include individual performance issues or team communication gaps
+3. Each threat should be a discrete, actionable item
+4. Categorize each threat as: "Equipment", "Process", "Resources", or "Logistics"
+5. Assess severity as: "High", "Medium", or "Low"
+6. Extract the recommendation for each threat
+
+**OUTPUT FORMAT:** Return ONLY a valid JSON array with this exact structure (no markdown, no explanation):
+
+[
+  {
+    "title": "Brief title (max 60 characters)",
+    "description": "Detailed description of the threat",
+    "severity": "High|Medium|Low",
+    "category": "Equipment|Process|Resources|Logistics",
+    "recommendation": "Specific recommendation to address this threat"
+  }
+]
+
+**SEVERITY GUIDELINES:**
+- **High**: Immediate patient safety risk, critical equipment missing, life-threatening delay potential
+- **Medium**: Significant workflow disruption, moderate safety concern, equipment malfunction
+- **Low**: Minor inefficiency, non-critical resource gap, optimization opportunity
+
+**REPORT TEXT:**
+${reportText}
+
+Extract all Latent Safety Threats now as a JSON array:`;
+
+    // Call Gemini API
+    const geminiResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${geminiApiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: extractionPrompt }] }],
+          generationConfig: {
+            temperature: 0.2,
+            topK: 40,
+            topP: 0.95,
+            maxOutputTokens: 8192,
+          },
+        }),
+      }
+    );
+
+    if (!geminiResponse.ok) {
+      const errorData = await geminiResponse.text();
+      console.error('Gemini API error during LST extraction:', errorData);
+      return c.json({ error: 'Failed to extract LSTs from report' }, 500);
+    }
+
+    const geminiData = await geminiResponse.json();
+    const extractedText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+    
+    console.log('Raw Gemini response for LST extraction:', extractedText);
+    
+    // Parse JSON from response (handle markdown code blocks)
+    let lstsData: any[] = [];
+    try {
+      // Remove markdown code blocks if present
+      const cleanedText = extractedText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      lstsData = JSON.parse(cleanedText);
+    } catch (parseError) {
+      console.error('Failed to parse LST extraction response:', parseError);
+      console.error('Raw response:', extractedText);
+      return c.json({ error: 'Failed to parse extracted LSTs', details: extractedText }, 500);
+    }
+    
+    if (!Array.isArray(lstsData)) {
+      console.error('LST extraction did not return an array:', lstsData);
+      return c.json({ error: 'Invalid LST extraction format' }, 500);
+    }
+    
+    console.log(`Extracted ${lstsData.length} LSTs from report`);
+    
+    // Get existing LSTs to check for duplicates/recurrences
+    const existingLSTs = await kv.getByPrefix('lst_');
+    const today = new Date().toISOString();
+    
+    const newLSTs: string[] = [];
+    const updatedLSTs: string[] = [];
+    
+    // Process each extracted LST
+    for (const lstData of lstsData) {
+      // Sanitize fields
+      const sanitizedLST = {
+        title: sanitizeText(lstData.title || 'Untitled Threat'),
+        description: sanitizeText(lstData.description || ''),
+        severity: lstData.severity || 'Medium',
+        category: lstData.category || 'Process',
+        recommendation: sanitizeText(lstData.recommendation || ''),
+      };
+      
+      // Check if similar LST already exists (fuzzy match on title)
+      const similarLST = existingLSTs.find(existing => {
+        const titleSimilarity = existing.title?.toLowerCase().includes(sanitizedLST.title.toLowerCase().slice(0, 20)) ||
+                                sanitizedLST.title.toLowerCase().includes(existing.title?.toLowerCase().slice(0, 20));
+        return titleSimilarity;
+      });
+      
+      if (similarLST) {
+        // Update existing LST: increment recurrence, update lastSeenDate, change status to Recurring
+        const updatedLST = {
+          ...similarLST,
+          lastSeenDate: today,
+          recurrenceCount: (similarLST.recurrenceCount || 1) + 1,
+          status: 'Recurring',
+          relatedReportId: reportId, // Update to most recent report
+        };
+        
+        await kv.set(similarLST.id, updatedLST);
+        await logAudit('update', 'lst', updatedLST.title, similarLST.id);
+        updatedLSTs.push(similarLST.id);
+        console.log(`Updated recurring LST: ${similarLST.title} (count: ${updatedLST.recurrenceCount})`);
+      } else {
+        // Create new LST
+        const id = `lst_${crypto.randomUUID()}`;
+        const newLST = {
+          id,
+          ...sanitizedLST,
+          status: 'Identified',
+          identifiedDate: today,
+          lastSeenDate: today,
+          relatedReportId: reportId || 'unknown',
+          recurrenceCount: 1,
+          createdAt: today,
+        };
+        
+        await kv.set(id, newLST);
+        await logAudit('create', 'lst', newLST.title, id);
+        newLSTs.push(id);
+        console.log(`Created new LST: ${newLST.title}`);
+      }
+    }
+    
+    return c.json({ 
+      success: true, 
+      extracted: lstsData.length,
+      newLSTs: newLSTs.length,
+      updatedLSTs: updatedLSTs.length,
+      details: {
+        new: newLSTs,
+        updated: updatedLSTs,
+      }
+    });
+  } catch (error) {
+    console.error('Error in LST extraction:', error);
+    return c.json({ error: `Failed to extract LSTs: ${error.message}` }, 500);
   }
 });
 

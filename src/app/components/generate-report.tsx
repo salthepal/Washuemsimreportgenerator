@@ -123,8 +123,37 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
       if (response.ok) {
         const data = await response.json();
         const reportContent = data.report.content;
+        const lstStats = data.lstStats || { new: 0, updated: 0, total: 0 };
+        
         setGeneratedReport(reportContent);
-        toast.success('Report generated successfully!');
+        
+        // Show success message with LST extraction info
+        if (lstStats.total > 0) {
+          toast.success(
+            `Report generated successfully!`,
+            {
+              description: `${lstStats.total} Latent Safety Threats identified: ${lstStats.new} new, ${lstStats.updated} recurring`,
+              duration: 5000,
+              icon: '🔍',
+            }
+          );
+          
+          // Show additional safety alert if high-priority threats detected
+          if (lstStats.new > 0) {
+            setTimeout(() => {
+              toast.info(
+                `Safety Alert: ${lstStats.new} new threats added to LST Tracker`,
+                {
+                  description: 'Review and prioritize these system-level safety concerns',
+                  duration: 6000,
+                }
+              );
+            }, 1000);
+          }
+        } else {
+          toast.success('Report generated successfully!');
+        }
+        
         onRefresh();
 
         // Parallelize post-generation tasks (tags and similar reports)
@@ -214,7 +243,31 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
 
     try {
       const doc = new jsPDF();
-      doc.text(generatedReport, 10, 10);
+      
+      // Set font size and margins
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 20;
+      const maxWidth = pageWidth - (margin * 2);
+      
+      // Split text into lines that fit the page width
+      const lines = doc.splitTextToSize(generatedReport, maxWidth);
+      
+      // Add text to PDF with pagination
+      let y = margin;
+      const lineHeight = 7;
+      
+      doc.setFontSize(11);
+      
+      for (let i = 0; i < lines.length; i++) {
+        if (y + lineHeight > pageHeight - margin) {
+          doc.addPage();
+          y = margin;
+        }
+        doc.text(lines[i], margin, y);
+        y += lineHeight;
+      }
+      
       doc.save(`post-session-report-${new Date().toISOString().split('T')[0]}.pdf`);
       toast.success('Report downloaded as PDF');
     } catch (error) {
@@ -451,14 +504,32 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
           )}
 
           {/* Generate Button */}
-          <button
-            onClick={handleGenerate}
-            disabled={generating || reportSelection.selected.length === 0 || noteSelection.selected.length === 0}
-            className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white font-semibold py-4 px-6 rounded-lg transition-colors flex items-center justify-center gap-3 text-lg"
-          >
-            <Sparkles className="w-6 h-6" />
-            {generating ? 'Generating Report with Gemini AI...' : 'Generate Post-Session Report'}
-          </button>
+          <div className="space-y-3">
+            {/* LST Extraction Info Banner */}
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <h4 className="font-semibold text-blue-900 dark:text-blue-200 text-sm mb-1">
+                    Automatic LST Extraction Enabled
+                  </h4>
+                  <p className="text-xs text-blue-800 dark:text-blue-300">
+                    This report will automatically identify and extract Latent Safety Threats, then sync them to the <strong>LST Tracker</strong> tab. 
+                    New threats are added as "Identified" and recurring issues are marked as "Recurring" with updated timestamps.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={handleGenerate}
+              disabled={generating || reportSelection.selected.length === 0 || noteSelection.selected.length === 0}
+              className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white font-semibold py-4 px-6 rounded-lg transition-colors flex items-center justify-center gap-3 text-lg"
+            >
+              <Sparkles className="w-6 h-6" />
+              {generating ? 'Generating Report with Gemini AI...' : 'Generate Post-Session Report'}
+            </button>
+          </div>
 
           {/* Generated Report Display */}
           {generatedReport && (
