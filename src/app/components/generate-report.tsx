@@ -1,10 +1,13 @@
-import { useState, useMemo } from 'react';
-import { Sparkles, CheckCircle2, AlertCircle, Download, Copy, Lightbulb, Target, FolderOpen } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Sparkles, CheckCircle2, AlertCircle, Download, Copy, Lightbulb, Target, FolderOpen, Search, Edit3 } from 'lucide-react';
 import { Report, SessionNote, API_BASE, API_HEADERS } from '../App';
 import { CaseFile } from './case-files';
 import { toast } from 'sonner';
-import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
+import { downloadDocxFromMarkdown } from '../utils/docx';
 import { useSelection } from '../hooks/useSelection';
+import { useLocalStorage } from '../hooks/useLocalStorage';
+import { useDebounce } from 'use-debounce';
+import { FixedSizeList as List } from 'react-window';
 
 interface GenerateReportProps {
   reports: Report[];
@@ -18,19 +21,48 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
   const noteSelection = useSelection<string>();
   const caseSelection = useSelection<string>();
   const [generating, setGenerating] = useState(false);
-  const [generatedReport, setGeneratedReport] = useState<string | null>(null);
+  
+  // Draft Persistence: Use localStorage to persist generated report
+  const [generatedReport, setGeneratedReport] = useLocalStorage<string | null>('generatedReportDraft', null);
+  
   const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
   const [similarReports, setSimilarReports] = useState<Report[]>([]);
+  const [recommendations, setRecommendations] = useState<string[]>([]);
+  
+  // Search & Filter: Search queries with 300ms debounce
+  const [reportSearchQuery, setReportSearchQuery] = useState('');
+  const [noteSearchQuery, setNoteSearchQuery] = useState('');
+  const [debouncedReportSearch] = useDebounce(reportSearchQuery, 300);
+  const [debouncedNoteSearch] = useDebounce(noteSearchQuery, 300);
+
+  // Filtered lists based on search
+  const filteredReports = useMemo(() => {
+    if (!debouncedReportSearch) return reports;
+    const query = debouncedReportSearch.toLowerCase();
+    return reports.filter(r => 
+      r.title.toLowerCase().includes(query) ||
+      r.content.toLowerCase().includes(query)
+    );
+  }, [reports, debouncedReportSearch]);
+
+  const filteredNotes = useMemo(() => {
+    if (!debouncedNoteSearch) return sessionNotes;
+    const query = debouncedNoteSearch.toLowerCase();
+    return sessionNotes.filter(n => 
+      n.sessionName.toLowerCase().includes(query) ||
+      n.notes.toLowerCase().includes(query)
+    );
+  }, [sessionNotes, debouncedNoteSearch]);
 
   // Memoized selections
   const selectedReportsList = useMemo(() => 
-    reports.filter(r => reportSelection.selected.includes(r.id)), 
-    [reports, reportSelection.selected]
+    filteredReports.filter(r => reportSelection.selected.includes(r.id)), 
+    [filteredReports, reportSelection.selected]
   );
 
   const selectedNotesList = useMemo(() => 
-    sessionNotes.filter(n => noteSelection.selected.includes(n.id)), 
-    [sessionNotes, noteSelection.selected]
+    filteredNotes.filter(n => noteSelection.selected.includes(n.id)), 
+    [filteredNotes, noteSelection.selected]
   );
 
   const selectedCasesList = useMemo(() => 
@@ -38,8 +70,8 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
     [caseFiles, caseSelection.selected]
   );
 
-  // Load smart recommendations on mount
-  useMemo(() => {
+  // Load smart recommendations when notes selection changes
+  useEffect(() => {
     const loadRecommendations = async () => {
       if (noteSelection.selected.length > 0) {
         try {
@@ -94,35 +126,41 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
         toast.success('Report generated successfully!');
         onRefresh();
 
-        // Auto-tag the generated report
-        try {
-          const tagsResponse = await fetch(`${API_BASE}/suggest-tags`, {
+        // Parallelize post-generation tasks (tags and similar reports)
+        const postGenerationTasks = Promise.allSettled([
+          // Task 1: Suggest tags
+          fetch(`${API_BASE}/suggest-tags`, {
             method: 'POST',
             headers: API_HEADERS,
             body: JSON.stringify({ content: reportContent }),
-          });
-          if (tagsResponse.ok) {
-            const tagsData = await tagsResponse.json();
-            setSuggestedTags(tagsData.tags || []);
-          }
-        } catch (err) {
-          console.error('Failed to generate tags:', err);
-        }
+          }).then(async (tagsResponse) => {
+            if (tagsResponse.ok) {
+              const tagsData = await tagsResponse.json();
+              setSuggestedTags(tagsData.tags || []);
+            }
+          }),
+          // Task 2: Find similar reports
+          fetch(`${API_BASE}/find-similar`, {
+            method: 'POST',
+            headers: API_HEADERS,
+            body: JSON.stringify({ content: reportContent }),
+          }).then(async (similarResponse) => {
+            if (similarResponse.ok) {
+              const similarData = await similarResponse.json();
+              setSimilarReports(similarData.similar || []);
+            }
+          }),
+        ]);
 
-        // Find similar reports
-        try {
-          const similarResponse = await fetch(`${API_BASE}/find-similar`, {
-            method: 'POST',
-            headers: API_HEADERS,
-            body: JSON.stringify({ content: reportContent }),
+        // Log any errors from post-generation tasks without blocking the UX
+        postGenerationTasks.then((results) => {
+          results.forEach((result, index) => {
+            if (result.status === 'rejected') {
+              const taskName = index === 0 ? 'tag suggestion' : 'similar report search';
+              console.error(`Failed ${taskName}:`, result.reason);
+            }
           });
-          if (similarResponse.ok) {
-            const similarData = await similarResponse.json();
-            setSimilarReports(similarData.similar || []);
-          }
-        } catch (err) {
-          console.error('Failed to find similar reports:', err);
-        }
+        });
       } else {
         const error = await response.text();
         console.error('Generation error:', error);
@@ -160,161 +198,9 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
     if (!generatedReport) return;
 
     try {
-      // Parse the Markdown content into structured paragraphs
-      const lines = generatedReport.split('\n');
-      const children: any[] = [];
-      let currentFindingLevel = 0; // Track if we're in a ### subsection
-
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        const trimmedLine = line.trim();
-        
-        if (!trimmedLine) {
-          // Add spacing for empty lines
-          children.push(new Paragraph({ text: '' }));
-          currentFindingLevel = 0;
-          continue;
-        }
-
-        // H1: Main title with # 
-        if (trimmedLine.startsWith('# ') && !trimmedLine.startsWith('##')) {
-          children.push(
-            new Paragraph({
-              text: trimmedLine.substring(2).trim(),
-              heading: HeadingLevel.HEADING_1,
-              spacing: { before: 240, after: 120 },
-            })
-          );
-          currentFindingLevel = 0;
-        }
-        // H2: Major sections with ##
-        else if (trimmedLine.startsWith('## ') && !trimmedLine.startsWith('###')) {
-          children.push(
-            new Paragraph({
-              text: trimmedLine.substring(3).trim(),
-              heading: HeadingLevel.HEADING_2,
-              spacing: { before: 240, after: 120 },
-            })
-          );
-          currentFindingLevel = 0;
-        }
-        // H3: Specific findings with ###
-        else if (trimmedLine.startsWith('### ')) {
-          children.push(
-            new Paragraph({
-              text: trimmedLine.substring(4).trim(),
-              heading: HeadingLevel.HEADING_3,
-              spacing: { before: 240, after: 120 },
-            })
-          );
-          currentFindingLevel = 1; // We're now in a finding subsection
-        }
-        // Bullet points with - (or -, •, *)
-        else if (trimmedLine.match(/^[-•*]\s+/)) {
-          children.push(
-            new Paragraph({
-              text: trimmedLine.replace(/^[-•*]\s+/, ''),
-              bullet: { level: 0 },
-              spacing: { after: 80 },
-            })
-          );
-        }
-        // Numbered lists
-        else if (trimmedLine.match(/^\d+[\.)]\s+/)) {
-          children.push(
-            new Paragraph({
-              text: trimmedLine.replace(/^\d+[\.)]\s+/, ''),
-              numbering: { reference: 'default-numbering', level: 0 },
-              spacing: { after: 80 },
-            })
-          );
-        }
-        // Regular paragraphs with inline formatting
-        else {
-          const textRuns: TextRun[] = [];
-          
-          // Parse inline bold (**text**) and italics (*text*)
-          // Split by both bold and italic markers
-          const parts = trimmedLine.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/);
-          
-          parts.forEach(part => {
-            if (!part) return;
-            
-            // Bold text
-            if (part.startsWith('**') && part.endsWith('**')) {
-              textRuns.push(new TextRun({ 
-                text: part.slice(2, -2), 
-                bold: true 
-              }));
-            }
-            // Italic text (but not bold)
-            else if (part.startsWith('*') && part.endsWith('*') && !part.startsWith('**')) {
-              textRuns.push(new TextRun({ 
-                text: part.slice(1, -1), 
-                italics: true 
-              }));
-            }
-            // Regular text
-            else {
-              textRuns.push(new TextRun(part));
-            }
-          });
-
-          // Apply indentation for paragraphs under ### findings
-          const indentLevel = currentFindingLevel > 0 ? 720 : 0;
-
-          children.push(
-            new Paragraph({
-              children: textRuns.length > 0 ? textRuns : [new TextRun(trimmedLine)],
-              spacing: { after: 120 },
-              indent: indentLevel > 0 ? { left: indentLevel } : undefined,
-            })
-          );
-        }
-      }
-
-      const doc = new Document({
-        numbering: {
-          config: [
-            {
-              reference: 'default-numbering',
-              levels: [
-                {
-                  level: 0,
-                  format: 'decimal',
-                  text: '%1.',
-                  alignment: 'start',
-                },
-              ],
-            },
-          ],
-        },
-        sections: [
-          {
-            properties: {
-              page: {
-                margin: {
-                  top: 1440,    // 1 inch
-                  right: 1440,  // 1 inch
-                  bottom: 1440, // 1 inch
-                  left: 1440,   // 1 inch
-                },
-              },
-            },
-            children,
-          },
-        ],
+      await downloadDocxFromMarkdown(generatedReport, {
+        filename: `post-session-report-${new Date().toISOString().split('T')[0]}.docx`
       });
-
-      const blob = await Packer.toBlob(doc);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `post-session-report-${new Date().toISOString().split('T')[0]}.docx`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
       toast.success('Report downloaded as DOCX');
     } catch (error) {
       console.error('Error generating DOCX:', error);
@@ -332,12 +218,12 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
       </div>
 
       {reports.length === 0 || sessionNotes.length === 0 ? (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800/50 rounded-lg p-6">
           <div className="flex items-start gap-3">
-            <AlertCircle className="w-6 h-6 text-yellow-600 flex-shrink-0 mt-0.5" />
+            <AlertCircle className="w-6 h-6 text-yellow-600 dark:text-yellow-500 flex-shrink-0 mt-0.5" />
             <div>
-              <h3 className="font-semibold text-yellow-900 mb-1">Setup Required</h3>
-              <p className="text-yellow-800">
+              <h3 className="font-semibold text-yellow-900 dark:text-yellow-200 mb-1">Setup Required</h3>
+              <p className="text-yellow-800 dark:text-yellow-300">
                 {reports.length === 0 && sessionNotes.length === 0 && 
                   'Please upload at least one prior report and add at least one session note to generate a new report.'}
                 {reports.length === 0 && sessionNotes.length > 0 && 
@@ -352,21 +238,34 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
         <>
           <div className="grid md:grid-cols-2 gap-6">
             {/* Select Prior Reports */}
-            <div className="bg-slate-50 rounded-lg p-5 border border-slate-200">
-              <h3 className="font-semibold text-slate-900 mb-3 flex items-center justify-between">
+            <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-5 border border-slate-200 dark:border-slate-700">
+              <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-3 flex items-center justify-between">
                 <span>Select Prior Reports (Style Reference)</span>
-                <span className="text-sm font-normal text-slate-600">
+                <span className="text-sm font-normal text-slate-600 dark:text-slate-400">
                   {reportSelection.selected.length} selected
                 </span>
               </h3>
+              
+              {/* Search Input with Debounce */}
+              <div className="relative mb-3">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500" />
+                <input
+                  type="text"
+                  placeholder="Search reports..."
+                  value={reportSearchQuery}
+                  onChange={(e) => setReportSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                />
+              </div>
+              
               <div className="space-y-2 max-h-96 overflow-y-auto">
-                {reports.map((report) => (
+                {filteredReports.map((report) => (
                   <label
                     key={report.id}
                     className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
                       reportSelection.selected.includes(report.id)
-                        ? 'bg-blue-50 border-blue-300'
-                        : 'bg-white border-slate-200 hover:border-slate-300'
+                        ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700'
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
                     }`}
                   >
                     <input
@@ -376,13 +275,13 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
                       className="mt-1 w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
                     />
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-slate-900 text-sm">{report.title}</div>
-                      <div className="text-xs text-slate-500 mt-0.5">
+                      <div className="font-medium text-slate-900 dark:text-slate-100 text-sm">{report.title}</div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                         {new Date(report.date).toLocaleDateString()}
                       </div>
                     </div>
                     {reportSelection.selected.includes(report.id) && (
-                      <CheckCircle2 className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                      <CheckCircle2 className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
                     )}
                   </label>
                 ))}
@@ -396,7 +295,7 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
                 </button>
                 <button
                   onClick={reportSelection.deselectAll}
-                  className="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-700 rounded-lg transition-colors text-sm font-medium"
+                  className="px-4 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg transition-colors text-sm font-medium"
                 >
                   Deselect All
                 </button>
@@ -404,21 +303,34 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
             </div>
 
             {/* Select Session Notes */}
-            <div className="bg-slate-50 rounded-lg p-5 border border-slate-200">
-              <h3 className="font-semibold text-slate-900 mb-3 flex items-center justify-between">
+            <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-5 border border-slate-200 dark:border-slate-700">
+              <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-3 flex items-center justify-between">
                 <span>Select Session Notes</span>
-                <span className="text-sm font-normal text-slate-600">
+                <span className="text-sm font-normal text-slate-600 dark:text-slate-400">
                   {noteSelection.selected.length} selected
                 </span>
               </h3>
+              
+              {/* Search Input with Debounce */}
+              <div className="relative mb-3">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500" />
+                <input
+                  type="text"
+                  placeholder="Search notes..."
+                  value={noteSearchQuery}
+                  onChange={(e) => setNoteSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                />
+              </div>
+              
               <div className="space-y-2 max-h-96 overflow-y-auto">
-                {sessionNotes.map((note) => (
+                {filteredNotes.map((note) => (
                   <label
                     key={note.id}
                     className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
                       noteSelection.selected.includes(note.id)
-                        ? 'bg-green-50 border-green-300'
-                        : 'bg-white border-slate-200 hover:border-slate-300'
+                        ? 'bg-green-50 dark:bg-green-900/30 border-green-300 dark:border-green-700'
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
                     }`}
                   >
                     <input
@@ -428,13 +340,13 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
                       className="mt-1 w-4 h-4 text-green-600 rounded focus:ring-2 focus:ring-green-500"
                     />
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-slate-900 text-sm">{note.sessionName}</div>
-                      <div className="text-xs text-slate-500 mt-0.5">
+                      <div className="font-medium text-slate-900 dark:text-slate-100 text-sm">{note.sessionName}</div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                         {new Date(note.createdAt).toLocaleDateString()} • {note.participants.length} participants
                       </div>
                     </div>
                     {noteSelection.selected.includes(note.id) && (
-                      <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
+                      <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
                     )}
                   </label>
                 ))}
@@ -448,7 +360,7 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
                 </button>
                 <button
                   onClick={noteSelection.deselectAll}
-                  className="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-700 rounded-lg transition-colors text-sm font-medium"
+                  className="px-4 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg transition-colors text-sm font-medium"
                 >
                   Deselect All
                 </button>
@@ -458,17 +370,17 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
 
           {/* Select Case Files (Optional) */}
           {caseFiles.length > 0 && (
-            <div className="bg-gradient-to-br from-[#007A33]/5 to-[#007A33]/10 rounded-lg p-5 border-2 border-[#007A33]/30">
+            <div className="bg-gradient-to-br from-[#007A33]/5 to-[#007A33]/10 dark:from-green-900/20 dark:to-green-900/10 rounded-lg p-5 border-2 border-[#007A33]/30 dark:border-green-700/50">
               <div className="flex items-start gap-3 mb-4">
-                <FolderOpen className="w-6 h-6 text-[#007A33] flex-shrink-0 mt-0.5" />
+                <FolderOpen className="w-6 h-6 text-[#007A33] dark:text-green-400 flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
-                  <h3 className="font-semibold text-slate-900 flex items-center justify-between">
+                  <h3 className="font-semibold text-slate-900 dark:text-slate-100 flex items-center justify-between">
                     <span>Select Case Files (Optional Context)</span>
-                    <span className="text-sm font-normal text-slate-600">
+                    <span className="text-sm font-normal text-slate-600 dark:text-slate-400">
                       {caseSelection.selected.length} selected
                     </span>
                   </h3>
-                  <p className="text-sm text-slate-600 mt-1">
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
                     Case files provide patient scenario details to the AI for more accurate and contextually relevant reports.
                   </p>
                 </div>
@@ -479,8 +391,8 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
                     key={caseFile.id}
                     className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
                       caseSelection.selected.includes(caseFile.id)
-                        ? 'bg-[#007A33]/10 border-[#007A33]'
-                        : 'bg-white border-slate-200 hover:border-[#007A33]/50'
+                        ? 'bg-[#007A33]/10 dark:bg-green-900/30 border-[#007A33] dark:border-green-700'
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-[#007A33]/50 dark:hover:border-green-600/50'
                     }`}
                   >
                     <input
@@ -490,10 +402,10 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
                       className="mt-1 w-4 h-4 text-[#007A33] rounded focus:ring-2 focus:ring-[#007A33]"
                     />
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-slate-900 text-sm">{caseFile.title}</div>
-                      <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                      <div className="font-medium text-slate-900 dark:text-slate-100 text-sm">{caseFile.title}</div>
+                      <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                         {caseFile.metadata?.caseType && (
-                          <span className="px-2 py-0.5 bg-[#007A33]/20 text-[#007A33] rounded font-medium">
+                          <span className="px-2 py-0.5 bg-[#007A33]/20 dark:bg-green-700/30 text-[#007A33] dark:text-green-300 rounded font-medium">
                             {caseFile.metadata.caseType}
                           </span>
                         )}
@@ -501,7 +413,7 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
                       </div>
                     </div>
                     {caseSelection.selected.includes(caseFile.id) && (
-                      <CheckCircle2 className="w-5 h-5 text-[#007A33] flex-shrink-0" />
+                      <CheckCircle2 className="w-5 h-5 text-[#007A33] dark:text-green-400 flex-shrink-0" />
                     )}
                   </label>
                 ))}
@@ -515,7 +427,7 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
                 </button>
                 <button
                   onClick={caseSelection.deselectAll}
-                  className="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-700 rounded-lg transition-colors text-sm font-medium"
+                  className="px-4 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg transition-colors text-sm font-medium"
                 >
                   Deselect All
                 </button>
@@ -577,13 +489,17 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
                 </div>
               )}
 
-              <div className="bg-white border-2 border-purple-200 rounded-lg p-6">
+              <div className="bg-white dark:bg-slate-900 border-2 border-purple-200 dark:border-purple-700 rounded-lg p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xl font-bold text-slate-900">Generated Report</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100">Generated Report</h3>
+                    <Edit3 className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                    <span className="text-sm text-slate-500 dark:text-slate-400">(Editable)</span>
+                  </div>
                   <div className="flex gap-2">
                     <button
                       onClick={handleCopy}
-                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors text-sm font-medium flex items-center gap-2"
+                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg transition-colors text-sm font-medium flex items-center gap-2"
                     >
                       <Copy className="w-4 h-4" />
                       Copy
@@ -597,11 +513,12 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
                     </button>
                   </div>
                 </div>
-                <div className="bg-slate-50 rounded-lg p-6 max-h-[600px] overflow-y-auto">
-                  <pre className="whitespace-pre-wrap font-sans text-slate-800 leading-relaxed">
-                    {generatedReport}
-                  </pre>
-                </div>
+                <textarea
+                  value={generatedReport}
+                  onChange={(e) => setGeneratedReport(e.target.value)}
+                  className="w-full min-h-[600px] bg-slate-50 dark:bg-slate-800 rounded-lg p-6 font-sans text-slate-800 dark:text-slate-200 leading-relaxed border border-slate-300 dark:border-slate-600 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-y"
+                  placeholder="Your generated report will appear here..."
+                />
               </div>
             </>
           )}

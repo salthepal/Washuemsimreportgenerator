@@ -15,21 +15,22 @@ export interface ProcessedDocument {
  */
 export async function processDocxFile(file: File): Promise<ProcessedDocument> {
   const arrayBuffer = await file.arrayBuffer();
-  const result = await mammoth.convertToHtml({ arrayBuffer });
   
-  // Extract plain text for content field
+  // Extract plain text directly (faster and more reliable)
+  const plainTextResult = await mammoth.extractRawText({ arrayBuffer });
+  const plainText = sanitizeText(plainTextResult.value);
+  
+  // Convert to HTML for htmlContent field
+  const htmlResult = await mammoth.convertToHtml({ arrayBuffer });
+  const htmlContent = sanitizeHTML(htmlResult.value);
+  
+  // Extract title from first heading in HTML
   const tempDiv = document.createElement('div');
-  tempDiv.innerHTML = result.value;
-  const plainText = sanitizeText(tempDiv.textContent || tempDiv.innerText || '');
-  
-  // Auto-extract title from first heading or filename
+  tempDiv.innerHTML = htmlResult.value;
   const firstHeading = tempDiv.querySelector('h1, h2, h3');
   const title = sanitizeText(
     firstHeading?.textContent?.trim() || file.name.replace('.docx', '')
   );
-  
-  // Sanitize HTML content
-  const htmlContent = sanitizeHTML(result.value);
   
   return {
     title,

@@ -102,13 +102,22 @@ export default function App() {
       
       console.log('Fetching data from:', API_BASE);
       
-      // Fetch reports
-      const reportsRes = await fetch(`${API_BASE}/reports`, {
-        headers: API_HEADERS,
+      // Fetch all data in parallel for faster loading
+      const [reportsRes, notesRes, caseFilesRes, generatedRes] = await Promise.all([
+        fetch(`${API_BASE}/reports`, { headers: API_HEADERS }),
+        fetch(`${API_BASE}/notes`, { headers: API_HEADERS }),
+        fetch(`${API_BASE}/case-files`, { headers: API_HEADERS }),
+        fetch(`${API_BASE}/reports/generated`, { headers: API_HEADERS }),
+      ]);
+      
+      console.log('All responses received - status codes:', {
+        reports: reportsRes.status,
+        notes: notesRes.status,
+        caseFiles: caseFilesRes.status,
+        generated: generatedRes.status,
       });
       
-      console.log('Reports response status:', reportsRes.status);
-      
+      // Process reports
       if (reportsRes.ok) {
         const reportsData = await reportsRes.json();
         console.log('Reports data:', reportsData);
@@ -129,13 +138,7 @@ export default function App() {
         }
       }
 
-      // Fetch session notes
-      const notesRes = await fetch(`${API_BASE}/notes`, {
-        headers: API_HEADERS,
-      });
-      
-      console.log('Notes response status:', notesRes.status);
-      
+      // Process session notes
       if (notesRes.ok) {
         const notesData = await notesRes.json();
         console.log('Notes data:', notesData);
@@ -145,13 +148,7 @@ export default function App() {
         console.error('Failed to fetch session notes:', errorText);
       }
 
-      // Fetch case files
-      const caseFilesRes = await fetch(`${API_BASE}/case-files`, {
-        headers: API_HEADERS,
-      });
-      
-      console.log('Case files response status:', caseFilesRes.status);
-      
+      // Process case files
       if (caseFilesRes.ok) {
         const caseFilesData = await caseFilesRes.json();
         console.log('Case files data:', caseFilesData);
@@ -161,13 +158,7 @@ export default function App() {
         console.error('Failed to fetch case files:', errorText);
       }
 
-      // Fetch generated reports
-      const generatedRes = await fetch(`${API_BASE}/reports/generated`, {
-        headers: API_HEADERS,
-      });
-      
-      console.log('Generated reports response status:', generatedRes.status);
-      
+      // Process generated reports
       if (generatedRes.ok) {
         const generatedData = await generatedRes.json();
         console.log('Generated reports data:', generatedData);
