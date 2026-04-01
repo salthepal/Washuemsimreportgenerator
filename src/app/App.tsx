@@ -95,6 +95,7 @@ export interface LST {
   resolutionNote?: string;
   resolvedDate?: string;
   recurrenceCount?: number;
+  assignee?: string;
 }
 
 export const API_BASE = `https://${projectId}.supabase.co/functions/v1/make-server-7fe18c53`;
