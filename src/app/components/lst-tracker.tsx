@@ -1,8 +1,8 @@
-import React from 'react';
-import { useState, useMemo } from 'react';
-import { 
-  AlertTriangle, Search, Filter, CheckCircle2, ShieldCheck, XCircle, 
-  TrendingUp, Users, Calendar, PlayCircle, Archive, AlertCircle, Download, MapPin 
+import React, { useState, useMemo, useCallback } from 'react';
+import {
+  AlertTriangle, Search, Filter, CheckCircle2, ShieldCheck, XCircle,
+  TrendingUp, Users, Calendar, PlayCircle, Archive, AlertCircle,
+  Download, MapPin, Pencil, X, Save
 } from 'lucide-react';
 import { LST, API_BASE, API_HEADERS } from '../App';
 import { toast } from 'sonner';
@@ -12,7 +12,23 @@ interface LSTTrackerProps {
   onRefresh: () => void;
 }
 
-type FilterType = 'status' | 'severity' | 'category' | 'location';
+// ── Edit Modal State ──
+interface EditModalState {
+  open: boolean;
+  lst: LST | null;
+  status: string;
+  severity: string;
+  category: string;
+  location: string;
+  recommendation: string;
+  resolutionNote: string;
+  assignee: string;
+}
+
+const INITIAL_EDIT: EditModalState = {
+  open: false, lst: null, status: '', severity: '', category: '',
+  location: '', recommendation: '', resolutionNote: '', assignee: '',
+};
 
 export function LSTTracker({ lsts, onRefresh }: LSTTrackerProps) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -20,75 +36,119 @@ export function LSTTracker({ lsts, onRefresh }: LSTTrackerProps) {
   const [filterSeverity, setFilterSeverity] = useState<string>('All');
   const [filterCategory, setFilterCategory] = useState<string>('All');
   const [filterLocation, setFilterLocation] = useState<string>('All');
-  const [editingResolution, setEditingResolution] = useState<string | null>(null);
-  const [resolutionText, setResolutionText] = useState('');
-  const [assignee, setAssignee] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  // Get unique locations for filter
+  // Edit modal
+  const [editModal, setEditModal] = useState<EditModalState>(INITIAL_EDIT);
+
+  // ── Derived Data ──
   const uniqueLocations = useMemo(() => {
-    const locations = lsts.map(lst => lst.location).filter(Boolean) as string[];
+    const locations = lsts.map(l => l.location).filter(Boolean) as string[];
     return ['All', ...Array.from(new Set(locations))];
   }, [lsts]);
 
-  // Filter and search LSTs
   const filteredLsts = useMemo(() => {
     return lsts.filter((lst) => {
-      const matchesSearch = 
-        lst.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        lst.description.toLowerCase().includes(searchQuery.toLowerCase());
-      
+      const q = searchQuery.toLowerCase();
+      const matchesSearch = !q || lst.title.toLowerCase().includes(q) || lst.description.toLowerCase().includes(q);
       const matchesStatus = filterStatus === 'All' || lst.status === filterStatus;
       const matchesSeverity = filterSeverity === 'All' || lst.severity === filterSeverity;
       const matchesCategory = filterCategory === 'All' || lst.category === filterCategory;
       const matchesLocation = filterLocation === 'All' || lst.location === filterLocation;
-
       return matchesSearch && matchesStatus && matchesSeverity && matchesCategory && matchesLocation;
     });
   }, [lsts, searchQuery, filterStatus, filterSeverity, filterCategory, filterLocation]);
 
-  // Sort by severity (High -> Medium -> Low) and then by lastSeenDate
   const sortedLsts = useMemo(() => {
     return [...filteredLsts].sort((a, b) => {
-      const severityOrder = { High: 0, Medium: 1, Low: 2 };
-      const severityDiff = severityOrder[a.severity] - severityOrder[b.severity];
-      if (severityDiff !== 0) return severityDiff;
+      const ord: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
+      const d = ord[a.severity] - ord[b.severity];
+      if (d !== 0) return d;
       return new Date(b.lastSeenDate).getTime() - new Date(a.lastSeenDate).getTime();
     });
   }, [filteredLsts]);
 
-  // Calculate stats
-  const stats = useMemo(() => {
-    const total = lsts.length;
-    const highSeverity = lsts.filter(lst => lst.severity === 'High').length;
-    const resolved = lsts.filter(lst => lst.status === 'Resolved').length;
-    
-    return { total, highSeverity, resolved };
-  }, [lsts]);
+  const stats = useMemo(() => ({
+    total: lsts.length,
+    active: lsts.filter(l => l.status === 'Identified').length,
+    highSeverity: lsts.filter(l => l.severity === 'High' && l.status !== 'Resolved').length,
+    resolved: lsts.filter(l => l.status === 'Resolved').length,
+  }), [lsts]);
 
-  // Advance status
-  const handleAdvanceStatus = async (lst: LST) => {
-    const statusFlow: Record<string, string> = {
-      'Identified': 'In Progress',
-      'In Progress': 'In Progress', // Keep in progress until formally resolved
-      'Recurring': 'In Progress',
-    };
+  const activeFilterCount = [filterStatus, filterSeverity, filterCategory, filterLocation].filter(f => f !== 'All').length;
 
-    const newStatus = statusFlow[lst.status];
-    if (!newStatus) return;
+  // ── Handlers ──
+  const openEditModal = useCallback((lst: LST) => {
+    setEditModal({
+      open: true,
+      lst,
+      status: lst.status,
+      severity: lst.severity,
+      category: lst.category,
+      location: lst.location || '',
+      recommendation: lst.recommendation || '',
+      resolutionNote: lst.resolutionNote || '',
+      assignee: lst.assignee || '',
+    });
+  }, []);
 
+  const handleSaveEdit = async () => {
+    if (!editModal.lst) return;
+    setSaving(true);
     try {
       const payload = {
-        ...lst,
-        status: newStatus,
+        ...editModal.lst,
+        status: editModal.status,
+        severity: editModal.severity,
+        category: editModal.category,
+        location: editModal.location || undefined,
+        recommendation: editModal.recommendation,
+        resolutionNote: editModal.resolutionNote || undefined,
+        assignee: editModal.assignee || undefined,
+        ...(editModal.status === 'Resolved' && !editModal.lst.resolvedDate
+          ? { resolvedDate: new Date().toISOString() }
+          : {}),
       };
 
-      const response = await fetch(`${API_BASE}/lsts/${lst.id}`, {
+      const response = await fetch(`${API_BASE}/lsts/${editModal.lst.id}`, {
         method: 'PUT',
         headers: API_HEADERS,
         body: JSON.stringify(payload),
       });
 
+      if (response.ok) {
+        toast.success('LST updated successfully');
+        setEditModal(INITIAL_EDIT);
+        onRefresh();
+      } else {
+        const err = await response.text();
+        console.error('Update LST error:', err);
+        toast.error('Failed to update LST');
+      }
+    } catch (error) {
+      console.error('Error updating LST:', error);
+      toast.error('Failed to update LST');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAdvanceStatus = async (lst: LST) => {
+    const flow: Record<string, string> = {
+      'Identified': 'In Progress',
+      'In Progress': 'In Progress',
+      'Recurring': 'In Progress',
+    };
+    const newStatus = flow[lst.status];
+    if (!newStatus) return;
+
+    try {
+      const response = await fetch(`${API_BASE}/lsts/${lst.id}`, {
+        method: 'PUT',
+        headers: API_HEADERS,
+        body: JSON.stringify({ ...lst, status: newStatus }),
+      });
       if (response.ok) {
         toast.success(`Advanced to "${newStatus}"`);
         onRefresh();
@@ -101,149 +161,14 @@ export function LSTTracker({ lsts, onRefresh }: LSTTrackerProps) {
     }
   };
 
-  // Save resolution
-  const handleSaveResolution = async (lst: LST) => {
-    if (!resolutionText.trim()) {
-      toast.error('Please provide resolution notes');
-      return;
-    }
-
-    try {
-      const payload = {
-        ...lst,
-        resolutionNote: resolutionText,
-        assignee: assignee || lst.assignee,
-        status: 'Resolved',
-        resolvedDate: new Date().toISOString(),
-      };
-
-      const response = await fetch(`${API_BASE}/lsts/${lst.id}`, {
-        method: 'PUT',
-        headers: API_HEADERS,
-        body: JSON.stringify(payload),
-      });
-
-      if (response.ok) {
-        toast.success('Threat resolved successfully', {
-          description: 'Resolution documented in system records',
-          icon: '✅',
-        });
-        setEditingResolution(null);
-        setResolutionText('');
-        setAssignee('');
-        onRefresh();
-      } else {
-        toast.error('Failed to save resolution');
-      }
-    } catch (error) {
-      console.error('Error saving resolution:', error);
-      toast.error('Failed to save resolution');
-    }
-  };
-
-  // Get border and background for severity
-  const getSeverityStyles = (severity: string, status: string) => {
-    if (status === 'Resolved') {
-      return {
-        border: 'border-l-4 border-l-[#007A33]',
-        bg: 'bg-gradient-to-r from-green-50/50 to-transparent dark:from-green-950/20 dark:to-transparent',
-      };
-    }
-
-    if (severity === 'High') {
-      return {
-        border: 'border-l-4 border-l-[#A51417]',
-        bg: 'bg-gradient-to-r from-red-50/80 to-transparent dark:from-red-950/30 dark:to-transparent',
-      };
-    }
-
-    if (severity === 'Medium') {
-      return {
-        border: 'border-l-4 border-l-orange-500',
-        bg: 'bg-gradient-to-r from-orange-50/50 to-transparent dark:from-orange-950/20 dark:to-transparent',
-      };
-    }
-
-    return {
-      border: 'border-l-4 border-l-slate-300 dark:border-l-slate-600',
-      bg: 'bg-white dark:bg-slate-800',
-    };
-  };
-
-  // Get status configuration
-  const getStatusConfig = (status: string) => {
-    const configs: Record<string, { label: string; icon: any; color: string }> = {
-      'Identified': { 
-        label: 'Identified', 
-        icon: AlertCircle, 
-        color: 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800' 
-      },
-      'In Progress': { 
-        label: 'In Progress', 
-        icon: PlayCircle, 
-        color: 'text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800' 
-      },
-      'Resolved': { 
-        label: 'Resolved', 
-        icon: CheckCircle2, 
-        color: 'text-[#007A33] dark:text-green-400 bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800' 
-      },
-      'Recurring': { 
-        label: 'Recurring Alert', 
-        icon: TrendingUp, 
-        color: 'text-[#A51417] dark:text-red-400 bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800' 
-      },
-    };
-
-    return configs[status] || configs['Identified'];
-  };
-
-  // Get action button config
-  const getActionConfig = (status: string) => {
-    if (status === 'Identified' || status === 'Recurring') {
-      return {
-        label: 'Advance to In Progress',
-        icon: PlayCircle,
-        color: 'bg-blue-600 hover:bg-blue-700',
-      };
-    }
-
-    if (status === 'In Progress') {
-      return {
-        label: 'Document Resolution',
-        icon: CheckCircle2,
-        color: 'bg-[#007A33] hover:bg-[#006428]',
-      };
-    }
-
-    return null;
-  };
-
-  // Timeline progress
-  const getTimelineProgress = (lst: LST) => {
-    const stages = ['Identified', 'In Progress', 'Resolved'];
-    let currentStage = 0;
-
-    if (lst.status === 'In Progress' || lst.status === 'Recurring') currentStage = 1;
-    if (lst.status === 'Resolved') currentStage = 2;
-
-    return { stages, currentStage };
-  };
-
-  // Active filter count
-  const activeFilterCount = [filterStatus, filterSeverity, filterCategory, filterLocation].filter(f => f !== 'All').length;
-
-  // Download CSV
+  // ── CSV Export ──
   const handleDownloadCSV = () => {
     const headers = ['Title', 'Description', 'Status', 'Severity', 'Category', 'Location', 'Assignee', 'Identified Date', 'Last Seen', 'Resolved Date', 'Recommendation', 'Resolution Note', 'Recurrence Count'];
     const rows = sortedLsts.map(lst => [
       `"${(lst.title || '').replace(/"/g, '""')}"`,
       `"${(lst.description || '').replace(/"/g, '""')}"`,
-      lst.status,
-      lst.severity,
-      lst.category,
-      lst.location || '',
-      lst.assignee || '',
+      lst.status, lst.severity, lst.category,
+      lst.location || '', lst.assignee || '',
       lst.identifiedDate ? new Date(lst.identifiedDate).toLocaleDateString() : '',
       lst.lastSeenDate ? new Date(lst.lastSeenDate).toLocaleDateString() : '',
       lst.resolvedDate ? new Date(lst.resolvedDate).toLocaleDateString() : '',
@@ -262,198 +187,292 @@ export function LSTTracker({ lsts, onRefresh }: LSTTrackerProps) {
     toast.success('LST data exported as CSV');
   };
 
+  // ── Badge Helpers ──
+  const severityBadge = (sev: string) => {
+    const cls = sev === 'High'
+      ? 'bg-[#A51417] text-white'
+      : sev === 'Medium'
+      ? 'bg-orange-500 text-white'
+      : 'bg-slate-400 text-white';
+    return <span className={`px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded ${cls}`}>{sev}</span>;
+  };
+
+  const statusBadge = (status: string) => {
+    const cls = status === 'Resolved'
+      ? 'bg-[#007A33]/15 text-[#007A33] dark:bg-green-900/40 dark:text-green-400 border border-[#007A33]/30 dark:border-green-700'
+      : status === 'Recurring'
+      ? 'bg-[#A51417]/15 text-[#A51417] dark:bg-red-900/40 dark:text-red-400 border border-[#A51417]/30 dark:border-red-700'
+      : status === 'In Progress'
+      ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400 border border-blue-200 dark:border-blue-700'
+      : 'bg-amber-50 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border border-amber-200 dark:border-amber-700';
+    return <span className={`px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded ${cls}`}>{status}</span>;
+  };
+
   return (
-    <div className="space-y-4 md:space-y-6 p-2 md:p-0">
-      {/* Clinical Header */}
-      <div className="border-b-2 border-slate-200 dark:border-slate-700 pb-4">
-        <div className="flex items-center gap-3 mb-2">
+    <div className="space-y-4 md:space-y-5 p-2 md:p-0">
+      {/* ── Edit Modal Overlay ── */}
+      {editModal.open && editModal.lst && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setEditModal(INITIAL_EDIT)}>
+          <div
+            className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto border border-slate-200 dark:border-slate-700"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 rounded-t-xl">
+              <div className="flex items-center gap-2">
+                <Pencil className="w-4 h-4 text-[#A51417]" />
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">Edit Latent Safety Threat</h3>
+              </div>
+              <button onClick={() => setEditModal(INITIAL_EDIT)} className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors">
+                <X className="w-4 h-4 text-slate-500" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 space-y-4">
+              <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-3 border border-slate-200 dark:border-slate-700">
+                <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Threat Title</div>
+                <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{editModal.lst.title}</div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {/* Status */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Status</label>
+                  <select
+                    value={editModal.status}
+                    onChange={(e) => setEditModal(prev => ({ ...prev, status: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="Identified">Identified</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Resolved">Resolved</option>
+                    <option value="Recurring">Recurring</option>
+                  </select>
+                </div>
+
+                {/* Severity */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Severity</label>
+                  <select
+                    value={editModal.severity}
+                    onChange={(e) => setEditModal(prev => ({ ...prev, severity: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="High">High</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Low">Low</option>
+                  </select>
+                </div>
+
+                {/* Category */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Category</label>
+                  <select
+                    value={editModal.category}
+                    onChange={(e) => setEditModal(prev => ({ ...prev, category: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="Equipment">Equipment</option>
+                    <option value="Process">Process</option>
+                    <option value="Resources">Resources</option>
+                    <option value="Logistics">Logistics</option>
+                  </select>
+                </div>
+
+                {/* Location */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Location</label>
+                  <input
+                    type="text"
+                    value={editModal.location}
+                    onChange={(e) => setEditModal(prev => ({ ...prev, location: e.target.value }))}
+                    placeholder="e.g., Christian Northwest"
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* Assignee */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Assignee / Department</label>
+                <input
+                  type="text"
+                  value={editModal.assignee}
+                  onChange={(e) => setEditModal(prev => ({ ...prev, assignee: e.target.value }))}
+                  placeholder="e.g., Pharmacy, Dr. Smith"
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Recommendation */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Recommendation</label>
+                <textarea
+                  value={editModal.recommendation}
+                  onChange={(e) => setEditModal(prev => ({ ...prev, recommendation: e.target.value }))}
+                  rows={3}
+                  placeholder="Recommended intervention or corrective action..."
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-blue-500 resize-y"
+                />
+              </div>
+
+              {/* Resolution Note */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
+                  Resolution Note {editModal.status === 'Resolved' && <span className="text-[#A51417]">*</span>}
+                </label>
+                <textarea
+                  value={editModal.resolutionNote}
+                  onChange={(e) => setEditModal(prev => ({ ...prev, resolutionNote: e.target.value }))}
+                  rows={3}
+                  placeholder="Document corrective actions taken, equipment changes, or policy updates..."
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-blue-500 resize-y"
+                />
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex gap-3 p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 rounded-b-xl">
+              <button
+                onClick={handleSaveEdit}
+                disabled={saving || (editModal.status === 'Resolved' && !editModal.resolutionNote.trim())}
+                className="flex-1 px-4 py-2.5 bg-[#007A33] hover:bg-[#006428] disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white font-bold rounded-lg transition-all flex items-center justify-center gap-2 text-sm"
+              >
+                <Save className="w-4 h-4" />
+                {saving ? 'Saving...' : 'Save Changes'}
+              </button>
+              <button
+                onClick={() => setEditModal(INITIAL_EDIT)}
+                className="px-4 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 font-bold rounded-lg transition-all text-sm"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Header ── */}
+      <div className="border-b-2 border-slate-200 dark:border-slate-700 pb-3">
+        <div className="flex items-center gap-3">
           <div className="p-2 bg-[#A51417] rounded-lg">
-            <ShieldCheck className="w-6 h-6 md:w-7 md:h-7 text-white" />
+            <ShieldCheck className="w-5 h-5 md:w-6 md:h-6 text-white" />
           </div>
           <div>
-            <h2 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-slate-100">
-              Safety Threat Tracker
-            </h2>
-            <p className="text-sm text-slate-600 dark:text-slate-400">
-              Washington University Emergency Medicine System Safety Monitor
-            </p>
+            <h2 className="text-xl md:text-2xl font-bold text-slate-900 dark:text-slate-100">Safety Threat Tracker</h2>
+            <p className="text-xs text-slate-600 dark:text-slate-400">WashU Emergency Medicine &mdash; System Safety Monitor</p>
           </div>
         </div>
       </div>
 
-      {/* Dashboard Stats */}
-      <div className="grid grid-cols-3 gap-3 md:gap-6">
-        <div className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-xl p-4 md:p-6 transition-all hover:shadow-lg">
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-3xl md:text-5xl font-bold text-slate-900 dark:text-slate-100">
-              {stats.total}
-            </div>
-            <Archive className="w-8 h-8 md:w-10 md:h-10 text-slate-400" />
-          </div>
-          <div className="text-xs md:text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
-            Total Threats
-          </div>
+      {/* ── Stats Row ── */}
+      <div className="grid grid-cols-4 gap-2 md:gap-4">
+        <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-center">
+          <div className="text-2xl md:text-3xl font-black text-slate-900 dark:text-slate-100">{stats.total}</div>
+          <div className="text-[10px] md:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total</div>
         </div>
-
-        <div className="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-950/50 dark:to-red-900/50 border-2 border-[#A51417] rounded-xl p-4 md:p-6 transition-all hover:shadow-lg">
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-3xl md:text-5xl font-bold text-[#A51417] dark:text-red-300">
-              {stats.highSeverity}
-            </div>
-            <AlertTriangle className="w-8 h-8 md:w-10 md:h-10 text-[#A51417] dark:text-red-400" />
-          </div>
-          <div className="text-xs md:text-sm font-semibold text-[#A51417] dark:text-red-400 uppercase tracking-wide">
-            High Priority
-          </div>
+        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3 text-center">
+          <div className="text-2xl md:text-3xl font-black text-amber-700 dark:text-amber-300">{stats.active}</div>
+          <div className="text-[10px] md:text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider">Active</div>
         </div>
-
-        <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950/50 dark:to-green-900/50 border-2 border-[#007A33] rounded-xl p-4 md:p-6 transition-all hover:shadow-lg">
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-3xl md:text-5xl font-bold text-[#007A33] dark:text-green-300">
-              {stats.resolved}
-            </div>
-            <CheckCircle2 className="w-8 h-8 md:w-10 md:h-10 text-[#007A33] dark:text-green-400" />
-          </div>
-          <div className="text-xs md:text-sm font-semibold text-[#007A33] dark:text-green-400 uppercase tracking-wide">
-            Resolved
-          </div>
+        <div className="bg-red-50 dark:bg-red-950/30 border border-[#A51417]/30 dark:border-red-800 rounded-lg p-3 text-center">
+          <div className="text-2xl md:text-3xl font-black text-[#A51417] dark:text-red-300">{stats.highSeverity}</div>
+          <div className="text-[10px] md:text-xs font-semibold text-[#A51417] dark:text-red-400 uppercase tracking-wider">High Risk</div>
+        </div>
+        <div className="bg-green-50 dark:bg-green-950/30 border border-[#007A33]/30 dark:border-green-800 rounded-lg p-3 text-center">
+          <div className="text-2xl md:text-3xl font-black text-[#007A33] dark:text-green-300">{stats.resolved}</div>
+          <div className="text-[10px] md:text-xs font-semibold text-[#007A33] dark:text-green-400 uppercase tracking-wider">Resolved</div>
         </div>
       </div>
 
-      {/* Unified Filter Bar */}
-      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-sm">
-        <div className="flex flex-col md:flex-row gap-3">
-          {/* Search */}
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search threat title or description..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-11 pr-4 py-2.5 border-2 border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-              />
-            </div>
+      {/* ── Filter Bar ── */}
+      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 shadow-sm">
+        <div className="flex flex-col md:flex-row gap-2">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search threats..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
           </div>
 
-          {/* Filter Toggle Button */}
+          {/* Location Dropdown */}
+          <select
+            value={filterLocation}
+            onChange={(e) => setFilterLocation(e.target.value)}
+            className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-xs focus:ring-2 focus:ring-blue-500"
+          >
+            {uniqueLocations.map(loc => (
+              <option key={loc} value={loc}>{loc === 'All' ? 'All Locations' : loc}</option>
+            ))}
+          </select>
+
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-sm transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg font-semibold text-xs transition-all ${
               showFilters || activeFilterCount > 0
                 ? 'bg-[#A51417] text-white'
                 : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
             }`}
           >
-            <Filter className="w-4 h-4" />
+            <Filter className="w-3.5 h-3.5" />
             Filters
             {activeFilterCount > 0 && (
-              <span className="px-2 py-0.5 bg-white text-[#A51417] rounded-full text-xs font-bold">
-                {activeFilterCount}
-              </span>
+              <span className="px-1.5 py-0.5 bg-white text-[#A51417] rounded-full text-[10px] font-bold">{activeFilterCount}</span>
             )}
           </button>
 
-          {/* Download CSV Button */}
           <button
             onClick={handleDownloadCSV}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-sm bg-blue-600 hover:bg-blue-700 text-white transition-all"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg font-semibold text-xs bg-blue-600 hover:bg-blue-700 text-white transition-all"
           >
-            <Download className="w-4 h-4" />
-            Export CSV
+            <Download className="w-3.5 h-3.5" />
+            CSV
           </button>
         </div>
 
-        {/* Filter Chips (Expandable) */}
+        {/* Expandable Filter Chips */}
         {showFilters && (
-          <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 space-y-3">
-            {/* Status Filters */}
+          <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 space-y-2.5">
+            {/* Status */}
             <div>
-              <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2 block">
-                Status
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {['All', 'Identified', 'In Progress', 'Recurring', 'Resolved'].map((status) => (
-                  <button
-                    key={status}
-                    onClick={() => setFilterStatus(status)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${
-                      filterStatus === status
-                        ? 'bg-blue-600 text-white shadow-md scale-105'
-                        : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
-                    }`}
-                  >
-                    {status}
-                  </button>
+              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">Status</label>
+              <div className="flex flex-wrap gap-1.5">
+                {['All', 'Identified', 'In Progress', 'Recurring', 'Resolved'].map((s) => (
+                  <button key={s} onClick={() => setFilterStatus(s)}
+                    className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wide transition-all ${
+                      filterStatus === s ? 'bg-blue-600 text-white shadow scale-105' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
+                    }`}>{s}</button>
                 ))}
               </div>
             </div>
-
-            {/* Severity Filters */}
+            {/* Severity */}
             <div>
-              <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2 block">
-                Severity
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {['All', 'High', 'Medium', 'Low'].map((severity) => (
-                  <button
-                    key={severity}
-                    onClick={() => setFilterSeverity(severity)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${
-                      filterSeverity === severity
-                        ? severity === 'High'
-                          ? 'bg-[#A51417] text-white shadow-md scale-105'
-                          : 'bg-blue-600 text-white shadow-md scale-105'
+              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">Severity</label>
+              <div className="flex flex-wrap gap-1.5">
+                {['All', 'High', 'Medium', 'Low'].map((s) => (
+                  <button key={s} onClick={() => setFilterSeverity(s)}
+                    className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wide transition-all ${
+                      filterSeverity === s
+                        ? s === 'High' ? 'bg-[#A51417] text-white shadow scale-105' : 'bg-blue-600 text-white shadow scale-105'
                         : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
-                    }`}
-                  >
-                    {severity}
-                  </button>
+                    }`}>{s}</button>
                 ))}
               </div>
             </div>
-
-            {/* Category Filters */}
+            {/* Category */}
             <div>
-              <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2 block">
-                Category
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {['All', 'Equipment', 'Process', 'Resources', 'Logistics'].map((category) => (
-                  <button
-                    key={category}
-                    onClick={() => setFilterCategory(category)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${
-                      filterCategory === category
-                        ? 'bg-blue-600 text-white shadow-md scale-105'
-                        : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
-                    }`}
-                  >
-                    {category}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Location Filters */}
-            <div>
-              <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2 block">
-                Location
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {uniqueLocations.map((location) => (
-                  <button
-                    key={location}
-                    onClick={() => setFilterLocation(location)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${
-                      filterLocation === location
-                        ? 'bg-blue-600 text-white shadow-md scale-105'
-                        : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
-                    }`}
-                  >
-                    {location}
-                  </button>
+              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">Category</label>
+              <div className="flex flex-wrap gap-1.5">
+                {['All', 'Equipment', 'Process', 'Resources', 'Logistics'].map((s) => (
+                  <button key={s} onClick={() => setFilterCategory(s)}
+                    className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wide transition-all ${
+                      filterCategory === s ? 'bg-blue-600 text-white shadow scale-105' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
+                    }`}>{s}</button>
                 ))}
               </div>
             </div>
@@ -461,292 +480,161 @@ export function LSTTracker({ lsts, onRefresh }: LSTTrackerProps) {
         )}
       </div>
 
-      {/* LST Cards */}
-      <div className="space-y-4">
-        {sortedLsts.length === 0 ? (
-          // Success State
-          <div className="text-center py-16 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 rounded-xl border-2 border-[#007A33]">
-            <div className="flex justify-center mb-4">
-              <div className="p-4 bg-[#007A33] rounded-full">
-                <ShieldCheck className="w-16 h-16 text-white" />
-              </div>
+      {/* ── Table / Card List ── */}
+      {sortedLsts.length === 0 ? (
+        <div className="text-center py-12 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 rounded-xl border-2 border-[#007A33]">
+          <div className="flex justify-center mb-3">
+            <div className="p-3 bg-[#007A33] rounded-full">
+              <ShieldCheck className="w-10 h-10 text-white" />
             </div>
-            <h3 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">
-              {lsts.length === 0 ? 'System Operating Safely' : 'No Matching Threats'}
-            </h3>
-            <p className="text-slate-600 dark:text-slate-400 max-w-md mx-auto">
-              {lsts.length === 0 
-                ? 'No latent safety threats have been identified. Continue monitoring simulation sessions for system-level risks.'
-                : 'No threats match your current filter criteria. Adjust filters to view other threats.'
-              }
-            </p>
-            {lsts.length > 0 && (
-              <button
-                onClick={() => {
-                  setFilterStatus('All');
-                  setFilterSeverity('All');
-                  setFilterCategory('All');
-                  setFilterLocation('All');
-                  setSearchQuery('');
-                }}
-                className="mt-4 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
-              >
-                Clear All Filters
-              </button>
-            )}
           </div>
-        ) : (
-          sortedLsts.map((lst) => {
-            const severityStyles = getSeverityStyles(lst.severity, lst.status);
-            const statusConfig = getStatusConfig(lst.status);
-            const actionConfig = getActionConfig(lst.status);
-            const timeline = getTimelineProgress(lst);
-            const StatusIcon = statusConfig.icon;
+          <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-1">
+            {lsts.length === 0 ? 'System Operating Safely' : 'No Matching Threats'}
+          </h3>
+          <p className="text-sm text-slate-600 dark:text-slate-400 max-w-md mx-auto">
+            {lsts.length === 0
+              ? 'No latent safety threats identified. Continue monitoring simulation sessions.'
+              : 'Adjust filters to view other threats.'}
+          </p>
+          {lsts.length > 0 && (
+            <button
+              onClick={() => { setFilterStatus('All'); setFilterSeverity('All'); setFilterCategory('All'); setFilterLocation('All'); setSearchQuery(''); }}
+              className="mt-3 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors text-sm"
+            >
+              Clear All Filters
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {sortedLsts.map((lst) => {
+            const borderColor = lst.status === 'Resolved'
+              ? 'border-l-[#007A33]'
+              : lst.severity === 'High'
+              ? 'border-l-[#A51417]'
+              : lst.severity === 'Medium'
+              ? 'border-l-orange-500'
+              : 'border-l-slate-300 dark:border-l-slate-600';
+
+            const bgColor = lst.status === 'Resolved'
+              ? 'bg-green-50/40 dark:bg-green-950/10'
+              : lst.severity === 'High'
+              ? 'bg-red-50/40 dark:bg-red-950/10'
+              : 'bg-white dark:bg-slate-800';
 
             return (
               <div
                 key={lst.id}
-                className={`${severityStyles.border} ${severityStyles.bg} border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden transition-all hover:shadow-xl`}
+                className={`border-l-4 ${borderColor} ${bgColor} border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden transition-all hover:shadow-md`}
               >
-                <div className="p-5 md:p-6">
-                  {/* Header Section */}
-                  <div className="flex items-start justify-between gap-4 mb-4">
+                <div className="p-3 md:p-4">
+                  {/* Row 1: Title + Badges + Actions */}
+                  <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-2 flex-wrap">
-                        <h3 className="text-lg md:text-xl font-bold text-slate-900 dark:text-slate-100">
-                          {lst.title}
-                        </h3>
-                        
-                        {/* Severity Badge */}
-                        <span className={`px-2 py-1 text-xs font-bold uppercase tracking-wider rounded ${
-                          lst.severity === 'High' 
-                            ? 'bg-[#A51417] text-white' 
-                            : lst.severity === 'Medium'
-                            ? 'bg-orange-500 text-white'
-                            : 'bg-slate-400 text-white'
-                        }`}>
-                          {lst.severity}
-                        </span>
-
-                        {/* Category Badge */}
-                        <span className="px-2 py-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold rounded uppercase tracking-wide">
-                          {lst.category}
-                        </span>
-
-                        {/* Recurrence Alert */}
+                      <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                        <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 leading-tight">{lst.title}</h3>
+                        {severityBadge(lst.severity)}
+                        {statusBadge(lst.status)}
                         {lst.recurrenceCount && lst.recurrenceCount > 1 && (
-                          <span className={`px-2 py-1 text-xs font-bold rounded flex items-center gap-1 ${
+                          <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded flex items-center gap-0.5 ${
                             lst.recurrenceCount >= 3
                               ? 'bg-[#A51417] text-white animate-pulse'
                               : 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300'
                           }`}>
-                            <TrendingUp className="w-3 h-3" />
-                            Seen {lst.recurrenceCount}×
+                            <TrendingUp className="w-2.5 h-2.5" />
+                            {lst.recurrenceCount}×
                           </span>
                         )}
                       </div>
-                      
-                      <p className="text-sm md:text-base text-slate-700 dark:text-slate-300 leading-relaxed">
-                        {lst.description}
-                      </p>
+                      <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed line-clamp-2">{lst.description}</p>
                     </div>
 
-                    {/* Status Display (Non-clickable) */}
-                    <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 ${statusConfig.color} flex-shrink-0`}>
-                      <StatusIcon className="w-4 h-4" />
-                      <span className="text-sm font-bold whitespace-nowrap">
-                        {statusConfig.label}
-                      </span>
-                    </div>
+                    {/* Edit Button */}
+                    <button
+                      onClick={() => openEditModal(lst)}
+                      className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg transition-colors text-xs font-semibold flex-shrink-0"
+                      title="Edit this LST"
+                    >
+                      <Pencil className="w-3 h-3" />
+                      Edit
+                    </button>
                   </div>
 
-                  {/* Clinical Timeline */}
-                  <div className="mb-4 bg-white/50 dark:bg-slate-900/50 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
-                    <div className="flex items-center justify-between mb-3">
-                      {timeline.stages.map((stage, index) => {
-                        const isComplete = index <= timeline.currentStage;
-                        const isCurrent = index === timeline.currentStage;
-                        
-                        return (
-                          <div key={stage} className="flex items-center flex-1">
-                            <div className="flex flex-col items-center">
-                              <div className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center font-bold text-xs md:text-sm transition-all ${
-                                isComplete 
-                                  ? isCurrent
-                                    ? 'bg-blue-600 text-white ring-4 ring-blue-200 dark:ring-blue-800 scale-110'
-                                    : 'bg-[#007A33] text-white'
-                                  : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
-                              }`}>
-                                {isComplete ? '✓' : index + 1}
-                              </div>
-                              <span className={`text-xs font-semibold mt-2 text-center ${
-                                isComplete ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-500'
-                              }`}>
-                                {stage}
-                              </span>
-                            </div>
-                            {index < timeline.stages.length - 1 && (
-                              <div className={`flex-1 h-1 mx-2 rounded-full ${
-                                index < timeline.currentStage 
-                                  ? 'bg-[#007A33]' 
-                                  : 'bg-slate-200 dark:bg-slate-700'
-                              }`} />
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {/* Date Information */}
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600 dark:text-slate-400">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3" />
-                        <span>Identified: {new Date(lst.identifiedDate).toLocaleDateString()}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" />
-                        <span>Last Seen: {new Date(lst.lastSeenDate).toLocaleDateString()}</span>
-                      </div>
-                      {lst.resolvedDate && (
-                        <div className="flex items-center gap-1 text-[#007A33] dark:text-green-400 font-semibold">
-                          <CheckCircle2 className="w-3 h-3" />
-                          <span>Resolved: {new Date(lst.resolvedDate).toLocaleDateString()}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Assignee/Department */}
-                  <div className="mb-4 flex items-center gap-4 flex-wrap">
+                  {/* Row 2: Metadata chips */}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+                    <span className="flex items-center gap-1 px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 rounded">
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">{lst.category}</span>
+                    </span>
                     {lst.location && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
-                          <MapPin className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                        </div>
-                        <div>
-                          <div className="text-xs text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider">
-                            Location
-                          </div>
-                          <div className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                            {lst.location}
-                          </div>
-                        </div>
-                      </div>
+                      <span className="flex items-center gap-1 px-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-900/30 rounded text-indigo-700 dark:text-indigo-300">
+                        <MapPin className="w-2.5 h-2.5" />
+                        {lst.location}
+                      </span>
                     )}
                     {lst.assignee && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                          <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                        </div>
-                        <div>
-                          <div className="text-xs text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider">
-                            Assigned To
-                          </div>
-                          <div className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                            {lst.assignee}
-                          </div>
-                        </div>
-                      </div>
+                      <span className="flex items-center gap-1 px-1.5 py-0.5 bg-blue-50 dark:bg-blue-900/30 rounded text-blue-700 dark:text-blue-300">
+                        <Users className="w-2.5 h-2.5" />
+                        {lst.assignee}
+                      </span>
+                    )}
+                    <span className="flex items-center gap-1">
+                      <Calendar className="w-2.5 h-2.5" />
+                      {new Date(lst.identifiedDate).toLocaleDateString()}
+                    </span>
+                    {lst.resolvedDate && (
+                      <span className="flex items-center gap-1 text-[#007A33] dark:text-green-400 font-semibold">
+                        <CheckCircle2 className="w-2.5 h-2.5" />
+                        Resolved {new Date(lst.resolvedDate).toLocaleDateString()}
+                      </span>
                     )}
                   </div>
 
-                  {/* Recommendation Section */}
+                  {/* Row 3: Recommendation + Resolution (compact) */}
                   {lst.recommendation && (
-                    <div className="mb-4 bg-blue-50 dark:bg-blue-950/30 border-l-4 border-blue-500 rounded-r-lg p-4">
-                      <div className="text-xs font-bold text-blue-900 dark:text-blue-300 uppercase tracking-wider mb-1">
-                        Recommended Intervention
-                      </div>
-                      <p className="text-sm text-blue-900 dark:text-blue-200 leading-relaxed">
-                        {lst.recommendation}
+                    <div className="mt-2 bg-blue-50 dark:bg-blue-950/20 border-l-2 border-blue-400 rounded-r px-3 py-2">
+                      <p className="text-[11px] text-blue-900 dark:text-blue-200 leading-relaxed">
+                        <span className="font-bold">Recommendation:</span> {lst.recommendation}
                       </p>
                     </div>
                   )}
 
-                  {/* Resolution Section */}
-                  {editingResolution === lst.id ? (
-                    <div className="space-y-3 bg-slate-50 dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-600 rounded-lg p-4">
-                      <div>
-                        <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
-                          Resolution Documentation (Required)
-                        </label>
-                        <textarea
-                          value={resolutionText}
-                          onChange={(e) => setResolutionText(e.target.value)}
-                          placeholder="Document the corrective action taken, equipment changes, policy updates, or process modifications that resolve this threat..."
-                          rows={4}
-                          className="w-full px-4 py-3 border-2 border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
-                          Assigned Department/Person (Optional)
-                        </label>
-                        <input
-                          type="text"
-                          value={assignee}
-                          onChange={(e) => setAssignee(e.target.value)}
-                          placeholder="e.g., Pharmacy, Nursing, Facilities"
-                          className="w-full px-4 py-2 border-2 border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        />
-                      </div>
-
-                      <div className="flex gap-3 pt-2">
-                        <button
-                          onClick={() => handleSaveResolution(lst)}
-                          disabled={!resolutionText.trim()}
-                          className="flex-1 px-4 py-3 bg-[#007A33] hover:bg-[#006428] disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white font-bold rounded-lg transition-all flex items-center justify-center gap-2 text-sm uppercase tracking-wide"
-                        >
-                          <CheckCircle2 className="w-4 h-4" />
-                          Save & Mark Resolved
-                        </button>
-                        <button
-                          onClick={() => {
-                            setEditingResolution(null);
-                            setResolutionText('');
-                            setAssignee('');
-                          }}
-                          className="px-4 py-3 bg-slate-300 hover:bg-slate-400 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 font-bold rounded-lg transition-all flex items-center justify-center gap-2 text-sm uppercase tracking-wide"
-                        >
-                          <XCircle className="w-4 h-4" />
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : lst.resolutionNote ? (
-                    <div className="bg-green-50 dark:bg-green-950/30 border-l-4 border-[#007A33] rounded-r-lg p-4">
-                      <div className="text-xs font-bold text-[#007A33] dark:text-green-300 uppercase tracking-wider mb-1">
-                        Resolution Documented
-                      </div>
-                      <p className="text-sm text-green-900 dark:text-green-200 leading-relaxed">
-                        {lst.resolutionNote}
+                  {lst.resolutionNote && (
+                    <div className="mt-2 bg-green-50 dark:bg-green-950/20 border-l-2 border-[#007A33] rounded-r px-3 py-2">
+                      <p className="text-[11px] text-green-900 dark:text-green-200 leading-relaxed">
+                        <span className="font-bold">Resolution:</span> {lst.resolutionNote}
                       </p>
                     </div>
-                  ) : actionConfig ? (
-                    <div className="flex gap-3">
-                      <button
-                        onClick={() => {
-                          if (lst.status === 'In Progress') {
-                            setEditingResolution(lst.id);
-                            setResolutionText(lst.resolutionNote || '');
-                            setAssignee(lst.assignee || '');
-                          } else {
-                            handleAdvanceStatus(lst);
-                          }
-                        }}
-                        className={`flex-1 ${actionConfig.color} text-white font-bold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 text-sm uppercase tracking-wide shadow-md hover:shadow-lg`}
-                      >
-                        {React.createElement(actionConfig.icon, { className: 'w-4 h-4' })}
-                        {actionConfig.label}
-                      </button>
+                  )}
+
+                  {/* Quick Action: Advance status for non-resolved */}
+                  {lst.status !== 'Resolved' && (
+                    <div className="mt-2 flex gap-2">
+                      {(lst.status === 'Identified' || lst.status === 'Recurring') && (
+                        <button
+                          onClick={() => handleAdvanceStatus(lst)}
+                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded text-[11px] flex items-center gap-1 transition-colors"
+                        >
+                          <PlayCircle className="w-3 h-3" />
+                          Start Progress
+                        </button>
+                      )}
+                      {lst.status === 'In Progress' && (
+                        <button
+                          onClick={() => openEditModal(lst)}
+                          className="px-3 py-1.5 bg-[#007A33] hover:bg-[#006428] text-white font-semibold rounded text-[11px] flex items-center gap-1 transition-colors"
+                        >
+                          <CheckCircle2 className="w-3 h-3" />
+                          Document Resolution
+                        </button>
+                      )}
                     </div>
-                  ) : null}
+                  )}
                 </div>
               </div>
             );
-          })
-        )}
-      </div>
+          })}
+        </div>
+      )}
     </div>
   );
 }

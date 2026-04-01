@@ -319,6 +319,7 @@ export default function App() {
                     reports={reports}
                     sessionNotes={sessionNotes}
                     generatedReports={generatedReports}
+                    lsts={lsts}
                   />
                 </Suspense>
               </TabsContent>
