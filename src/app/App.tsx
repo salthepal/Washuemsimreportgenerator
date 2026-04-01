@@ -392,7 +392,7 @@ export default function App() {
                       <p><strong>Build:</strong> 26 Major Optimization Features</p>
                       <p><strong>Total Documents:</strong> {reports.length + sessionNotes.length + generatedReports.length}</p>
                       <p><strong>Active LSTs:</strong> {lsts.filter(lst => lst.status !== 'Resolved').length}</p>
-                      <p><strong>AI Model:</strong> Google Gemini 2.0 Flash (Experimental)</p>
+                      <p><strong>AI Model:</strong> Gemini 3.0 Flash Experimental</p>
                       <p><strong>Backend:</strong> Supabase Edge Functions + KV Store</p>
                       <p><strong>Core Capabilities:</strong> AI-Powered Report Generation, LST Intelligence, Workflow Automation</p>
                       <p><strong>UX Features:</strong> Dark Mode (WCAG AA), Horizontal Scroll Tabs, 3 Export Formats (Copy/DOCX/PDF)</p>
