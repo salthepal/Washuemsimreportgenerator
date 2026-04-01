@@ -1,7 +1,8 @@
+import React from 'react';
 import { useState, useMemo } from 'react';
 import { 
   AlertTriangle, Search, Filter, CheckCircle2, ShieldCheck, XCircle, 
-  TrendingUp, Users, Calendar, PlayCircle, Archive, AlertCircle 
+  TrendingUp, Users, Calendar, PlayCircle, Archive, AlertCircle, Download, MapPin 
 } from 'lucide-react';
 import { LST, API_BASE, API_HEADERS } from '../App';
 import { toast } from 'sonner';
@@ -11,17 +12,24 @@ interface LSTTrackerProps {
   onRefresh: () => void;
 }
 
-type FilterType = 'status' | 'severity' | 'category';
+type FilterType = 'status' | 'severity' | 'category' | 'location';
 
 export function LSTTracker({ lsts, onRefresh }: LSTTrackerProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('All');
   const [filterSeverity, setFilterSeverity] = useState<string>('All');
   const [filterCategory, setFilterCategory] = useState<string>('All');
+  const [filterLocation, setFilterLocation] = useState<string>('All');
   const [editingResolution, setEditingResolution] = useState<string | null>(null);
   const [resolutionText, setResolutionText] = useState('');
   const [assignee, setAssignee] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+
+  // Get unique locations for filter
+  const uniqueLocations = useMemo(() => {
+    const locations = lsts.map(lst => lst.location).filter(Boolean) as string[];
+    return ['All', ...Array.from(new Set(locations))];
+  }, [lsts]);
 
   // Filter and search LSTs
   const filteredLsts = useMemo(() => {
@@ -33,10 +41,11 @@ export function LSTTracker({ lsts, onRefresh }: LSTTrackerProps) {
       const matchesStatus = filterStatus === 'All' || lst.status === filterStatus;
       const matchesSeverity = filterSeverity === 'All' || lst.severity === filterSeverity;
       const matchesCategory = filterCategory === 'All' || lst.category === filterCategory;
+      const matchesLocation = filterLocation === 'All' || lst.location === filterLocation;
 
-      return matchesSearch && matchesStatus && matchesSeverity && matchesCategory;
+      return matchesSearch && matchesStatus && matchesSeverity && matchesCategory && matchesLocation;
     });
-  }, [lsts, searchQuery, filterStatus, filterSeverity, filterCategory]);
+  }, [lsts, searchQuery, filterStatus, filterSeverity, filterCategory, filterLocation]);
 
   // Sort by severity (High -> Medium -> Low) and then by lastSeenDate
   const sortedLsts = useMemo(() => {
@@ -222,7 +231,36 @@ export function LSTTracker({ lsts, onRefresh }: LSTTrackerProps) {
   };
 
   // Active filter count
-  const activeFilterCount = [filterStatus, filterSeverity, filterCategory].filter(f => f !== 'All').length;
+  const activeFilterCount = [filterStatus, filterSeverity, filterCategory, filterLocation].filter(f => f !== 'All').length;
+
+  // Download CSV
+  const handleDownloadCSV = () => {
+    const headers = ['Title', 'Description', 'Status', 'Severity', 'Category', 'Location', 'Assignee', 'Identified Date', 'Last Seen', 'Resolved Date', 'Recommendation', 'Resolution Note', 'Recurrence Count'];
+    const rows = sortedLsts.map(lst => [
+      `"${(lst.title || '').replace(/"/g, '""')}"`,
+      `"${(lst.description || '').replace(/"/g, '""')}"`,
+      lst.status,
+      lst.severity,
+      lst.category,
+      lst.location || '',
+      lst.assignee || '',
+      lst.identifiedDate ? new Date(lst.identifiedDate).toLocaleDateString() : '',
+      lst.lastSeenDate ? new Date(lst.lastSeenDate).toLocaleDateString() : '',
+      lst.resolvedDate ? new Date(lst.resolvedDate).toLocaleDateString() : '',
+      `"${(lst.recommendation || '').replace(/"/g, '""')}"`,
+      `"${(lst.resolutionNote || '').replace(/"/g, '""')}"`,
+      lst.recurrenceCount || 0,
+    ]);
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `lst-tracker-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('LST data exported as CSV');
+  };
 
   return (
     <div className="space-y-4 md:space-y-6 p-2 md:p-0">
@@ -316,6 +354,15 @@ export function LSTTracker({ lsts, onRefresh }: LSTTrackerProps) {
               </span>
             )}
           </button>
+
+          {/* Download CSV Button */}
+          <button
+            onClick={handleDownloadCSV}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-sm bg-blue-600 hover:bg-blue-700 text-white transition-all"
+          >
+            <Download className="w-4 h-4" />
+            Export CSV
+          </button>
         </div>
 
         {/* Filter Chips (Expandable) */}
@@ -388,6 +435,28 @@ export function LSTTracker({ lsts, onRefresh }: LSTTrackerProps) {
                 ))}
               </div>
             </div>
+
+            {/* Location Filters */}
+            <div>
+              <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2 block">
+                Location
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {uniqueLocations.map((location) => (
+                  <button
+                    key={location}
+                    onClick={() => setFilterLocation(location)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${
+                      filterLocation === location
+                        ? 'bg-blue-600 text-white shadow-md scale-105'
+                        : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
+                    }`}
+                  >
+                    {location}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -417,6 +486,7 @@ export function LSTTracker({ lsts, onRefresh }: LSTTrackerProps) {
                   setFilterStatus('All');
                   setFilterSeverity('All');
                   setFilterCategory('All');
+                  setFilterLocation('All');
                   setSearchQuery('');
                 }}
                 className="mt-4 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
@@ -547,21 +617,38 @@ export function LSTTracker({ lsts, onRefresh }: LSTTrackerProps) {
                   </div>
 
                   {/* Assignee/Department */}
-                  {lst.assignee && (
-                    <div className="mb-4 flex items-center gap-2 text-sm">
-                      <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                        <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                      </div>
-                      <div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider">
-                          Assigned To
+                  <div className="mb-4 flex items-center gap-4 flex-wrap">
+                    {lst.location && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                          <MapPin className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                         </div>
-                        <div className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                          {lst.assignee}
+                        <div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider">
+                            Location
+                          </div>
+                          <div className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                            {lst.location}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                    {lst.assignee && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                          <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                        </div>
+                        <div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider">
+                            Assigned To
+                          </div>
+                          <div className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                            {lst.assignee}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
 
                   {/* Recommendation Section */}
                   {lst.recommendation && (

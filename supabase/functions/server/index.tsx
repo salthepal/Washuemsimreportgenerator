@@ -415,6 +415,7 @@ JSON Schema for each LST:
 - severity: "High" (Immediate life/safety risk), "Medium" (Delay in care), or "Low" (System inefficiency)
 - category: "Equipment", "Process", "Logistics", or "Resources"
 - recommendation: The specific suggested fix from the report
+- location: Extract site location (e.g., "Christian Northwest", "Barnes-Jewish Hospital", "St. Louis Children's") for each identified LST. Infer from session notes context if not explicitly stated. Use "Unknown" if no location can be determined.
 
 SEVERITY GUIDELINES:
 - High: Immediate patient safety risk, critical equipment missing, life-threatening delay potential
@@ -439,6 +440,7 @@ Example LST JSON format:
     "description": "The ETCO2 monitoring bricks were not available in the resuscitation bay, requiring staff to search for equipment during a critical intubation.",
     "severity": "High",
     "category": "Equipment",
+    "location": "Christian Northwest",
     "recommendation": "Stock ETCO2 bricks in all resuscitation bays and implement a daily equipment checklist."
   },
   {
@@ -446,6 +448,7 @@ Example LST JSON format:
     "description": "Manual BP cuffs are stored in an unmarked drawer, leading to delays when automated systems fail.",
     "severity": "Medium",
     "category": "Logistics",
+    "location": "Barnes-Jewish Hospital",
     "recommendation": "Label the storage location clearly and add manual BP cuffs to the room orientation checklist."
   }
 ]

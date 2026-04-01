@@ -279,8 +279,8 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-slate-900 mb-2">Generate New Report</h2>
-        <p className="text-slate-600">
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">Generate New Report</h2>
+        <p className="text-slate-600 dark:text-slate-400">
           Select prior reports for style reference and session notes to synthesize a new report.
         </p>
       </div>

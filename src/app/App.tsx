@@ -96,6 +96,7 @@ export interface LST {
   resolvedDate?: string;
   recurrenceCount?: number;
   assignee?: string;
+  location?: string;
 }
 
 export const API_BASE = `https://${projectId}.supabase.co/functions/v1/make-server-7fe18c53`;
@@ -242,8 +243,8 @@ export default function App() {
                 <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                   <FileText className="w-6 h-6 md:w-8 md:h-8 flex-shrink-0" />
                   <div className="min-w-0">
-                    <h1 className="text-lg md:text-3xl font-bold truncate">WashU EM Sim</h1>
-                    <p className="text-xs md:text-sm text-red-100 truncate">Post-Session Report Creator</p>
+                    <h1 className="text-lg md:text-3xl font-bold truncate">WashU Emergency Medicine</h1>
+                    <p className="text-xs md:text-sm text-red-100 truncate">Simulation & Safety Intelligence</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
