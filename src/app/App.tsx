@@ -243,8 +243,8 @@ export default function App() {
                 <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                   <FileText className="w-6 h-6 md:w-8 md:h-8 flex-shrink-0" />
                   <div className="min-w-0">
-                    <h1 className="text-lg md:text-3xl font-bold truncate">WashU Emergency Medicine</h1>
-                    <p className="text-xs md:text-sm text-red-100 truncate">Simulation & Safety Intelligence</p>
+                    <h1 className="text-lg md:text-2xl font-bold truncate">WashU Emergency Medicine: Simulation & Safety Intelligence</h1>
+                    <p className="text-xs md:text-sm text-red-100 truncate">Post-Session Report &amp; LST Management Platform</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
@@ -273,28 +273,28 @@ export default function App() {
           <main className="container mx-auto px-2 md:px-6 py-4 md:py-8">
             <Tabs defaultValue="dashboard" className="space-y-4 md:space-y-6">
               <TabsList className="flex items-center justify-start overflow-x-auto overflow-y-hidden whitespace-nowrap bg-slate-100 dark:bg-slate-800 rounded-lg p-1 w-full no-scrollbar">
-                <TabsTrigger value="dashboard" className="dashboard-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+                <TabsTrigger value="dashboard" className="dashboard-tab text-sm px-4 py-2 whitespace-nowrap flex-shrink-0">
                   Dashboard
                 </TabsTrigger>
-                <TabsTrigger value="upload" className="upload-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+                <TabsTrigger value="upload" className="upload-tab text-sm px-4 py-2 whitespace-nowrap flex-shrink-0">
                   Upload
                 </TabsTrigger>
-                <TabsTrigger value="cases" className="cases-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+                <TabsTrigger value="cases" className="cases-tab text-sm px-4 py-2 whitespace-nowrap flex-shrink-0">
                   Cases
                 </TabsTrigger>
-                <TabsTrigger value="notes" className="notes-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+                <TabsTrigger value="notes" className="notes-tab text-sm px-4 py-2 whitespace-nowrap flex-shrink-0">
                   Notes
                 </TabsTrigger>
-                <TabsTrigger value="generate" className="generate-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+                <TabsTrigger value="generate" className="generate-tab text-sm px-4 py-2 whitespace-nowrap flex-shrink-0">
                   Generate
                 </TabsTrigger>
-                <TabsTrigger value="lst-tracker" className="lst-tracker-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+                <TabsTrigger value="lst-tracker" className="lst-tracker-tab text-sm px-4 py-2 whitespace-nowrap flex-shrink-0">
                   LST Tracker
                 </TabsTrigger>
-                <TabsTrigger value="repository" className="repository-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+                <TabsTrigger value="repository" className="repository-tab text-sm px-4 py-2 whitespace-nowrap flex-shrink-0">
                   Repository
                 </TabsTrigger>
-                <TabsTrigger value="settings" className="settings-tab text-xs md:text-sm py-2.5 md:py-3 px-3 md:px-4 whitespace-nowrap bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+                <TabsTrigger value="settings" className="settings-tab text-sm px-4 py-2 whitespace-nowrap flex-shrink-0">
                   Settings
                 </TabsTrigger>
               </TabsList>
@@ -388,10 +388,16 @@ export default function App() {
                   <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-4 md:p-6 border border-blue-200 dark:border-blue-800">
                     <h3 className="text-base md:text-lg font-bold text-blue-900 dark:text-blue-200 mb-2">System Information</h3>
                     <div className="space-y-2 text-xs md:text-sm text-blue-800 dark:text-blue-300">
-                      <p><strong>Version:</strong> 2.0.0 (Optimized)</p>
+                      <p><strong>Version:</strong> 3.0.0 (Comprehensive Intelligence Platform)</p>
+                      <p><strong>Build:</strong> 26 Major Optimization Features</p>
                       <p><strong>Total Documents:</strong> {reports.length + sessionNotes.length + generatedReports.length}</p>
-                      <p><strong>Gemini Model:</strong> gemini-3-flash-preview</p>
-                      <p><strong>Features:</strong> AI Generation, Batch Operations, Audit Logging, Dark Mode</p>
+                      <p><strong>Active LSTs:</strong> {lsts.filter(lst => lst.status !== 'Resolved').length}</p>
+                      <p><strong>AI Model:</strong> Google Gemini 2.0 Flash (Experimental)</p>
+                      <p><strong>Backend:</strong> Supabase Edge Functions + KV Store</p>
+                      <p><strong>Core Capabilities:</strong> AI-Powered Report Generation, LST Intelligence, Workflow Automation</p>
+                      <p><strong>UX Features:</strong> Dark Mode (WCAG AA), Horizontal Scroll Tabs, 3 Export Formats (Copy/DOCX/PDF)</p>
+                      <p><strong>Data Management:</strong> Batch Operations, Audit Logging, Backup/Restore, Advanced Filtering</p>
+                      <p><strong>Branding:</strong> WashU PMS 200 (#A51417) & PMS 350 (#007A33)</p>
                     </div>
                   </div>
                 </div>

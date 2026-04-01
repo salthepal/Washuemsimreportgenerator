@@ -13,7 +13,7 @@ interface DashboardProps {
 export function Dashboard({ reports, sessionNotes, generatedReports, lsts }: DashboardProps) {
   // ── LST-focused Metrics ──
   const activeSystemGaps = useMemo(() =>
-    lsts.filter(l => l.status === 'Identified').length,
+    lsts.filter(l => l.status !== 'Resolved').length,
   [lsts]);
 
   const resolutionRate = useMemo(() => {
@@ -158,7 +158,7 @@ export function Dashboard({ reports, sessionNotes, generatedReports, lsts }: Das
             <span className="text-xs font-bold uppercase tracking-wider text-[#007A33] dark:text-green-400 bg-green-200 dark:bg-green-900/50 px-2 py-0.5 rounded">Rate</span>
           </div>
           <div className="text-3xl md:text-4xl font-black text-[#007A33] dark:text-green-200">{resolutionRate}%</div>
-          <div className="text-xs font-semibold text-[#007A33] dark:text-green-400 mt-1">Resolution Rate</div>
+          <div className="text-xs font-semibold text-[#007A33] dark:text-green-400 mt-1">Safety Resolution Rate</div>
         </div>
 
         {/* High-Risk Alerts */}

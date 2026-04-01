@@ -36,23 +36,32 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
   const [debouncedReportSearch] = useDebounce(reportSearchQuery, 300);
   const [debouncedNoteSearch] = useDebounce(noteSearchQuery, 300);
 
-  // Filtered lists based on search
-  const filteredReports = useMemo(() => {
-    if (!debouncedReportSearch) return reports;
-    const query = debouncedReportSearch.toLowerCase();
-    return reports.filter(r => 
-      r.title.toLowerCase().includes(query) ||
-      r.content.toLowerCase().includes(query)
-    );
+  // Filtered lists based on search — useEffect to decouple from render cycle
+  const [filteredReports, setFilteredReports] = useState<Report[]>(reports);
+  const [filteredNotes, setFilteredNotes] = useState<SessionNote[]>(sessionNotes);
+
+  useEffect(() => {
+    if (!debouncedReportSearch) {
+      setFilteredReports(reports);
+    } else {
+      const query = debouncedReportSearch.toLowerCase();
+      setFilteredReports(reports.filter(r =>
+        r.title.toLowerCase().includes(query) ||
+        r.content.toLowerCase().includes(query)
+      ));
+    }
   }, [reports, debouncedReportSearch]);
 
-  const filteredNotes = useMemo(() => {
-    if (!debouncedNoteSearch) return sessionNotes;
-    const query = debouncedNoteSearch.toLowerCase();
-    return sessionNotes.filter(n => 
-      n.sessionName.toLowerCase().includes(query) ||
-      n.notes.toLowerCase().includes(query)
-    );
+  useEffect(() => {
+    if (!debouncedNoteSearch) {
+      setFilteredNotes(sessionNotes);
+    } else {
+      const query = debouncedNoteSearch.toLowerCase();
+      setFilteredNotes(sessionNotes.filter(n =>
+        n.sessionName.toLowerCase().includes(query) ||
+        n.notes.toLowerCase().includes(query)
+      ));
+    }
   }, [sessionNotes, debouncedNoteSearch]);
 
   // Memoized selections
