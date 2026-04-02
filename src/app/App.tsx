@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, lazy, Suspense, useMemo } from 'react';
 import Joyride, { Step } from 'react-joyride';
 import { UploadReports } from './components/upload-reports';
 import { SessionNotes } from './components/session-notes';
@@ -12,7 +12,7 @@ import { AuditLog } from './components/audit-log';
 import { ViewAIPrompt } from './components/view-ai-prompt';
 import { ErrorBoundary } from './components/error-boundary';
 import { Toaster } from './components/ui/sonner';
-import { FileText, Moon, Sun, HelpCircle, Menu } from 'lucide-react';
+import { FileText, Moon, Sun, HelpCircle, Menu, MapPin, X } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Skeleton } from './components/ui/skeleton';
 import { projectId, publicAnonKey } from '/utils/supabase/info';
@@ -119,6 +119,15 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useLocalStorage('sidebarCollapsed', false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [selectedSite, setSelectedSite] = useState<string>('All Sites');
+
+  const availableSites = useMemo(() => {
+    const sites = new Set<string>();
+    lsts.forEach(l => { if (l.location) sites.add(l.location); });
+    reports.forEach(r => { if (r.metadata?.location) sites.add(r.metadata.location); });
+    sessionNotes.forEach(n => { if (n.metadata?.location) sites.add(n.metadata.location); });
+    return ['All Sites', ...Array.from(sites).sort()];
+  }, [lsts, reports, sessionNotes]);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -278,6 +287,9 @@ export default function App() {
                 mobile
                 open={mobileSidebarOpen}
                 onClose={() => setMobileSidebarOpen(false)}
+                selectedSite={selectedSite}
+                onSiteChange={setSelectedSite}
+                availableSites={availableSites}
               />
             )}
 
@@ -288,10 +300,30 @@ export default function App() {
                 onTabChange={setActiveTab}
                 collapsed={sidebarCollapsed}
                 onCollapsedChange={setSidebarCollapsed}
+                selectedSite={selectedSite}
+                onSiteChange={setSelectedSite}
+                availableSites={availableSites}
               />
             )}
 
             <main className="flex-1 min-w-0 px-2 md:px-6 py-4 md:py-6">
+              {/* Site Filter Badge */}
+              {selectedSite !== 'All Sites' && (
+                <div className="mb-4 flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-[#007A33]/10 text-[#007A33] dark:bg-[#007A33]/20 dark:text-emerald-400 border border-[#007A33]/20 dark:border-[#007A33]/30">
+                    <MapPin className="w-3.5 h-3.5" />
+                    Filtered by {selectedSite}
+                    <button
+                      onClick={() => setSelectedSite('All Sites')}
+                      className="ml-1 hover:bg-[#007A33]/20 rounded-full p-0.5 transition-colors"
+                      aria-label="Clear site filter"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                </div>
+              )}
+
               {activeTab === 'dashboard' && (
                 <Suspense fallback={
                   <div className="space-y-6">
@@ -314,6 +346,7 @@ export default function App() {
                     generatedReports={generatedReports}
                     lsts={lsts}
                     isLoading={loading}
+                    selectedSite={selectedSite}
                   />
                 </Suspense>
               )}
@@ -343,13 +376,14 @@ export default function App() {
                     sessionNotes={sessionNotes}
                     caseFiles={caseFiles}
                     onRefresh={fetchData}
+                    selectedSite={selectedSite}
                   />
                 </div>
               )}
 
               {activeTab === 'lst-tracker' && (
                 <div className="p-2 md:p-6">
-                  <LSTTracker lsts={lsts} onRefresh={fetchData} />
+                  <LSTTracker lsts={lsts} onRefresh={fetchData} selectedSite={selectedSite} />
                 </div>
               )}
 
@@ -361,6 +395,7 @@ export default function App() {
                     generatedReports={generatedReports}
                     onRefresh={fetchData}
                     isLoading={loading}
+                    selectedSite={selectedSite}
                   />
                 </div>
               )}

@@ -10,27 +10,34 @@ interface DashboardProps {
   generatedReports: Report[];
   lsts: LST[];
   isLoading?: boolean;
+  selectedSite?: string;
 }
 
-export function Dashboard({ reports, sessionNotes, generatedReports, lsts, isLoading }: DashboardProps) {
+export function Dashboard({ reports, sessionNotes, generatedReports, lsts, isLoading, selectedSite }: DashboardProps) {
+  // ── Site-filtered LSTs ──
+  const filteredLsts = useMemo(() => {
+    if (!selectedSite || selectedSite === 'All Sites') return lsts;
+    return lsts.filter(l => l.location === selectedSite);
+  }, [lsts, selectedSite]);
+
   // ── LST-focused Metrics ──
   const activeSystemGaps = useMemo(() =>
-    lsts.filter(l => l.status !== 'Resolved').length,
-  [lsts]);
+    filteredLsts.filter(l => l.status !== 'Resolved').length,
+  [filteredLsts]);
 
   const resolutionRate = useMemo(() => {
-    if (lsts.length === 0) return 0;
-    const resolved = lsts.filter(l => l.status === 'Resolved').length;
-    return Math.round((resolved / lsts.length) * 100);
-  }, [lsts]);
+    if (filteredLsts.length === 0) return 0;
+    const resolved = filteredLsts.filter(l => l.status === 'Resolved').length;
+    return Math.round((resolved / filteredLsts.length) * 100);
+  }, [filteredLsts]);
 
   const highRiskAlerts = useMemo(() =>
-    lsts.filter(l => l.severity === 'High' && l.status !== 'Resolved').length,
-  [lsts]);
+    filteredLsts.filter(l => l.severity === 'High' && l.status !== 'Resolved').length,
+  [filteredLsts]);
 
   const topSimulationSite = useMemo(() => {
     const locationCounts: Record<string, number> = {};
-    lsts.forEach(l => {
+    filteredLsts.forEach(l => {
       const loc = l.location || 'Unknown';
       locationCounts[loc] = (locationCounts[loc] || 0) + 1;
     });
@@ -43,13 +50,13 @@ export function Dashboard({ reports, sessionNotes, generatedReports, lsts, isLoa
       }
     });
     return { name: topSite, count: maxCount };
-  }, [lsts]);
+  }, [filteredLsts]);
 
   // ── Gaps Found vs Gaps Resolved over time ──
   const gapTimelineData = useMemo(() => {
     const monthMap: Record<string, { found: number; resolved: number }> = {};
 
-    lsts.forEach(lst => {
+    filteredLsts.forEach(lst => {
       const foundMonth = new Date(lst.identifiedDate).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
       if (!monthMap[foundMonth]) monthMap[foundMonth] = { found: 0, resolved: 0 };
       monthMap[foundMonth].found += 1;
@@ -69,23 +76,23 @@ export function Dashboard({ reports, sessionNotes, generatedReports, lsts, isLoa
       })
       .map(([month, data], idx) => ({ id: `gap-${idx}`, month, ...data }))
       .slice(-8);
-  }, [lsts]);
+  }, [filteredLsts]);
 
   // ── Severity distribution pie ──
   const severityPieData = useMemo(() => {
     const counts = { High: 0, Medium: 0, Low: 0 };
-    lsts.forEach(l => { counts[l.severity] = (counts[l.severity] || 0) + 1; });
+    filteredLsts.forEach(l => { counts[l.severity] = (counts[l.severity] || 0) + 1; });
     return [
       { name: 'High', value: counts.High, color: '#A51417' },
       { name: 'Medium', value: counts.Medium, color: '#f97316' },
       { name: 'Low', value: counts.Low, color: '#94a3b8' },
     ].filter(d => d.value > 0);
-  }, [lsts]);
+  }, [filteredLsts]);
 
   // ── LSTs by Location bar chart ──
   const locationBarData = useMemo(() => {
     const counts: Record<string, number> = {};
-    lsts.forEach(l => {
+    filteredLsts.forEach(l => {
       const loc = l.location || 'Unknown';
       counts[loc] = (counts[loc] || 0) + 1;
     });
@@ -93,16 +100,16 @@ export function Dashboard({ reports, sessionNotes, generatedReports, lsts, isLoa
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 6);
-  }, [lsts]);
+  }, [filteredLsts]);
 
   // ── Category distribution ──
   const categoryData = useMemo(() => {
     const counts: Record<string, number> = {};
-    lsts.forEach(l => { counts[l.category] = (counts[l.category] || 0) + 1; });
+    filteredLsts.forEach(l => { counts[l.category] = (counts[l.category] || 0) + 1; });
     return Object.entries(counts)
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value);
-  }, [lsts]);
+  }, [filteredLsts]);
 
   // ── Recent Activity ──
   const recentActivity = useMemo(() => {

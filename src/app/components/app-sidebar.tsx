@@ -1,5 +1,6 @@
-import { LayoutDashboard, UploadCloud, FileStack, ClipboardPaste, Wand2, ShieldAlert, Database, Settings, PanelLeftClose, PanelLeft } from 'lucide-react';
+import { LayoutDashboard, UploadCloud, FileStack, ClipboardPaste, Wand2, ShieldAlert, Database, Settings, PanelLeftClose, PanelLeft, Hospital, ChevronDown } from 'lucide-react';
 import { cn } from './ui/utils';
+import { useState, useRef, useEffect } from 'react';
 
 export interface SidebarItem {
   value: string;
@@ -27,13 +28,116 @@ interface AppSidebarProps {
   mobile?: boolean;
   open?: boolean;
   onClose?: () => void;
+  selectedSite?: string;
+  onSiteChange?: (site: string) => void;
+  availableSites?: string[];
 }
 
-export function AppSidebar({ activeTab, onTabChange, collapsed, onCollapsedChange, mobile, open, onClose }: AppSidebarProps) {
+function SiteSelector({ selectedSite, onSiteChange, availableSites, collapsed }: {
+  selectedSite: string;
+  onSiteChange: (site: string) => void;
+  availableSites: string[];
+  collapsed?: boolean;
+}) {
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setDropdownOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  if (collapsed) {
+    return (
+      <div className="px-2 mb-2" ref={ref}>
+        <button
+          onClick={() => setDropdownOpen(!dropdownOpen)}
+          className={cn(
+            'w-full flex items-center justify-center p-2 rounded-lg transition-colors',
+            selectedSite !== 'All Sites'
+              ? 'bg-[#007A33]/10 text-[#007A33] dark:bg-[#007A33]/20 dark:text-emerald-400'
+              : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+          )}
+          title={`Site: ${selectedSite}`}
+          aria-label="Select hospital site"
+        >
+          <Hospital className="w-5 h-5" />
+        </button>
+        {dropdownOpen && (
+          <div className="absolute left-14 top-auto z-50 w-48 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1 mt-1">
+            {availableSites.map(site => (
+              <button
+                key={site}
+                onClick={() => { onSiteChange(site); setDropdownOpen(false); }}
+                className={cn(
+                  'w-full text-left px-3 py-2 text-sm transition-colors',
+                  selectedSite === site
+                    ? 'bg-[#007A33]/10 text-[#007A33] dark:bg-[#007A33]/20 dark:text-emerald-400 font-medium'
+                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+                )}
+              >
+                {site}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-3 mb-2" ref={ref}>
+      <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5 px-1">
+        <Hospital className="w-3.5 h-3.5" />
+        Hospital Site
+      </label>
+      <button
+        onClick={() => setDropdownOpen(!dropdownOpen)}
+        className={cn(
+          'w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-sm border transition-colors',
+          selectedSite !== 'All Sites'
+            ? 'border-[#007A33]/30 bg-[#007A33]/5 text-[#007A33] dark:border-[#007A33]/40 dark:bg-[#007A33]/10 dark:text-emerald-400'
+            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+        )}
+        aria-label="Select hospital site"
+      >
+        <span className="truncate font-medium">{selectedSite}</span>
+        <ChevronDown className={cn('w-4 h-4 flex-shrink-0 transition-transform', dropdownOpen && 'rotate-180')} />
+      </button>
+      {dropdownOpen && (
+        <div className="relative z-50">
+          <div className="absolute top-1 left-0 right-0 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1 max-h-48 overflow-y-auto">
+            {availableSites.map(site => (
+              <button
+                key={site}
+                onClick={() => { onSiteChange(site); setDropdownOpen(false); }}
+                className={cn(
+                  'w-full text-left px-3 py-2 text-sm transition-colors',
+                  selectedSite === site
+                    ? 'bg-[#007A33]/10 text-[#007A33] dark:bg-[#007A33]/20 dark:text-emerald-400 font-medium'
+                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+                )}
+              >
+                {site}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function AppSidebar({ activeTab, onTabChange, collapsed, onCollapsedChange, mobile, open, onClose, selectedSite, onSiteChange, availableSites }: AppSidebarProps) {
   const handleClick = (value: string) => {
     onTabChange(value);
     if (mobile && onClose) onClose();
   };
+
+  const showSiteSelector = selectedSite && onSiteChange && availableSites && availableSites.length > 1;
 
   const sidebarContent = (
     <nav className="flex flex-col gap-1 p-3">
@@ -49,6 +153,17 @@ export function AppSidebar({ activeTab, onTabChange, collapsed, onCollapsedChang
           </button>
         )}
       </div>
+
+      {/* Site Selector */}
+      {showSiteSelector && (
+        <SiteSelector
+          selectedSite={selectedSite}
+          onSiteChange={onSiteChange}
+          availableSites={availableSites}
+          collapsed={collapsed && !mobile}
+        />
+      )}
+
       {SIDEBAR_ITEMS.map((item) => (
         <button
           key={item.value}

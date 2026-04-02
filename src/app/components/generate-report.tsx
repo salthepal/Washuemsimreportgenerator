@@ -15,9 +15,10 @@ interface GenerateReportProps {
   sessionNotes: SessionNote[];
   caseFiles: CaseFile[];
   onRefresh: () => void;
+  selectedSite?: string;
 }
 
-export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: GenerateReportProps) {
+export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh, selectedSite }: GenerateReportProps) {
   const reportSelection = useSelection<string>();
   const noteSelection = useSelection<string>();
   const caseSelection = useSelection<string>();
@@ -126,6 +127,7 @@ export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh }: 
           selectedReports: reportSelection.selected,
           selectedNotes: noteSelection.selected,
           selectedCases: caseSelection.selected,
+          selectedSite: selectedSite || '',
         }),
       });
 

@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 interface LSTTrackerProps {
   lsts: LST[];
   onRefresh: () => void;
+  selectedSite?: string;
 }
 
 // ── Edit Modal State ──
@@ -30,7 +31,7 @@ const INITIAL_EDIT: EditModalState = {
   location: '', recommendation: '', resolutionNote: '', assignee: '',
 };
 
-export function LSTTracker({ lsts, onRefresh }: LSTTrackerProps) {
+export function LSTTracker({ lsts, onRefresh, selectedSite }: LSTTrackerProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('All');
   const [filterSeverity, setFilterSeverity] = useState<string>('All');
@@ -56,9 +57,10 @@ export function LSTTracker({ lsts, onRefresh }: LSTTrackerProps) {
       const matchesSeverity = filterSeverity === 'All' || lst.severity === filterSeverity;
       const matchesCategory = filterCategory === 'All' || lst.category === filterCategory;
       const matchesLocation = filterLocation === 'All' || lst.location === filterLocation;
-      return matchesSearch && matchesStatus && matchesSeverity && matchesCategory && matchesLocation;
+      const matchesSite = !selectedSite || selectedSite === 'All Sites' || lst.location === selectedSite;
+      return matchesSearch && matchesStatus && matchesSeverity && matchesCategory && matchesLocation && matchesSite;
     });
-  }, [lsts, searchQuery, filterStatus, filterSeverity, filterCategory, filterLocation]);
+  }, [lsts, searchQuery, filterStatus, filterSeverity, filterCategory, filterLocation, selectedSite]);
 
   const sortedLsts = useMemo(() => {
     return [...filteredLsts].sort((a, b) => {
@@ -69,12 +71,15 @@ export function LSTTracker({ lsts, onRefresh }: LSTTrackerProps) {
     });
   }, [filteredLsts]);
 
-  const stats = useMemo(() => ({
-    total: lsts.length,
-    active: lsts.filter(l => l.status === 'Identified').length,
-    highSeverity: lsts.filter(l => l.severity === 'High' && l.status !== 'Resolved').length,
-    resolved: lsts.filter(l => l.status === 'Resolved').length,
-  }), [lsts]);
+  const stats = useMemo(() => {
+    const siteLsts = (!selectedSite || selectedSite === 'All Sites') ? lsts : lsts.filter(l => l.location === selectedSite);
+    return {
+      total: siteLsts.length,
+      active: siteLsts.filter(l => l.status === 'Identified').length,
+      highSeverity: siteLsts.filter(l => l.severity === 'High' && l.status !== 'Resolved').length,
+      resolved: siteLsts.filter(l => l.status === 'Resolved').length,
+    };
+  }, [lsts, selectedSite]);
 
   const activeFilterCount = [filterStatus, filterSeverity, filterCategory, filterLocation].filter(f => f !== 'All').length;
 

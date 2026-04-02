@@ -14,9 +14,10 @@ interface ViewRepositoryProps {
   generatedReports: Report[];
   onRefresh: () => void;
   isLoading?: boolean;
+  selectedSite?: string;
 }
 
-export function ViewRepository({ reports, sessionNotes, generatedReports, onRefresh, isLoading }: ViewRepositoryProps) {
+export function ViewRepository({ reports, sessionNotes, generatedReports, onRefresh, isLoading, selectedSite }: ViewRepositoryProps) {
   const [expandedReport, setExpandedReport] = useState<string | null>(null);
   const [expandedNote, setExpandedNote] = useState<string | null>(null);
   const [expandedGenerated, setExpandedGenerated] = useState<string | null>(null);
@@ -70,6 +71,12 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
   // Filter documents
   const filterDocuments = <T extends Report | SessionNote>(docs: T[]) => {
     return docs.filter(doc => {
+      // Site filter
+      if (selectedSite && selectedSite !== 'All Sites') {
+        const loc = doc.metadata?.location;
+        if (loc && loc !== selectedSite) return false;
+      }
+
       // Search filter
       const searchLower = debouncedSearch.toLowerCase();
       const matchesSearch = searchLower === '' || 
