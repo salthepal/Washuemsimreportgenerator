@@ -12,14 +12,14 @@ export function sanitizeText(text: string): string {
     // Normalize Unicode to NFC form
     .normalize('NFC')
     // Remove control characters except newlines and tabs
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '')
+    .replaceAll(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '')
     // Remove zero-width characters
-    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replaceAll(/[\u200B-\u200D\uFEFF]/g, '')
     // Replace problematic quotes with standard ones
-    .replace(/[\u2018\u2019]/g, "'")
-    .replace(/[\u201C\u201D]/g, '"')
+    .replaceAll(/[\u2018\u2019]/g, "'")
+    .replaceAll(/[\u201C\u201D]/g, '"')
     // Normalize whitespace
-    .replace(/\s+/g, ' ')
+    .replaceAll(/\s+/g, ' ')
     .trim();
 }
 
@@ -29,17 +29,48 @@ export function sanitizeText(text: string): string {
 export function sanitizeHTML(html: string): string {
   if (!html) return '';
   
-  return html
-    .normalize('NFC')
-    // Remove script and style tags
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-    // Remove event handlers
-    .replace(/on\w+="[^"]*"/gi, '')
-    .replace(/on\w+='[^']*'/gi, '')
-    // Normalize quotes in HTML
-    .replace(/[\u2018\u2019]/g, "'")
-    .replace(/[\u201C\u201D]/g, '"');
+  let sanitized = html.normalize('NFC');
+  
+  // Loop to handle nested/overlapping patterns until no more matches found
+  // This prevents bypasses like <<script>script> becoming <script>
+  let previousLength = -1;
+  while (sanitized.length !== previousLength) {
+    previousLength = sanitized.length;
+    
+    // Remove script tags and their content
+    sanitized = sanitized.replaceAll(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+    sanitized = sanitized.replaceAll(/<script[\s\S]*?<\/script>/gi, '');
+    sanitized = sanitized.replaceAll(/<script[^>]*>/gi, '');
+    
+    // Remove style tags and their content
+    sanitized = sanitized.replaceAll(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
+    sanitized = sanitized.replaceAll(/<style[\s\S]*?<\/style>/gi, '');
+    sanitized = sanitized.replaceAll(/<style[^>]*>/gi, '');
+    
+    // Remove iframe tags
+    sanitized = sanitized.replaceAll(/<iframe[\s\S]*?<\/iframe>/gi, '');
+    sanitized = sanitized.replaceAll(/<iframe[^>]*>/gi, '');
+    
+    // Remove object and embed tags
+    sanitized = sanitized.replaceAll(/<object[\s\S]*?<\/object>/gi, '');
+    sanitized = sanitized.replaceAll(/<embed[\s\S]*?<\/embed>/gi, '');
+    
+    // Remove event handlers with various formats
+    sanitized = sanitized.replaceAll(/on\w+\s*=\s*"[^"]*"/gi, '');
+    sanitized = sanitized.replaceAll(/on\w+\s*=\s*'[^']*'/gi, '');
+    sanitized = sanitized.replaceAll(/on\w+\s*=\s*[^\s>]*/gi, '');
+    
+    // Remove javascript: protocol
+    sanitized = sanitized.replaceAll(/javascript:/gi, '');
+    sanitized = sanitized.replaceAll(/vbscript:/gi, '');
+    sanitized = sanitized.replaceAll(/data:text\/html/gi, '');
+  }
+  
+  // Normalize quotes in HTML
+  sanitized = sanitized.replaceAll(/[\u2018\u2019]/g, "'");
+  sanitized = sanitized.replaceAll(/[\u201C\u201D]/g, '"');
+  
+  return sanitized;
 }
 
 /**
@@ -51,11 +82,11 @@ export function sanitizeFilename(filename: string): string {
   return filename
     .normalize('NFC')
     // Remove invalid filename characters
-    .replace(/[<>:"/\\|?*\x00-\x1F]/g, '')
+    .replaceAll(/[<>:"/\\|?*\x00-\x1F]/g, '')
     // Replace spaces with underscores
-    .replace(/\s+/g, '_')
+    .replaceAll(/\s+/g, '_')
     // Remove consecutive underscores
-    .replace(/_+/g, '_')
+    .replaceAll(/_+/g, '_')
     .trim();
 }
 
