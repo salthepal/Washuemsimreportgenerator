@@ -3,9 +3,34 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "description": "WashU Emergency Medicine Simulation & Safety Intelligence Platform - AI-powered post-session report generation and LST tracking",
+  "author": "Washington University School of Medicine - Emergency Medicine",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/washusimintelligence.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/washusimintelligence/issues"
+  },
+  "homepage": "https://yourusername.github.io/washusimintelligence/",
+  "keywords": [
+    "medical-education",
+    "simulation",
+    "patient-safety",
+    "emergency-medicine",
+    "washU",
+    "LST-tracking",
+    "AI-report-generation",
+    "supabase",
+    "gemini-ai"
+  ],
   "scripts": {
     "build": "vite build",
-    "dev": "vite"
+    "dev": "vite",
+    "preview": "vite preview",
+    "deploy": "npm run build && gh-pages -d dist",
+    "predeploy": "npm run build"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",

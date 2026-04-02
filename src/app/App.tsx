@@ -1,6 +1,5 @@
-import { useState, useEffect, lazy, Suspense, useMemo } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import Joyride, { Step } from 'react-joyride';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { UploadReports } from './components/upload-reports';
 import { SessionNotes } from './components/session-notes';
 import { CaseFiles, CaseFile } from './components/case-files';
@@ -13,7 +12,7 @@ import { AuditLog } from './components/audit-log';
 import { ViewAIPrompt } from './components/view-ai-prompt';
 import { ErrorBoundary } from './components/error-boundary';
 import { Toaster } from './components/ui/sonner';
-import { FileText, Moon, Sun, HelpCircle } from 'lucide-react';
+import { FileText, Moon, Sun, HelpCircle, Menu } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Skeleton } from './components/ui/skeleton';
 import { projectId, publicAnonKey } from '/utils/supabase/info';
@@ -23,6 +22,7 @@ import { useLocalStorage } from './hooks/useLocalStorage';
 import { apiCache } from './utils/cache';
 import { TOUR_STEPS, KEYBOARD_SHORTCUTS } from './constants/tour';
 import { toast } from 'sonner';
+import { AppSidebar } from './components/app-sidebar';
 
 // Suppress React DevTools warning (harmless warning from browser extensions)
 if (typeof window !== 'undefined') {
@@ -115,6 +115,17 @@ export default function App() {
   const [tourRunning, setTourRunning] = useState(false);
   const [darkMode, setDarkMode] = useDarkMode();
   const [tourSteps, setTourSteps] = useLocalStorage<Step[]>('tourSteps', TOUR_STEPS);
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [sidebarCollapsed, setSidebarCollapsed] = useLocalStorage('sidebarCollapsed', false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   const fetchData = async () => {
     try {
@@ -213,68 +224,75 @@ export default function App() {
 
           {/* Header */}
           <header className="bg-gradient-to-r from-[#A51417] to-[#8B0F12] text-white shadow-lg">
-            <div className="container mx-auto px-3 md:px-6 py-4 md:py-6">
+            <div className="px-3 md:px-6 py-2.5 md:py-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
-                  <FileText className="w-6 h-6 md:w-8 md:h-8 flex-shrink-0" />
+                  {isMobile && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setMobileSidebarOpen(true)}
+                      className="text-white hover:bg-white/20 w-8 h-8 flex-shrink-0"
+                      aria-label="Open menu"
+                    >
+                      <Menu className="w-5 h-5" />
+                    </Button>
+                  )}
+                  <FileText className="w-6 h-6 md:w-7 md:h-7 flex-shrink-0" />
                   <div className="min-w-0">
-                    <h1 className="text-lg md:text-2xl font-bold truncate">WashU Emergency Medicine: Simulation & Safety Intelligence</h1>
-                    <p className="text-xs md:text-sm text-red-100 truncate">Post-Session Report &amp; LST Management Platform</p>
+                    <h1 className="text-base md:text-xl font-bold truncate">WashU Emergency Medicine: Simulation & Safety Intelligence</h1>
+                    <p className="text-xs text-red-100 truncate hidden md:block">Post-Session Report &amp; LST Management Platform</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex items-center gap-1.5 flex-shrink-0">
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => setDarkMode(!darkMode)}
-                    className="text-white hover:bg-white/20 w-8 h-8 md:w-10 md:h-10"
+                    className="text-white hover:bg-white/20 w-8 h-8"
                   >
-                    {darkMode ? <Sun className="w-4 h-4 md:w-5 md:h-5" /> : <Moon className="w-4 h-4 md:w-5 md:h-5" />}
+                    {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
                   </Button>
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => setTourRunning(true)}
-                    className="text-white hover:bg-white/20 w-8 h-8 md:w-10 md:h-10"
+                    className="text-white hover:bg-white/20 w-8 h-8"
                   >
-                    <HelpCircle className="w-4 h-4 md:w-5 md:h-5" />
+                    <HelpCircle className="w-4 h-4" />
                   </Button>
                 </div>
               </div>
             </div>
           </header>
 
-          {/* Main Content */}
-          <main className="container mx-auto px-2 md:px-6 py-4 md:py-8">
-            <Tabs defaultValue="dashboard" className="space-y-4 md:space-y-6">
-              <TabsList className="flex items-center justify-start overflow-x-auto overflow-y-hidden whitespace-nowrap bg-slate-100 dark:bg-slate-800 rounded-lg p-1 w-full no-scrollbar">
-                <TabsTrigger value="dashboard" className="dashboard-tab text-sm px-4 py-2 whitespace-nowrap flex-shrink-0">
-                  Dashboard
-                </TabsTrigger>
-                <TabsTrigger value="upload" className="upload-tab text-sm px-4 py-2 whitespace-nowrap flex-shrink-0">
-                  Upload
-                </TabsTrigger>
-                <TabsTrigger value="cases" className="cases-tab text-sm px-4 py-2 whitespace-nowrap flex-shrink-0">
-                  Cases
-                </TabsTrigger>
-                <TabsTrigger value="notes" className="notes-tab text-sm px-4 py-2 whitespace-nowrap flex-shrink-0">
-                  Notes
-                </TabsTrigger>
-                <TabsTrigger value="generate" className="generate-tab text-sm px-4 py-2 whitespace-nowrap flex-shrink-0">
-                  Generate
-                </TabsTrigger>
-                <TabsTrigger value="lst-tracker" className="lst-tracker-tab text-sm px-4 py-2 whitespace-nowrap flex-shrink-0">
-                  LST Tracker
-                </TabsTrigger>
-                <TabsTrigger value="repository" className="repository-tab text-sm px-4 py-2 whitespace-nowrap flex-shrink-0">
-                  Repository
-                </TabsTrigger>
-                <TabsTrigger value="settings" className="settings-tab text-sm px-4 py-2 whitespace-nowrap flex-shrink-0">
-                  Settings
-                </TabsTrigger>
-              </TabsList>
+          {/* Sidebar + Main Content */}
+          <div className="flex">
+            {/* Mobile Sidebar */}
+            {isMobile && (
+              <AppSidebar
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
+                collapsed={false}
+                onCollapsedChange={() => {}}
+                mobile
+                open={mobileSidebarOpen}
+                onClose={() => setMobileSidebarOpen(false)}
+              />
+            )}
 
-              <TabsContent value="dashboard" className="p-2 md:p-6">
+            {/* Desktop Sidebar */}
+            {!isMobile && (
+              <AppSidebar
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
+                collapsed={sidebarCollapsed}
+                onCollapsedChange={setSidebarCollapsed}
+              />
+            )}
+
+            <main className="flex-1 min-w-0 px-2 md:px-6 py-4 md:py-6">
+              {activeTab === 'dashboard' && (
                 <Suspense fallback={
                   <div className="space-y-6">
                     <Skeleton className="h-8 w-64" />
@@ -298,100 +316,108 @@ export default function App() {
                     isLoading={loading}
                   />
                 </Suspense>
-              </TabsContent>
+              )}
 
-              <TabsContent value="upload" className="p-2 md:p-6">
-                <UploadReports reports={reports} onRefresh={fetchData} />
-              </TabsContent>
+              {activeTab === 'upload' && (
+                <div className="p-2 md:p-6">
+                  <UploadReports reports={reports} onRefresh={fetchData} />
+                </div>
+              )}
 
-              <TabsContent value="cases" className="p-2 md:p-6">
-                <CaseFiles caseFiles={caseFiles} onRefresh={fetchData} />
-              </TabsContent>
+              {activeTab === 'cases' && (
+                <div className="p-2 md:p-6">
+                  <CaseFiles caseFiles={caseFiles} onRefresh={fetchData} />
+                </div>
+              )}
 
-              <TabsContent value="notes" className="p-2 md:p-6">
-                <SessionNotes sessionNotes={sessionNotes} onRefresh={fetchData} />
-              </TabsContent>
+              {activeTab === 'notes' && (
+                <div className="p-2 md:p-6">
+                  <SessionNotes sessionNotes={sessionNotes} onRefresh={fetchData} />
+                </div>
+              )}
 
-              <TabsContent value="generate" className="p-2 md:p-6">
-                <GenerateReport
-                  reports={reports}
-                  sessionNotes={sessionNotes}
-                  caseFiles={caseFiles}
-                  onRefresh={fetchData}
-                />
-              </TabsContent>
+              {activeTab === 'generate' && (
+                <div className="p-2 md:p-6">
+                  <GenerateReport
+                    reports={reports}
+                    sessionNotes={sessionNotes}
+                    caseFiles={caseFiles}
+                    onRefresh={fetchData}
+                  />
+                </div>
+              )}
 
-              <TabsContent value="lst-tracker" className="p-2 md:p-6">
-                <LSTTracker lsts={lsts} onRefresh={fetchData} />
-              </TabsContent>
+              {activeTab === 'lst-tracker' && (
+                <div className="p-2 md:p-6">
+                  <LSTTracker lsts={lsts} onRefresh={fetchData} />
+                </div>
+              )}
 
-              <TabsContent value="repository" className="p-2 md:p-6">
-                <ViewRepository
-                  reports={reports}
-                  sessionNotes={sessionNotes}
-                  generatedReports={generatedReports}
-                  onRefresh={fetchData}
-                  isLoading={loading}
-                />
-              </TabsContent>
+              {activeTab === 'repository' && (
+                <div className="p-2 md:p-6">
+                  <ViewRepository
+                    reports={reports}
+                    sessionNotes={sessionNotes}
+                    generatedReports={generatedReports}
+                    onRefresh={fetchData}
+                    isLoading={loading}
+                  />
+                </div>
+              )}
 
-              <TabsContent value="settings" className="p-3 md:p-6">
-                <div className="space-y-4 md:space-y-6">
-                  <div>
-                    <h2 className="text-xl md:text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">Settings & Administration</h2>
-                    <p className="text-sm md:text-base text-slate-600 dark:text-slate-400">
-                      Manage backups, audit logs, and system configuration
-                    </p>
-                  </div>
-
-                  <ViewAIPrompt />
-
-                  <BackupRestore />
-
-                  <AuditLog />
-                  
-                  <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-4 md:p-6 border border-slate-200 dark:border-slate-700">
-                    <h3 className="text-base md:text-lg font-bold text-slate-900 dark:text-slate-100 mb-3">Keyboard Shortcuts</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs md:text-sm">
-                      {KEYBOARD_SHORTCUTS.map((shortcut) => (
-                        <div key={shortcut.key} className="flex justify-between items-center">
-                          <span className="text-slate-600 dark:text-slate-400">{shortcut.label}</span>
-                          <kbd className="px-2 py-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded text-xs text-slate-900 dark:text-slate-100">{shortcut.key}</kbd>
-                        </div>
-                      ))}
+              {activeTab === 'settings' && (
+                <div className="p-3 md:p-6">
+                  <div className="space-y-4 md:space-y-6">
+                    <div>
+                      <h2 className="text-xl md:text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">Settings & Administration</h2>
+                      <p className="text-sm md:text-base text-slate-600 dark:text-slate-400">
+                        Manage backups, audit logs, and system configuration
+                      </p>
                     </div>
-                  </div>
 
-                  <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-4 md:p-6 border border-blue-200 dark:border-blue-800">
-                    <h3 className="text-base md:text-lg font-bold text-blue-900 dark:text-blue-200 mb-2">System Information</h3>
-                    <div className="space-y-2 text-xs md:text-sm text-blue-800 dark:text-blue-300">
-                      <p><strong>Version:</strong> 3.0.0 (Comprehensive Intelligence Platform)</p>
-                      <p><strong>Build:</strong> 26 Major Optimization Features</p>
-                      <p><strong>Total Documents:</strong> {reports.length + sessionNotes.length + generatedReports.length}</p>
-                      <p><strong>Active LSTs:</strong> {lsts.filter(lst => lst.status !== 'Resolved').length}</p>
-                      <p><strong>AI Model:</strong> Gemini 3.0 Flash Experimental</p>
-                      <p><strong>Backend:</strong> Supabase Edge Functions + KV Store</p>
-                      <p><strong>Core Capabilities:</strong> AI-Powered Report Generation, LST Intelligence, Workflow Automation</p>
-                      <p><strong>UX Features:</strong> Dark Mode (WCAG AA), Horizontal Scroll Tabs, 3 Export Formats (Copy/DOCX/PDF)</p>
-                      <p><strong>Data Management:</strong> Batch Operations, Audit Logging, Backup/Restore, Advanced Filtering</p>
-                      <p><strong>Branding:</strong> WashU PMS 200 (#A51417) & PMS 350 (#007A33)</p>
+                    <ViewAIPrompt />
+
+                    <BackupRestore />
+
+                    <AuditLog />
+                    
+                    <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-4 md:p-6 border border-slate-200 dark:border-slate-700">
+                      <h3 className="text-base md:text-lg font-bold text-slate-900 dark:text-slate-100 mb-3">Keyboard Shortcuts</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs md:text-sm">
+                        {KEYBOARD_SHORTCUTS.map((shortcut) => (
+                          <div key={shortcut.key} className="flex justify-between items-center">
+                            <span className="text-slate-600 dark:text-slate-400">{shortcut.label}</span>
+                            <kbd className="px-2 py-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded text-xs text-slate-900 dark:text-slate-100">{shortcut.key}</kbd>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-4 md:p-6 border border-blue-200 dark:border-blue-800">
+                      <h3 className="text-base md:text-lg font-bold text-blue-900 dark:text-blue-200 mb-2">System Information</h3>
+                      <div className="space-y-2 text-xs md:text-sm text-blue-800 dark:text-blue-300">
+                        <p><strong>Version:</strong> 3.0.0 (Comprehensive Intelligence Platform)</p>
+                        <p><strong>Build:</strong> 26 Major Optimization Features</p>
+                        <p><strong>Total Documents:</strong> {reports.length + sessionNotes.length + generatedReports.length}</p>
+                        <p><strong>Active LSTs:</strong> {lsts.filter(lst => lst.status !== 'Resolved').length}</p>
+                        <p><strong>AI Model:</strong> Gemini 3.0 Flash Experimental</p>
+                        <p><strong>Backend:</strong> Supabase Edge Functions + KV Store</p>
+                        <p><strong>Core Capabilities:</strong> AI-Powered Report Generation, LST Intelligence, Workflow Automation</p>
+                        <p><strong>UX Features:</strong> Dark Mode (WCAG AA), Sidebar Navigation, 3 Export Formats (Copy/DOCX/PDF)</p>
+                        <p><strong>Data Management:</strong> Batch Operations, Audit Logging, Backup/Restore, Advanced Filtering</p>
+                        <p><strong>Branding:</strong> WashU PMS 200 (#A51417) & PMS 350 (#007A33)</p>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </TabsContent>
-            </Tabs>
-          </main>
+              )}
+            </main>
+          </div>
 
           {/* Quick Actions Bar */}
           <QuickActionsBar
-            onQuickUpload={() => {
-              const uploadTab = document.querySelector('.upload-tab') as HTMLElement;
-              uploadTab?.click();
-            }}
-            onQuickGenerate={() => {
-              const generateTab = document.querySelector('.generate-tab') as HTMLElement;
-              generateTab?.click();
-            }}
+            onQuickUpload={() => setActiveTab('upload')}
+            onQuickGenerate={() => setActiveTab('generate')}
             onExportAll={async () => {
               try {
                 const response = await fetch(`${API_BASE}/backup`, {
@@ -413,10 +439,7 @@ export default function App() {
                 toast.error('Failed to export data');
               }
             }}
-            onNewNote={() => {
-              const notesTab = document.querySelector('.notes-tab') as HTMLElement;
-              notesTab?.click();
-            }}
+            onNewNote={() => setActiveTab('notes')}
           />
         </div>
       </div>
