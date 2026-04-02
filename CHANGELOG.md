@@ -5,35 +5,6 @@ All notable changes to the WashU EM Sim Safety Intelligence Platform will be doc
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.1] - 2026-04-02
-
-### 🚀 Performance Optimizations
-
-Significant improvements to initial load speed and user experience.
-
-### Added
-
-#### Performance Enhancements
-- **Parallel Data Fetching** - All 5 data streams (reports, notes, cases, generated, LSTs) now fetch and parse simultaneously using Promise.all
-- **localStorage Caching** - Automatic data persistence with instant cache loading on mount
-- **Background Sync** - Fresh data fetched in background after cached data loads
-- **No Loading Lock** - Header and Tabs always visible, removing full-screen spinner
-
-#### UX Improvements
-- **Skeleton Loaders** - Dashboard shows pulse animations during initial load
-- **Instant First Paint** - Cached data displays immediately while fetching fresh data
-- **Smooth Transitions** - Content appears progressively as data loads
-
-### Changed
-- Refactored `fetchData` function to parallelize both fetch calls and JSON parsing
-- Removed full-screen loading state that blocked UI during initial load
-- Updated Dashboard component to accept `isLoading` prop for skeleton states
-
-### Performance Metrics
-- **Initial render**: Now instant with cached data (previously 1-3s blank screen)
-- **Data fetching**: ~40% faster with parallel Promise.all pattern
-- **User perception**: Immediate feedback with skeleton loaders
-
 ## [1.0.0] - 2026-04-02
 
 ### 🎉 Production Release
@@ -150,5 +121,5 @@ The first production-ready release of the WashU Emergency Medicine Simulation & 
 
 ---
 
-**Current Version**: 1.0.1  
+**Current Version**: 1.0.0  
 **Last Updated**: April 2, 2026

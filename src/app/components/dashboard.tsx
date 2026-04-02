@@ -2,17 +2,15 @@ import { useMemo } from 'react';
 import { Report, SessionNote, LST } from '../App';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { ShieldAlert, CheckCircle2, AlertTriangle, MapPin, FileText, Users, Sparkles, Calendar, TrendingUp, Activity } from 'lucide-react';
-import { Skeleton } from './ui/skeleton';
 
 interface DashboardProps {
   reports: Report[];
   sessionNotes: SessionNote[];
   generatedReports: Report[];
   lsts: LST[];
-  isLoading?: boolean;
 }
 
-export function Dashboard({ reports, sessionNotes, generatedReports, lsts, isLoading = false }: DashboardProps) {
+export function Dashboard({ reports, sessionNotes, generatedReports, lsts }: DashboardProps) {
   // ── LST-focused Metrics ──
   const activeSystemGaps = useMemo(() =>
     lsts.filter(l => l.status !== 'Resolved').length,
