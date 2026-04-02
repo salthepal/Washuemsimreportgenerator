@@ -15,29 +15,25 @@ async function initializeDatabase() {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
     );
 
-    // Create table if it doesn't exist using SQL
-    const { error } = await supabase.rpc('exec_sql', {
-      sql: `
-        CREATE TABLE IF NOT EXISTS kv_store_7fe18c53 (
-          key TEXT NOT NULL PRIMARY KEY,
-          value JSONB NOT NULL
-        );
-      `
-    });
-
-    if (error) {
-      console.error('Table initialization error (this is OK if table exists):', error.message);
-      // Try alternative method - direct SQL execution
-      const { error: sqlError } = await supabase.from('kv_store_7fe18c53').select('key').limit(1);
-      if (sqlError) {
-        console.error('Table does not exist. Please create it manually in Supabase dashboard.');
-        console.log('Run this SQL in Supabase SQL Editor:');
-        console.log('CREATE TABLE IF NOT EXISTS kv_store_7fe18c53 (key TEXT NOT NULL PRIMARY KEY, value JSONB NOT NULL);');
-      } else {
-        console.log('Database table verified successfully');
-      }
+    // Verify table exists by attempting to query it
+    const { error: queryError } = await supabase.from('kv_store_7fe18c53').select('key').limit(1);
+    
+    if (queryError) {
+      console.error('Database table does not exist or cannot be accessed:', queryError.message);
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('⚠️  TABLE SETUP REQUIRED');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('Please create the kv_store_7fe18c53 table in your Supabase dashboard.');
+      console.log('');
+      console.log('Run this SQL in Supabase SQL Editor:');
+      console.log('');
+      console.log('CREATE TABLE IF NOT EXISTS kv_store_7fe18c53 (');
+      console.log('  key TEXT NOT NULL PRIMARY KEY,');
+      console.log('  value JSONB NOT NULL');
+      console.log(');');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     } else {
-      console.log('Database table initialized successfully');
+      console.log('✅ Database table verified successfully');
     }
   } catch (error) {
     console.error('Database initialization error:', error);

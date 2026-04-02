@@ -65,7 +65,7 @@ export function Dashboard({ reports, sessionNotes, generatedReports, lsts }: Das
         const db = new Date(b[0]);
         return da.getTime() - db.getTime();
       })
-      .map(([month, data]) => ({ month, ...data }))
+      .map(([month, data], idx) => ({ id: `gap-${idx}`, month, ...data }))
       .slice(-8);
   }, [lsts]);
 
