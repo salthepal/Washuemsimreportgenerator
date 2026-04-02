@@ -116,14 +116,36 @@ export default function App() {
   const [darkMode, setDarkMode] = useDarkMode();
   const [tourSteps, setTourSteps] = useLocalStorage<Step[]>('tourSteps', TOUR_STEPS);
 
+  // Load cached data from localStorage on mount
+  const loadCachedData = () => {
+    try {
+      const cachedReports = localStorage.getItem('cached_reports');
+      const cachedNotes = localStorage.getItem('cached_notes');
+      const cachedCases = localStorage.getItem('cached_cases');
+      const cachedGenerated = localStorage.getItem('cached_generated');
+      const cachedLsts = localStorage.getItem('cached_lsts');
+
+      if (cachedReports) setReports(JSON.parse(cachedReports));
+      if (cachedNotes) setSessionNotes(JSON.parse(cachedNotes));
+      if (cachedCases) setCaseFiles(JSON.parse(cachedCases));
+      if (cachedGenerated) setGeneratedReports(JSON.parse(cachedGenerated));
+      if (cachedLsts) setLsts(JSON.parse(cachedLsts));
+      
+      // If we have cached data, we can immediately show content
+      if (cachedReports || cachedNotes || cachedCases || cachedGenerated || cachedLsts) {
+        console.log('Loaded cached data from localStorage');
+      }
+    } catch (error) {
+      console.error('Error loading cached data:', error);
+    }
+  };
+
   const fetchData = async () => {
     try {
-      setLoading(true);
-      
       console.log('Fetching data from:', API_BASE);
       
       // Fetch all data in parallel for faster loading
-      const [reportsRes, notesRes, caseFilesRes, generatedRes, lstsRes] = await Promise.all([
+      const responses = await Promise.all([
         fetch(`${API_BASE}/reports`, { headers: API_HEADERS }),
         fetch(`${API_BASE}/notes`, { headers: API_HEADERS }),
         fetch(`${API_BASE}/case-files`, { headers: API_HEADERS }),
@@ -132,77 +154,105 @@ export default function App() {
       ]);
       
       console.log('All responses received - status codes:', {
-        reports: reportsRes.status,
-        notes: notesRes.status,
-        caseFiles: caseFilesRes.status,
-        generated: generatedRes.status,
-        lsts: lstsRes.status,
+        reports: responses[0].status,
+        notes: responses[1].status,
+        caseFiles: responses[2].status,
+        generated: responses[3].status,
+        lsts: responses[4].status,
       });
       
-      // Process reports
-      if (reportsRes.ok) {
-        const reportsData = await reportsRes.json();
-        console.log('Reports data:', reportsData);
-        setReports(reportsData.reports || []);
-      } else {
-        const errorData = await reportsRes.json();
-        console.error('Failed to fetch reports:', errorData);
-        
-        // Check if it's a table missing error
-        if (errorData.error?.includes('kv_store_7fe18c53')) {
-          toast.error('Database table not found!', {
-            description: 'Please create the table in Supabase SQL Editor',
-            duration: 10000,
-          });
-          console.error('⚠️ DATABASE SETUP REQUIRED ⚠️');
-          console.log('Please run this SQL in your Supabase SQL Editor:');
-          console.log('CREATE TABLE IF NOT EXISTS kv_store_7fe18c53 (key TEXT NOT NULL PRIMARY KEY, value JSONB NOT NULL);');
+      // Parse all JSON responses in parallel
+      const [reportsRes, notesRes, caseFilesRes, generatedRes, lstsRes] = responses;
+      
+      const jsonPromises = responses.map(async (res, index) => {
+        if (!res.ok) {
+          try {
+            const errorData = await res.json();
+            return { ok: false, data: errorData, index };
+          } catch {
+            const errorText = await res.text();
+            return { ok: false, data: errorText, index };
+          }
         }
-      }
-
-      // Process session notes
-      if (notesRes.ok) {
-        const notesData = await notesRes.json();
-        console.log('Notes data:', notesData);
-        setSessionNotes(notesData.notes || []);
-      } else {
-        const errorText = await notesRes.text();
-        console.error('Failed to fetch session notes:', errorText);
-      }
-
-      // Process case files
-      if (caseFilesRes.ok) {
-        const caseFilesData = await caseFilesRes.json();
-        console.log('Case files data:', caseFilesData);
-        setCaseFiles(caseFilesData.caseFiles || []);
-      } else {
-        const errorText = await caseFilesRes.text();
-        console.error('Failed to fetch case files:', errorText);
-      }
-
-      // Process generated reports
-      if (generatedRes.ok) {
-        const generatedData = await generatedRes.json();
-        console.log('Generated reports data:', generatedData);
-        setGeneratedReports(generatedData.reports || []);
-      } else {
-        const errorText = await generatedRes.text();
-        console.error('Failed to fetch generated reports:', errorText);
-      }
-
-      // Process LSTs
-      if (lstsRes.ok) {
-        const lstsData = await lstsRes.json();
-        console.log('LSTs data:', lstsData);
-        setLsts(lstsData.lsts || []);
-      } else {
-        const errorText = await lstsRes.text();
-        console.error('Failed to fetch LSTs:', errorText);
-      }
+        try {
+          const data = await res.json();
+          return { ok: true, data, index };
+        } catch {
+          return { ok: false, data: 'Failed to parse response', index };
+        }
+      });
+      
+      const results = await Promise.all(jsonPromises);
+      
+      // Process all results
+      results.forEach((result, index) => {
+        if (result.ok) {
+          switch (index) {
+            case 0: // reports
+              console.log('Reports data:', result.data);
+              const reportsData = result.data.reports || [];
+              setReports(reportsData);
+              localStorage.setItem('cached_reports', JSON.stringify(reportsData));
+              break;
+            case 1: // notes
+              console.log('Notes data:', result.data);
+              const notesData = result.data.notes || [];
+              setSessionNotes(notesData);
+              localStorage.setItem('cached_notes', JSON.stringify(notesData));
+              break;
+            case 2: // case files
+              console.log('Case files data:', result.data);
+              const caseFilesData = result.data.caseFiles || [];
+              setCaseFiles(caseFilesData);
+              localStorage.setItem('cached_cases', JSON.stringify(caseFilesData));
+              break;
+            case 3: // generated reports
+              console.log('Generated reports data:', result.data);
+              const generatedData = result.data.reports || [];
+              setGeneratedReports(generatedData);
+              localStorage.setItem('cached_generated', JSON.stringify(generatedData));
+              break;
+            case 4: // lsts
+              console.log('LSTs data:', result.data);
+              const lstsData = result.data.lsts || [];
+              setLsts(lstsData);
+              localStorage.setItem('cached_lsts', JSON.stringify(lstsData));
+              break;
+          }
+        } else {
+          // Handle errors
+          switch (index) {
+            case 0:
+              console.error('Failed to fetch reports:', result.data);
+              if (typeof result.data === 'object' && result.data.error?.includes('kv_store_7fe18c53')) {
+                toast.error('Database table not found!', {
+                  description: 'Please create the table in Supabase SQL Editor',
+                  duration: 10000,
+                });
+                console.error('⚠️ DATABASE SETUP REQUIRED ⚠️');
+                console.log('Please run this SQL in your Supabase SQL Editor:');
+                console.log('CREATE TABLE IF NOT EXISTS kv_store_7fe18c53 (key TEXT NOT NULL PRIMARY KEY, value JSONB NOT NULL);');
+              }
+              break;
+            case 1:
+              console.error('Failed to fetch session notes:', result.data);
+              break;
+            case 2:
+              console.error('Failed to fetch case files:', result.data);
+              break;
+            case 3:
+              console.error('Failed to fetch generated reports:', result.data);
+              break;
+            case 4:
+              console.error('Failed to fetch LSTs:', result.data);
+              break;
+          }
+        }
+      });
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Failed to connect to server', {
-        description: 'Check console for details',
+        description: 'Using cached data if available',
       });
     } finally {
       setLoading(false);
@@ -210,6 +260,10 @@ export default function App() {
   };
 
   useEffect(() => {
+    // Load cached data immediately
+    loadCachedData();
+    
+    // Then fetch fresh data in the background
     fetchData();
   }, []);
 
@@ -303,12 +357,12 @@ export default function App() {
                 <Suspense fallback={
                   <div className="space-y-6">
                     <Skeleton className="h-8 w-64" />
-                    <div className="grid grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
                       {[...Array(4)].map((_, i) => (
                         <Skeleton key={i} className="h-24" />
                       ))}
                     </div>
-                    <div className="grid grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       {[...Array(4)].map((_, i) => (
                         <Skeleton key={i} className="h-64" />
                       ))}
@@ -320,6 +374,7 @@ export default function App() {
                     sessionNotes={sessionNotes}
                     generatedReports={generatedReports}
                     lsts={lsts}
+                    isLoading={loading}
                   />
                 </Suspense>
               </TabsContent>
