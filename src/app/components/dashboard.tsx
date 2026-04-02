@@ -2,15 +2,17 @@ import { useMemo } from 'react';
 import { Report, SessionNote, LST } from '../App';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { ShieldAlert, CheckCircle2, AlertTriangle, MapPin, FileText, Users, Sparkles, Calendar, TrendingUp, Activity } from 'lucide-react';
+import { Skeleton } from './ui/skeleton';
 
 interface DashboardProps {
   reports: Report[];
   sessionNotes: SessionNote[];
   generatedReports: Report[];
   lsts: LST[];
+  isLoading?: boolean;
 }
 
-export function Dashboard({ reports, sessionNotes, generatedReports, lsts }: DashboardProps) {
+export function Dashboard({ reports, sessionNotes, generatedReports, lsts, isLoading }: DashboardProps) {
   // ── LST-focused Metrics ──
   const activeSystemGaps = useMemo(() =>
     lsts.filter(l => l.status !== 'Resolved').length,
@@ -132,6 +134,24 @@ export function Dashboard({ reports, sessionNotes, generatedReports, lsts }: Das
 
   return (
     <div className="space-y-6">
+      {isLoading && reports.length === 0 && lsts.length === 0 ? (
+        <div className="space-y-6">
+          <Skeleton className="h-8 w-72" />
+          <Skeleton className="h-4 w-96" />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
+              <Skeleton key={`stat-${i}`} className="h-28 rounded-xl" />
+            ))}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {[...Array(4)].map((_, i) => (
+              <Skeleton key={`chart-${i}`} className="h-64 rounded-xl" />
+            ))}
+          </div>
+          <Skeleton className="h-48 rounded-xl" />
+        </div>
+      ) : (
+      <>
       <div>
         <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-1">Safety Intelligence Dashboard</h2>
         <p className="text-sm text-slate-600 dark:text-slate-400">
@@ -349,6 +369,8 @@ export function Dashboard({ reports, sessionNotes, generatedReports, lsts }: Das
           </div>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }

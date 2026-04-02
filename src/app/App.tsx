@@ -122,85 +122,60 @@ export default function App() {
       
       console.log('Fetching data from:', API_BASE);
       
-      // Fetch all data in parallel for faster loading
-      const [reportsRes, notesRes, caseFilesRes, generatedRes, lstsRes] = await Promise.all([
+      // Use allSettled so one failure doesn't block the rest
+      const results = await Promise.allSettled([
         fetch(`${API_BASE}/reports`, { headers: API_HEADERS }),
         fetch(`${API_BASE}/notes`, { headers: API_HEADERS }),
         fetch(`${API_BASE}/case-files`, { headers: API_HEADERS }),
         fetch(`${API_BASE}/reports/generated`, { headers: API_HEADERS }),
         fetch(`${API_BASE}/lsts`, { headers: API_HEADERS }),
       ]);
-      
-      console.log('All responses received - status codes:', {
-        reports: reportsRes.status,
-        notes: notesRes.status,
-        caseFiles: caseFilesRes.status,
-        generated: generatedRes.status,
-        lsts: lstsRes.status,
-      });
-      
-      // Process reports
-      if (reportsRes.ok) {
-        const reportsData = await reportsRes.json();
-        console.log('Reports data:', reportsData);
-        setReports(reportsData.reports || []);
-      } else {
-        const errorData = await reportsRes.json();
-        console.error('Failed to fetch reports:', errorData);
-        
-        // Check if it's a table missing error
-        if (errorData.error?.includes('kv_store_7fe18c53')) {
-          toast.error('Database table not found!', {
-            description: 'Please create the table in Supabase SQL Editor',
-            duration: 10000,
-          });
-          console.error('⚠️ DATABASE SETUP REQUIRED ⚠️');
-          console.log('Please run this SQL in your Supabase SQL Editor:');
-          console.log('CREATE TABLE IF NOT EXISTS kv_store_7fe18c53 (key TEXT NOT NULL PRIMARY KEY, value JSONB NOT NULL);');
+
+      // Process each result independently
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i];
+        if (result.status !== 'fulfilled') {
+          console.error(`Request ${i} rejected:`, result.reason);
+          continue;
+        }
+        const res = result.value;
+        if (!res.ok) {
+          const errorText = await res.text();
+          console.error(`Request ${i} failed (${res.status}):`, errorText);
+          
+          // Check for table missing error on first request
+          if (i === 0 && errorText.includes('kv_store_7fe18c53')) {
+            toast.error('Database table not found!', {
+              description: 'Please create the table in Supabase SQL Editor',
+              duration: 10000,
+            });
+            console.error('⚠️ DATABASE SETUP REQUIRED ⚠️');
+            console.log('Please run this SQL in your Supabase SQL Editor:');
+            console.log('CREATE TABLE IF NOT EXISTS kv_store_7fe18c53 (key TEXT NOT NULL PRIMARY KEY, value JSONB NOT NULL);');
+          }
+          continue;
+        }
+        try {
+          const data = await res.json();
+          switch (i) {
+            case 0: setReports(data.reports || []); break;
+            case 1: setSessionNotes(data.notes || []); break;
+            case 2: setCaseFiles(data.caseFiles || []); break;
+            case 3: setGeneratedReports(data.reports || []); break;
+            case 4: setLsts(data.lsts || []); break;
+          }
+        } catch (parseErr) {
+          console.error(`Request ${i} JSON parse error:`, parseErr);
         }
       }
 
-      // Process session notes
-      if (notesRes.ok) {
-        const notesData = await notesRes.json();
-        console.log('Notes data:', notesData);
-        setSessionNotes(notesData.notes || []);
-      } else {
-        const errorText = await notesRes.text();
-        console.error('Failed to fetch session notes:', errorText);
-      }
-
-      // Process case files
-      if (caseFilesRes.ok) {
-        const caseFilesData = await caseFilesRes.json();
-        console.log('Case files data:', caseFilesData);
-        setCaseFiles(caseFilesData.caseFiles || []);
-      } else {
-        const errorText = await caseFilesRes.text();
-        console.error('Failed to fetch case files:', errorText);
-      }
-
-      // Process generated reports
-      if (generatedRes.ok) {
-        const generatedData = await generatedRes.json();
-        console.log('Generated reports data:', generatedData);
-        setGeneratedReports(generatedData.reports || []);
-      } else {
-        const errorText = await generatedRes.text();
-        console.error('Failed to fetch generated reports:', errorText);
-      }
-
-      // Process LSTs
-      if (lstsRes.ok) {
-        const lstsData = await lstsRes.json();
-        console.log('LSTs data:', lstsData);
-        setLsts(lstsData.lsts || []);
-      } else {
-        const errorText = await lstsRes.text();
-        console.error('Failed to fetch LSTs:', errorText);
+      // Log any failures
+      const failures = results.filter(r => r.status === 'rejected');
+      if (failures.length > 0) {
+        toast.error('Systems are slow to respond. Some data may be missing.');
       }
     } catch (error) {
-      console.error('Error fetching data:', error);
+      console.error('Critical Load Error:', error);
       toast.error('Failed to connect to server', {
         description: 'Check console for details',
       });
@@ -320,6 +295,7 @@ export default function App() {
                     sessionNotes={sessionNotes}
                     generatedReports={generatedReports}
                     lsts={lsts}
+                    isLoading={loading}
                   />
                 </Suspense>
               </TabsContent>
@@ -355,6 +331,7 @@ export default function App() {
                   sessionNotes={sessionNotes}
                   generatedReports={generatedReports}
                   onRefresh={fetchData}
+                  isLoading={loading}
                 />
               </TabsContent>
 

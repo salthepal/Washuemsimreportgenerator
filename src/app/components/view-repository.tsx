@@ -5,6 +5,7 @@ import { ReportViewer } from './report-viewer';
 import { ComparisonView } from './comparison-view';
 import { BulkExportModal } from './bulk-export-modal';
 import { useDebounce } from '../hooks/useDebounce';
+import { Skeleton } from './ui/skeleton';
 import { toast } from 'sonner';
 
 interface ViewRepositoryProps {
@@ -12,9 +13,10 @@ interface ViewRepositoryProps {
   sessionNotes: SessionNote[];
   generatedReports: Report[];
   onRefresh: () => void;
+  isLoading?: boolean;
 }
 
-export function ViewRepository({ reports, sessionNotes, generatedReports, onRefresh }: ViewRepositoryProps) {
+export function ViewRepository({ reports, sessionNotes, generatedReports, onRefresh, isLoading }: ViewRepositoryProps) {
   const [expandedReport, setExpandedReport] = useState<string | null>(null);
   const [expandedNote, setExpandedNote] = useState<string | null>(null);
   const [expandedGenerated, setExpandedGenerated] = useState<string | null>(null);
@@ -159,6 +161,22 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
 
   return (
     <div className="space-y-6">
+      {isLoading && reports.length === 0 && sessionNotes.length === 0 && generatedReports.length === 0 ? (
+        <div className="space-y-6">
+          <Skeleton className="h-8 w-64" />
+          <Skeleton className="h-4 w-80" />
+          <Skeleton className="h-14 w-full rounded-lg" />
+          <div className="grid grid-cols-3 gap-4">
+            {[...Array(3)].map((_, i) => (
+              <Skeleton key={`repo-stat-${i}`} className="h-20 rounded-lg" />
+            ))}
+          </div>
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={`repo-row-${i}`} className="h-16 rounded-lg" />
+          ))}
+        </div>
+      ) : (
+      <>
       <div>
         <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">Document Repository</h2>
         <p className="text-slate-600 dark:text-slate-400">
@@ -641,6 +659,8 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
           allDocuments={[...reports, ...sessionNotes, ...generatedReports]}
           onClose={() => setShowBulkExport(false)}
         />
+      )}
+      </>
       )}
     </div>
   );
