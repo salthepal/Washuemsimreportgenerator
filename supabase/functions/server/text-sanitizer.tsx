@@ -22,24 +22,24 @@ export function sanitizeText(text: string): string {
   let sanitized = text;
 
   // Step 1: Remove literal backslash-u escape sequences that might appear in pasted text
-  // e.g., "\u0000" as a string literal
-  sanitized = sanitized.replace(/\\u[0-9a-fA-F]{4}/g, '');
-  sanitized = sanitized.replace(/\\x[0-9a-fA-F]{2}/g, '');
+  // e.g., "\\u0000" as a string literal
+  sanitized = sanitized.replaceAll(/\\u[0-9a-fA-F]{4}/g, '');
+  sanitized = sanitized.replaceAll(/\\x[0-9a-fA-F]{2}/g, '');
   
   // Step 2: Remove actual Unicode control characters (U+0000 to U+001F and U+007F to U+009F)
-  // BUT keep newline (\n = U+000A), carriage return (\r = U+000D), and tab (\t = U+0009)
+  // BUT keep newline (\\n = U+000A), carriage return (\\r = U+000D), and tab (\\t = U+0009)
   // eslint-disable-next-line no-control-regex
-  sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '');
+  sanitized = sanitized.replaceAll(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '');
   
   // Step 3: Remove zero-width characters and other invisible Unicode
-  sanitized = sanitized.replace(/[\u200B-\u200D\uFEFF]/g, ''); // Zero-width spaces
-  sanitized = sanitized.replace(/[\u2060-\u206F]/g, ''); // Word joiners and other invisible formatting
+  sanitized = sanitized.replaceAll(/[\u200B-\u200D\uFEFF]/g, ''); // Zero-width spaces
+  sanitized = sanitized.replaceAll(/[\u2060-\u206F]/g, ''); // Word joiners and other invisible formatting
   
   // Step 4: Remove bidirectional text markers that can cause rendering issues
-  sanitized = sanitized.replace(/[\u202A-\u202E]/g, '');
+  sanitized = sanitized.replaceAll(/[\u202A-\u202E]/g, '');
   
   // Step 5: Normalize various Unicode whitespace characters to standard space
-  sanitized = sanitized.replace(/[\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]/g, ' ');
+  sanitized = sanitized.replaceAll(/[\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]/g, ' ');
   
   // Step 6: Normalize to NFC form (canonical decomposition followed by canonical composition)
   // This ensures consistent representation of accented characters
@@ -47,11 +47,11 @@ export function sanitizeText(text: string): string {
   
   // Step 7: Remove any remaining non-standard backslash sequences
   // Keep only valid JSON escape sequences: \", \\, \/, \b, \f, \n, \r, \t
-  sanitized = sanitized.replace(/\\(?!["\\/bfnrt])/g, '');
+  sanitized = sanitized.replaceAll(/\\(?!["\\\/bfnrt])/g, '');
   
   // Step 8: Trim excessive whitespace
-  sanitized = sanitized.replace(/[ \t]+/g, ' '); // Multiple spaces/tabs to single space
-  sanitized = sanitized.replace(/\n{3,}/g, '\n\n'); // Max 2 consecutive newlines
+  sanitized = sanitized.replaceAll(/[ \t]+/g, ' '); // Multiple spaces/tabs to single space
+  sanitized = sanitized.replaceAll(/\n{3,}/g, '\n\n'); // Max 2 consecutive newlines
   
   // Step 9: Trim leading/trailing whitespace on each line
   sanitized = sanitized.split('\n').map(line => line.trim()).join('\n');
