@@ -51,3 +51,32 @@ export async function updateLst(id: string, payload: Partial<LST>): Promise<LST>
   if (!response.ok) throw new Error('Failed to update LST');
   return response.json();
 }
+
+export async function addLst(payload: Partial<LST>): Promise<{ success: boolean, id: string }> {
+  const response = await fetch(`${API_BASE}/lsts/add`, {
+    method: 'POST',
+    headers: API_HEADERS,
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw new Error('Failed to add LST');
+  return response.json();
+}
+
+export async function deleteLst(id: string): Promise<{ success: boolean }> {
+  const response = await fetch(`${API_BASE}/lsts/${id}`, {
+    method: 'DELETE',
+    headers: API_HEADERS,
+  });
+  if (!response.ok) throw new Error('Failed to delete LST');
+  return response.json();
+}
+
+export async function mergeLsts(ids: string[], mergedLST: Partial<LST>): Promise<{ success: boolean, id: string }> {
+  const response = await fetch(`${API_BASE}/lsts/merge`, {
+    method: 'POST',
+    headers: API_HEADERS,
+    body: JSON.stringify({ ids, mergedLST }),
+  });
+  if (!response.ok) throw new Error('Failed to merge LSTs');
+  return response.json();
+}

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchReports, fetchGeneratedReports, fetchNotes, fetchCaseFiles, fetchLSTs, updateLst } from '../api';
+import { fetchReports, fetchGeneratedReports, fetchNotes, fetchCaseFiles, fetchLSTs, updateLst, addLst, deleteLst, mergeLsts } from '../api';
 import { LST } from '../types';
 
 export function useReports() {
@@ -26,6 +26,36 @@ export function useUpdateLST() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, payload }: { id: string, payload: Partial<LST> }) => updateLst(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lsts'] });
+    },
+  });
+}
+
+export function useAddLST() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: Partial<LST>) => addLst(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lsts'] });
+    },
+  });
+}
+
+export function useDeleteLST() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteLst(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lsts'] });
+    },
+  });
+}
+
+export function useMergeLSTs() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ids, mergedLST }: { ids: string[], mergedLST: Partial<LST> }) => mergeLsts(ids, mergedLST),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['lsts'] });
     },

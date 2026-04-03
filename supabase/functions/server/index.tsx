@@ -1232,6 +1232,49 @@ app.delete('/make-server-7fe18c53/lsts/:id', async (c: Context) => {
   }
 });
 
+// Merge LSTs
+app.post('/make-server-7fe18c53/lsts/merge', async (c: Context) => {
+  try {
+    const { ids, mergedLST } = await c.req.json();
+    
+    if (!ids || !Array.isArray(ids) || ids.length < 2) {
+      return c.json({ error: 'At least two LSTs are required for merging' }, 400);
+    }
+
+    // Create the new merged LST
+    const newId = `lst_${crypto.randomUUID()}`;
+    const now = new Date().toISOString();
+    
+    const finalLST = {
+      ...mergedLST,
+      id: newId,
+      createdAt: now,
+      updatedAt: now,
+      type: 'lst',
+      mergedFrom: ids,
+    };
+
+    // Sanitize
+    if (finalLST.title) finalLST.title = sanitizeText(finalLST.title);
+    if (finalLST.description) finalLST.description = sanitizeText(finalLST.description);
+
+    // Save the new LST
+    await kv.set(newId, finalLST);
+    
+    // Delete the old LSTs
+    for (const id of ids) {
+      await kv.del(id);
+    }
+
+    await logAudit('merge', 'lst', finalLST.title, newId);
+    
+    return c.json({ success: true, id: newId });
+  } catch (error: any) {
+    console.log(`Error merging LSTs: ${error}`);
+    return c.json({ error: `Failed to merge LSTs: ${error.message}` }, 500);
+  }
+});
+
 // Batch extract LSTs from generated report text
 app.post('/make-server-7fe18c53/lsts/extract', async (c: Context) => {
   try {

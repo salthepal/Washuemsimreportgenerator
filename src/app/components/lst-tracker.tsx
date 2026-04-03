@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import {
   AlertTriangle, Search, Filter, CheckCircle2, ShieldCheck, XCircle,
   TrendingUp, Users, Calendar, PlayCircle, Archive, AlertCircle,
-  Download, MapPin, Pencil, X, Save
+  Download, MapPin, Pencil, X, Save, Trash2, GitMerge, Plus
 } from 'lucide-react';
 import { LST } from '../types';
 import { toast } from 'sonner';
@@ -12,7 +12,7 @@ interface LSTTrackerProps {
 }
 
 import { EditModalState, INITIAL_EDIT, LstEditModal } from './lst-edit-modal';
-import { useLSTs, useUpdateLST } from '../hooks/useQueries';
+import { useLSTs, useUpdateLST, useAddLST, useDeleteLST, useMergeLSTs } from '../hooks/useQueries';
 
 export function LSTTracker({ selectedSite }: LSTTrackerProps) {
   const { data } = useLSTs();
@@ -28,6 +28,25 @@ export function LSTTracker({ selectedSite }: LSTTrackerProps) {
 
   // Edit modal
   const [editModal, setEditModal] = useState<EditModalState>(INITIAL_EDIT);
+  
+  // Multi-selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  
+  // Create / Merge states
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
+  const [newLstData, setNewLstData] = useState<Partial<LST>>({
+    title: '',
+    description: '',
+    severity: 'Medium' as LST['severity'],
+    category: 'Process' as LST['category'],
+    status: 'Identified' as LST['status'],
+    location: selectedSite === 'All Sites' ? '' : selectedSite,
+  });
+
+  const addLstMutation = useAddLST();
+  const deleteLstMutation = useDeleteLST();
+  const mergeLstsMutation = useMergeLSTs();
 
   // ── Derived Data ──
   const uniqueLocations = useMemo(() => {
@@ -90,9 +109,9 @@ export function LSTTracker({ selectedSite }: LSTTrackerProps) {
     try {
       const payload = {
         ...editModal.lst,
-        status: editModal.status,
-        severity: editModal.severity,
-        category: editModal.category,
+        status: editModal.status as LST['status'],
+        severity: editModal.severity as LST['severity'],
+        category: editModal.category as LST['category'],
         location: editModal.location || undefined,
         recommendation: editModal.recommendation,
         resolutionNote: editModal.resolutionNote || undefined,
@@ -114,7 +133,7 @@ export function LSTTracker({ selectedSite }: LSTTrackerProps) {
   };
 
   const handleAdvanceStatus = async (lst: LST) => {
-    const flow: Record<string, string> = {
+    const flow: Record<string, LST['status']> = {
       'Identified': 'In Progress',
       'In Progress': 'In Progress',
       'Recurring': 'In Progress',
@@ -128,6 +147,109 @@ export function LSTTracker({ selectedSite }: LSTTrackerProps) {
     } catch (error) {
       console.error('Error updating status:', error);
       toast.error('Failed to update status');
+    }
+  };
+
+  const handleCreateLst = async () => {
+    if (!newLstData.title || !newLstData.description) {
+      toast.error('Title and description are required');
+      return;
+    }
+    setSaving(true);
+    try {
+      await addLstMutation.mutateAsync({
+        ...newLstData,
+        identifiedDate: new Date().toISOString(),
+        lastSeenDate: new Date().toISOString(),
+      });
+      toast.success('LST created successfully');
+      setIsCreateModalOpen(false);
+      setNewLstData({
+        title: '',
+        description: '',
+        severity: 'Medium' as LST['severity'],
+        category: 'Process' as LST['category'],
+        status: 'Identified' as LST['status'],
+        location: selectedSite === 'All Sites' ? '' : selectedSite,
+      });
+    } catch (error) {
+      toast.error('Failed to create LST');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`Are you sure you want to delete ${selectedIds.size} LST(s)?`)) return;
+
+    setSaving(true);
+    try {
+      for (const id of Array.from(selectedIds)) {
+        await deleteLstMutation.mutateAsync(id);
+      }
+      toast.success('LSTs deleted successfully');
+      setSelectedIds(new Set());
+    } catch (error) {
+      toast.error('Failed to delete some LSTs');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openMergeModal = () => {
+    if (selectedIds.size < 2) return;
+    
+    // Pre-fill merge data from selected items
+    const selectedLsts = lsts.filter(l => selectedIds.has(l.id));
+    const highestSeverity = selectedLsts.some(l => l.severity === 'High') ? 'High' : 
+                          selectedLsts.some(l => l.severity === 'Medium') ? 'Medium' : 'Low';
+    
+    setNewLstData({
+      title: `Merged: ${selectedLsts[0].title}`,
+      description: selectedLsts.map(l => l.description).join('\n\n---\n\n'),
+      severity: highestSeverity as LST['severity'],
+      category: selectedLsts[0].category as LST['category'],
+      status: 'Identified' as LST['status'],
+      location: selectedLsts[0].location,
+      recommendation: selectedLsts.map(l => l.recommendation).filter(Boolean).join('\n\n'),
+    });
+    setIsMergeModalOpen(true);
+  };
+
+  const handleMergeLsts = async () => {
+    setSaving(true);
+    try {
+      await mergeLstsMutation.mutateAsync({
+        ids: Array.from(selectedIds),
+        mergedLST: {
+          ...newLstData,
+          identifiedDate: new Date().toISOString(),
+          lastSeenDate: new Date().toISOString(),
+        }
+      });
+      toast.success('LSTs merged successfully');
+      setIsMergeModalOpen(false);
+      setSelectedIds(new Set());
+    } catch (error) {
+      toast.error('Failed to merge LSTs');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleSelection = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) newSelected.delete(id);
+    else newSelected.add(id);
+    setSelectedIds(newSelected);
+  };
+
+  const selectAllFiltered = () => {
+    if (selectedIds.size === filteredLsts.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredLsts.map(l => l.id)));
     }
   };
 
@@ -184,7 +306,7 @@ export function LSTTracker({ selectedSite }: LSTTrackerProps) {
       <LstEditModal editModal={editModal} setEditModal={setEditModal} saving={saving} onSave={handleSaveEdit} />
 
       {/* ── Header ── */}
-      <div className="border-b-2 border-slate-200 dark:border-slate-700 pb-3">
+      <div className="border-b-2 border-slate-200 dark:border-slate-700 pb-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-[#A51417] rounded-lg">
             <ShieldCheck className="w-5 h-5 md:w-6 md:h-6 text-white" />
@@ -194,6 +316,13 @@ export function LSTTracker({ selectedSite }: LSTTrackerProps) {
             <p className="text-xs text-slate-600 dark:text-slate-400">WashU Emergency Medicine &mdash; System Safety Monitor</p>
           </div>
         </div>
+        <button
+          onClick={() => setIsCreateModalOpen(true)}
+          className="flex items-center gap-1.5 px-4 py-2 bg-[#007A33] hover:bg-[#006428] text-white font-bold rounded-lg transition-all text-sm shadow-sm"
+        >
+          <Plus className="w-4 h-4" />
+          New LST
+        </button>
       </div>
 
       {/* ── Stats Row ── */}
@@ -308,6 +437,39 @@ export function LSTTracker({ selectedSite }: LSTTrackerProps) {
             </div>
           </div>
         )}
+
+        {/* Bulk Actions Header */}
+        {(selectedIds.size > 0 || sortedLsts.length > 0) && (
+          <div className={`mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between transition-all ${selectedIds.size > 0 ? 'opacity-100 h-auto' : 'opacity-0 h-0 overflow-hidden'}`}>
+            <div className="flex items-center gap-3 text-xs font-bold text-slate-600 dark:text-slate-400">
+              <input 
+                type="checkbox" 
+                checked={selectedIds.size === filteredLsts.length && filteredLsts.length > 0} 
+                onChange={selectAllFiltered}
+                className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              {selectedIds.size} Selected
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={openMergeModal}
+                disabled={selectedIds.size < 2 || saving}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/40 dark:hover:bg-amber-900/60 text-amber-700 dark:text-amber-300 font-bold rounded text-[10px] uppercase tracking-wider transition-all disabled:opacity-50"
+              >
+                <GitMerge className="w-3.5 h-3.5" />
+                Merge
+              </button>
+              <button
+                onClick={handleDeleteSelected}
+                disabled={saving}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-red-100 hover:bg-red-200 dark:bg-red-900/40 dark:hover:bg-red-900/60 text-red-700 dark:text-red-300 font-bold rounded text-[10px] uppercase tracking-wider transition-all disabled:opacity-50"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Table / Card List ── */}
@@ -355,9 +517,19 @@ export function LSTTracker({ selectedSite }: LSTTrackerProps) {
             return (
               <div
                 key={lst.id}
-                className={`border-l-4 ${borderColor} ${bgColor} border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden transition-all hover:shadow-md`}
+                className={`flex gap-0 border-l-4 ${borderColor} ${bgColor} border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden transition-all hover:shadow-md`}
               >
-                <div className="p-3 md:p-4">
+                {/* Selection Checkbox Column */}
+                <div className="bg-slate-50/50 dark:bg-slate-900/50 border-r border-slate-200 dark:border-slate-700 px-3 flex flex-col items-center justify-center">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(lst.id)}
+                    onChange={() => toggleSelection(lst.id)}
+                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                  />
+                </div>
+                
+                <div className="p-3 md:p-4 flex-1">
                   {/* Row 1: Title + Badges + Actions */}
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
@@ -463,6 +635,120 @@ export function LSTTracker({ selectedSite }: LSTTrackerProps) {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* ── Create / Merge Modal ── */}
+      {(isCreateModalOpen || isMergeModalOpen) && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 animate-in fade-in duration-200" onClick={() => { setIsCreateModalOpen(false); setIsMergeModalOpen(false); }}>
+          <div 
+            className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto border border-slate-200 dark:border-slate-700 scale-in-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 rounded-t-xl">
+              <div className="flex items-center gap-2">
+                {isMergeModalOpen ? <GitMerge className="w-5 h-5 text-amber-500" /> : <Plus className="w-5 h-5 text-[#007A33]" />}
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
+                  {isMergeModalOpen ? 'Merge Latent Safety Threats' : 'Manual Entry: New LST'}
+                </h3>
+              </div>
+              <button onClick={() => { setIsCreateModalOpen(false); setIsMergeModalOpen(false); }} className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg">
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Threat Title</label>
+                <input
+                  type="text"
+                  value={newLstData.title}
+                  onChange={(e) => setNewLstData(prev => ({ ...prev, title: e.target.value }))}
+                  placeholder="e.g., Massive Transfusion Protocol Delay"
+                  className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Severity</label>
+                  <select
+                    value={newLstData.severity}
+                    onChange={(e) => setNewLstData(prev => ({ ...prev, severity: e.target.value as LST['severity'] }))}
+                    className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-sm"
+                  >
+                    <option value="High">High</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Low">Low</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Category</label>
+                  <select
+                    value={newLstData.category}
+                    onChange={(e) => setNewLstData(prev => ({ ...prev, category: e.target.value as LST['category'] }))}
+                    className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-sm"
+                  >
+                    <option value="Equipment">Equipment</option>
+                    <option value="Process">Process</option>
+                    <option value="Resources">Resources</option>
+                    <option value="Logistics">Logistics</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Location</label>
+                <input
+                  type="text"
+                  value={newLstData.location}
+                  onChange={(e) => setNewLstData(prev => ({ ...prev, location: e.target.value }))}
+                  placeholder="e.g., Barnes-Jewish Hospital"
+                  className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Detailed Description</label>
+                <textarea
+                  value={newLstData.description}
+                  onChange={(e) => setNewLstData(prev => ({ ...prev, description: e.target.value }))}
+                  rows={4}
+                  placeholder="Describe the gap, impact, and context..."
+                  className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-sm focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Initial Recommendation</label>
+                <textarea
+                  value={newLstData.recommendation}
+                  onChange={(e) => setNewLstData(prev => ({ ...prev, recommendation: e.target.value }))}
+                  rows={2}
+                  placeholder="What is the suggested fix?"
+                  className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex gap-3 rounded-b-xl">
+              <button
+                onClick={isMergeModalOpen ? handleMergeLsts : handleCreateLst}
+                disabled={saving || !newLstData.title || !newLstData.description}
+                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg font-bold text-sm transition-all shadow-md ${
+                  isMergeModalOpen ? 'bg-amber-600 hover:bg-amber-700' : 'bg-[#007A33] hover:bg-[#006428]'
+                } text-white disabled:bg-slate-300 dark:disabled:bg-slate-700`}
+              >
+                {saving ? 'Processing...' : isMergeModalOpen ? 'Consolidate & Delete Originals' : 'Add to Tracker'}
+              </button>
+              <button
+                onClick={() => { setIsCreateModalOpen(false); setIsMergeModalOpen(false); }}
+                className="px-6 py-3 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 font-bold rounded-lg transition-all text-sm"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
