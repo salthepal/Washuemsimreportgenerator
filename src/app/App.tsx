@@ -11,6 +11,7 @@ import { LSTTracker } from './components/lst-tracker';
 import { QuickActionsBar } from './components/quick-actions-bar';
 import { BackupRestore } from './components/backup-restore';
 import { AuditLog } from './components/audit-log';
+import { ErrorLog } from './components/error-log';
 import { ViewAIPrompt } from './components/view-ai-prompt';
 import { ErrorBoundary } from './components/error-boundary';
 import { Toaster } from './components/ui/sonner';
@@ -283,6 +284,7 @@ export default function App() {
                       <ViewAIPrompt />
                       <BackupRestore />
                       <AuditLog />
+                      <ErrorLog />
                       
                       <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-4 md:p-6 border border-slate-200 dark:border-slate-700">
                         <h3 className="text-base md:text-lg font-bold text-slate-900 dark:text-slate-100 mb-3">Keyboard Shortcuts</h3>

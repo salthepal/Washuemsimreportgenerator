@@ -11,6 +11,7 @@ const app = new Hono();
 // Global error handler
 app.onError((err: Error, c: Context) => {
   console.error('Server error:', err);
+  logError('global_unhandled', err);
   return c.json({ 
     error: err.message || 'Internal server error',
     details: err.stack 
@@ -151,8 +152,8 @@ app.post('/make-server-7fe18c53/reports/upload', async (c: Context) => {
     
     return c.json({ success: true, report });
   } catch (error: any) {
-    console.log(`Error uploading report: ${error}`);
-    console.log(`Stack trace: ${error.stack}`);
+    console.error('Report Upload Error:', error);
+    await logError('report_upload', error);
     return c.json({ error: `Failed to upload report: ${error.message}` }, 500);
   }
 });
@@ -216,8 +217,8 @@ app.post('/make-server-7fe18c53/notes/add', async (c: Context) => {
     
     return c.json({ success: true, notes: sessionNotes });
   } catch (error: any) {
-    console.log(`Error adding session notes: ${error}`);
-    console.log(`Stack trace: ${error.stack}`);
+    console.error('Session Note Upload Error:', error);
+    await logError('note_upload', error);
     return c.json({ error: `Failed to add session notes: ${error.message}` }, 500);
   }
 });
@@ -644,8 +645,13 @@ Generate the Post-Session Report now using strict Markdown formatting, followed 
       lstStats: lstStats
     });
   } catch (error: any) {
-    console.log(`Error generating report: ${error}`);
-    return c.json({ error: `Failed to generate report: ${error.message}` }, 500);
+    console.error('Report Generation Error:', error);
+    await logError('report_generation', error);
+    return c.json({ 
+      error: 'Generation Failed', 
+      message: error.message,
+      suggestion: 'Check if your Gemini API key is valid and has sufficient quota.'
+    }, 500);
   }
 });
 
@@ -761,6 +767,55 @@ async function logAudit(action: string, type: string, target: string, id: string
     console.log(`Error logging audit: ${error}`);
   }
 }
+
+// Error logging helper
+async function logError(action: string, error: any, context?: any) {
+  try {
+    const errorId = `error_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const entry = {
+      id: errorId,
+      timestamp: new Date().toISOString(),
+      action,
+      message: error?.message || String(error),
+      stack: error?.stack,
+      context,
+      type: 'system_error'
+    };
+    await kv.set(errorId, entry);
+    console.log(`[ERROR LOGGED] ${action}: ${entry.message}`);
+    return errorId;
+  } catch (logErr: any) {
+    console.log(`CRITICAL: Failed to log error: ${logErr}`);
+  }
+}
+
+// Error log endpoints
+app.get('/make-server-7fe18c53/error-log', async (c: Context) => {
+  try {
+    const errorEntries = await kv.getByPrefix('error_');
+    const logs = errorEntries.sort((a, b) => 
+      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+    return c.json(logs);
+  } catch (error: any) {
+    console.log(`Error fetching error log: ${error}`);
+    return c.json({ error: `Failed to fetch error log: ${error.message}` }, 500);
+  }
+});
+
+app.delete('/make-server-7fe18c53/error-log', async (c: Context) => {
+  try {
+    const errorEntries = await kv.getByPrefix('error_');
+    for (const entry of errorEntries) {
+      await kv.del(entry.id);
+    }
+    await logAudit('clear', 'system', 'Error Log Cleared', 'error-log');
+    return c.json({ success: true });
+  } catch (error: any) {
+    console.log(`Error clearing error log: ${error}`);
+    return c.json({ error: `Failed to clear error log: ${error.message}` }, 500);
+  }
+});
 
 // Backup endpoint - export all data
 app.get('/make-server-7fe18c53/backup', async (c: Context) => {
@@ -1578,7 +1633,8 @@ app.post('/make-server-7fe18c53/settings/ai-model', async (c: Context) => {
     
     return c.json({ success: true, model });
   } catch (error: any) {
-    console.log(`Error updating AI model: ${error}`);
+    console.error('Report Upload Error:', error);
+    await logError('report_upload', error);
     return c.json({ error: error.message }, 500);
   }
 });

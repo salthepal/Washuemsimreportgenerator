@@ -80,3 +80,20 @@ export async function mergeLsts(ids: string[], mergedLST: Partial<LST>): Promise
   if (!response.ok) throw new Error('Failed to merge LSTs');
   return response.json();
 }
+
+export async function fetchErrorLog(): Promise<any[]> {
+  const response = await fetch(`${API_BASE}/error-log`, {
+    headers: API_HEADERS,
+  });
+  if (!response.ok) throw new Error('Failed to fetch error log');
+  return response.json();
+}
+
+export async function clearErrorLog(): Promise<{ success: boolean }> {
+  const response = await fetch(`${API_BASE}/error-log`, {
+    method: 'DELETE',
+    headers: API_HEADERS,
+  });
+  if (!response.ok) throw new Error('Failed to clear error log');
+  return response.json();
+}

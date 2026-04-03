@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchReports, fetchGeneratedReports, fetchNotes, fetchCaseFiles, fetchLSTs, updateLst, addLst, deleteLst, mergeLsts } from '../api';
+import { fetchReports, fetchGeneratedReports, fetchNotes, fetchCaseFiles, fetchLSTs, updateLst, addLst, deleteLst, mergeLsts, fetchErrorLog, clearErrorLog } from '../api';
 import { LST } from '../types';
 
 export function useReports() {
@@ -58,6 +58,24 @@ export function useMergeLSTs() {
     mutationFn: ({ ids, mergedLST }: { ids: string[], mergedLST: Partial<LST> }) => mergeLsts(ids, mergedLST),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['lsts'] });
+    },
+  });
+}
+
+export function useErrorLog() {
+  return useQuery({ 
+    queryKey: ['errorLog'], 
+    queryFn: fetchErrorLog,
+    refetchInterval: 10000, // Auto-refresh every 10s
+  });
+}
+
+export function useClearErrorLog() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: clearErrorLog,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['errorLog'] });
     },
   });
 }
