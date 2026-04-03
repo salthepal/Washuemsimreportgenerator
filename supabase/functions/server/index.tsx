@@ -1,4 +1,5 @@
 import { Hono } from 'npm:hono';
+import type { Context } from 'npm:hono';
 import { cors } from 'npm:hono/cors';
 import { logger } from 'npm:hono/logger';
 import * as kv from './kv_store.tsx';
@@ -7,12 +8,21 @@ import { sanitizeText, sanitizeObject, validateText } from './text-sanitizer.tsx
 
 const app = new Hono();
 
+// Global error handler
+app.onError((err: Error, c: Context) => {
+  console.error('Server error:', err);
+  return c.json({ 
+    error: err.message || 'Internal server error',
+    details: err.stack 
+  }, 500);
+});
+
 // Initialize database table
 async function initializeDatabase() {
   try {
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL'),
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
+      Deno.env.get('SUPABASE_URL') || '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
     );
 
     // Verify table exists by attempting to query it
@@ -51,22 +61,13 @@ app.use('*', cors({
 }));
 app.use('*', logger(console.log));
 
-// Global error handler
-app.onError((err, c) => {
-  console.error('Server error:', err);
-  return c.json({ 
-    error: err.message || 'Internal server error',
-    details: err.stack 
-  }, 500);
-});
-
 // Health check
-app.get('/make-server-7fe18c53/health', (c) => {
+app.get('/make-server-7fe18c53/health', (c: Context) => {
   return c.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 // Debug endpoint to see ALL keys in database
-app.get('/make-server-7fe18c53/debug/all-keys', async (c) => {
+app.get('/make-server-7fe18c53/debug/all-keys', async (c: Context) => {
   try {
     const allData = await kv.getByPrefix('');
     console.log('ALL DATABASE ENTRIES:', allData.length);
@@ -82,14 +83,14 @@ app.get('/make-server-7fe18c53/debug/all-keys', async (c) => {
       })),
       rawFirstEntry: allData[0]
     });
-  } catch (error) {
+  } catch (error: any) {
     console.log(`Error in debug endpoint: ${error}`);
     return c.json({ error: error.message }, 500);
   }
 });
 
 // Upload a prior report
-app.post('/make-server-7fe18c53/reports/upload', async (c) => {
+app.post('/make-server-7fe18c53/reports/upload', async (c: Context) => {
   try {
     let { title, content, htmlContent, date, tags, metadata } = await c.req.json();
     
@@ -148,9 +149,8 @@ app.post('/make-server-7fe18c53/reports/upload', async (c) => {
     const savedReport = await kv.get(reportId);
     console.log('Verification read:', savedReport ? 'Success' : 'Failed', savedReport);
     
-    await logAudit('create', 'report', title, reportId);
     return c.json({ success: true, report });
-  } catch (error) {
+  } catch (error: any) {
     console.log(`Error uploading report: ${error}`);
     console.log(`Stack trace: ${error.stack}`);
     return c.json({ error: `Failed to upload report: ${error.message}` }, 500);
@@ -158,7 +158,7 @@ app.post('/make-server-7fe18c53/reports/upload', async (c) => {
 });
 
 // Add session notes
-app.post('/make-server-7fe18c53/notes/add', async (c) => {
+app.post('/make-server-7fe18c53/notes/add', async (c: Context) => {
   try {
     let { sessionName, notes, participants, tags, metadata } = await c.req.json();
     
@@ -214,9 +214,8 @@ app.post('/make-server-7fe18c53/notes/add', async (c) => {
     await kv.set(noteId, sessionNotes);
     console.log('Session notes saved successfully');
     
-    await logAudit('create', 'note', sessionName, noteId);
     return c.json({ success: true, notes: sessionNotes });
-  } catch (error) {
+  } catch (error: any) {
     console.log(`Error adding session notes: ${error}`);
     console.log(`Stack trace: ${error.stack}`);
     return c.json({ error: `Failed to add session notes: ${error.message}` }, 500);
@@ -224,7 +223,7 @@ app.post('/make-server-7fe18c53/notes/add', async (c) => {
 });
 
 // Get all prior reports
-app.get('/make-server-7fe18c53/reports', async (c) => {
+app.get('/make-server-7fe18c53/reports', async (c: Context) => {
   try {
     console.log('Fetching reports with prefix: report_');
     const allReports = await kv.getByPrefix('report_');
@@ -239,14 +238,14 @@ app.get('/make-server-7fe18c53/reports', async (c) => {
     
     console.log('Filtered prior reports:', reports.length);
     return c.json({ reports });
-  } catch (error) {
+  } catch (error: any) {
     console.log(`Error fetching reports: ${error}`);
     return c.json({ error: `Failed to fetch reports: ${error.message}` }, 500);
   }
 });
 
 // Get all session notes
-app.get('/make-server-7fe18c53/notes', async (c) => {
+app.get('/make-server-7fe18c53/notes', async (c: Context) => {
   try {
     const allNotes = await kv.getByPrefix('notes_');
     const notes = allNotes
@@ -256,40 +255,36 @@ app.get('/make-server-7fe18c53/notes', async (c) => {
     return c.json({ notes });
   } catch (error) {
     console.log(`Error fetching session notes: ${error}`);
-    return c.json({ error: `Failed to fetch session notes: ${error.message}` }, 500);
-  }
-});
-
 // Delete a report
-app.delete('/make-server-7fe18c53/reports/:id', async (c) => {
+app.delete('/make-server-7fe18c53/reports/:id', async (c: Context) => {
   try {
     const id = c.req.param('id');
     const report = await kv.get(id);
     await kv.del(id);
     await logAudit('delete', 'report', report?.title || 'Unknown', id);
     return c.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     console.log(`Error deleting report: ${error}`);
     return c.json({ error: `Failed to delete report: ${error.message}` }, 500);
   }
 });
 
 // Delete session note
-app.delete('/make-server-7fe18c53/notes/:id', async (c) => {
+app.delete('/make-server-7fe18c53/notes/:id', async (c: Context) => {
   try {
     const id = c.req.param('id');
     const note = await kv.get(id);
     await kv.del(id);
     await logAudit('delete', 'note', note?.sessionName || 'Unknown', id);
     return c.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     console.log(`Error deleting note: ${error}`);
     return c.json({ error: `Failed to delete note: ${error.message}` }, 500);
   }
 });
 
 // Generate new report using Gemini
-app.post('/make-server-7fe18c53/reports/generate', async (c) => {
+app.post('/make-server-7fe18c53/reports/generate', async (c: Context) => {
   try {
     const { selectedReports, selectedNotes, selectedCases } = await c.req.json();
     
@@ -645,14 +640,14 @@ Generate the Post-Session Report now using strict Markdown formatting, followed 
       report: newReport,
       lstStats: lstStats
     });
-  } catch (error) {
+  } catch (error: any) {
     console.log(`Error generating report: ${error}`);
     return c.json({ error: `Failed to generate report: ${error.message}` }, 500);
   }
 });
 
 // Get all generated reports
-app.get('/make-server-7fe18c53/reports/generated', async (c) => {
+app.get('/make-server-7fe18c53/reports/generated', async (c: Context) => {
   try {
     const allReports = await kv.getByPrefix('report_');
     const reports = allReports
@@ -660,14 +655,14 @@ app.get('/make-server-7fe18c53/reports/generated', async (c) => {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     
     return c.json({ reports });
-  } catch (error) {
+  } catch (error: any) {
     console.log(`Error fetching generated reports: ${error}`);
     return c.json({ error: `Failed to fetch generated reports: ${error.message}` }, 500);
   }
 });
 
 // Update report (for editing and status changes)
-app.patch('/make-server-7fe18c53/reports/:id', async (c) => {
+app.patch('/make-server-7fe18c53/reports/:id', async (c: Context) => {
   try {
     const id = c.req.param('id');
     const updates = await c.req.json();
@@ -688,35 +683,35 @@ app.patch('/make-server-7fe18c53/reports/:id', async (c) => {
     await kv.set(id, updatedReport);
     await logAudit('update', 'report', existingReport.title, id);
     return c.json({ success: true, report: updatedReport });
-  } catch (error) {
+  } catch (error: any) {
     console.log(`Error updating report: ${error}`);
     return c.json({ error: `Failed to update report: ${error.message}` }, 500);
   }
 });
 
 // Delete report
-app.delete('/make-server-7fe18c53/reports/:id', async (c) => {
+app.delete('/make-server-7fe18c53/reports/:id', async (c: Context) => {
   try {
     const id = c.req.param('id');
     const report = await kv.get(id);
     await kv.del(id);
     await logAudit('delete', 'report', report?.title || 'Unknown', id);
     return c.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     console.log(`Error deleting report: ${error}`);
     return c.json({ error: `Failed to delete report: ${error.message}` }, 500);
   }
 });
 
 // Delete session note
-app.delete('/make-server-7fe18c53/notes/:id', async (c) => {
+app.delete('/make-server-7fe18c53/notes/:id', async (c: Context) => {
   try {
     const id = c.req.param('id');
     const note = await kv.get(id);
     await kv.del(id);
     await logAudit('delete', 'note', note?.sessionName || 'Unknown', id);
     return c.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     console.log(`Error deleting note: ${error}`);
     return c.json({ error: `Failed to delete note: ${error.message}` }, 500);
   }
@@ -725,30 +720,38 @@ app.delete('/make-server-7fe18c53/notes/:id', async (c) => {
 // ============= NEW OPTIMIZATION ENDPOINTS =============
 
 // Audit log endpoint
-app.get('/make-server-7fe18c53/audit-log', async (c) => {
+app.get('/make-server-7fe18c53/audit-log', async (c: Context) => {
   try {
     const auditEntries = await kv.getByPrefix('audit_');
-    const entries = auditEntries.sort((a, b) => 
+    const entries = auditEntries.sort((a: any, b: any) => 
       new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
     return c.json(entries);
-  } catch (error) {
+  } catch (error: any) {
     console.log(`Error fetching audit log: ${error}`);
     return c.json({ error: `Failed to fetch audit log: ${error.message}` }, 500);
   }
 });
 
-// Add audit log entry (helper function called by other endpoints)
-async function logAudit(action: string, itemType: string, itemTitle: string, itemId: string) {
+// Database Helper
+const getSupabaseClient = (c: Context) => {
+  return createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+  )
+}
+
+// Audit logging helper
+async function logAudit(action: string, type: string, target: string, id: string) {
   try {
     const auditId = `audit_${Date.now()}_${Math.random().toString(36).substring(7)}`;
     const entry = {
       id: auditId,
-      timestamp: new Date().toISOString(),
       action,
-      itemType,
-      itemTitle,
-      itemId,
+      type,
+      target,
+      targetId: id,
+      timestamp: new Date().toISOString()
     };
     await kv.set(auditId, entry);
   } catch (error) {
@@ -757,7 +760,7 @@ async function logAudit(action: string, itemType: string, itemTitle: string, ite
 }
 
 // Backup endpoint - export all data
-app.get('/make-server-7fe18c53/backup', async (c) => {
+app.get('/make-server-7fe18c53/backup', async (c: Context) => {
   try {
     const allData = await kv.getByPrefix('');
     const backup = {
@@ -771,14 +774,14 @@ app.get('/make-server-7fe18c53/backup', async (c) => {
     
     await logAudit('export', 'backup', 'Full System Backup', 'backup');
     return c.json(backup);
-  } catch (error) {
+  } catch (error: any) {
     console.log(`Error creating backup: ${error}`);
     return c.json({ error: `Failed to create backup: ${error.message}` }, 500);
   }
 });
 
 // Restore endpoint - import data
-app.post('/make-server-7fe18c53/restore', async (c) => {
+app.post('/make-server-7fe18c53/restore', async (c: Context) => {
   try {
     const { reports, sessionNotes, templates } = await c.req.json();
     
@@ -819,26 +822,26 @@ app.post('/make-server-7fe18c53/restore', async (c) => {
     
     await logAudit('import', 'backup', `Restored ${imported} items`, 'restore');
     return c.json({ success: true, imported });
-  } catch (error) {
+  } catch (error: any) {
     console.log(`Error restoring data: ${error}`);
     return c.json({ error: `Failed to restore data: ${error.message}` }, 500);
   }
 });
 
 // Templates endpoints
-app.get('/make-server-7fe18c53/templates', async (c) => {
+app.get('/make-server-7fe18c53/templates', async (c: Context) => {
   try {
     const templates = await kv.getByPrefix('template_');
     return c.json(templates.sort((a, b) => 
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     ));
-  } catch (error) {
+  } catch (error: any) {
     console.log(`Error fetching templates: ${error}`);
     return c.json({ error: `Failed to fetch templates: ${error.message}` }, 500);
   }
 });
 
-app.post('/make-server-7fe18c53/templates', async (c) => {
+app.post('/make-server-7fe18c53/templates', async (c: Context) => {
   try {
     const template = await c.req.json();
     const templateId = template.id || `template_${Date.now()}_${Math.random().toString(36).substring(7)}`;
@@ -852,27 +855,27 @@ app.post('/make-server-7fe18c53/templates', async (c) => {
     await kv.set(templateId, newTemplate);
     await logAudit('create', 'template', newTemplate.name, templateId);
     return c.json({ success: true, template: newTemplate });
-  } catch (error) {
+  } catch (error: any) {
     console.log(`Error creating template: ${error}`);
     return c.json({ error: `Failed to create template: ${error.message}` }, 500);
   }
 });
 
-app.delete('/make-server-7fe18c53/templates/:id', async (c) => {
+app.delete('/make-server-7fe18c53/templates/:id', async (c: Context) => {
   try {
     const id = c.req.param('id');
     const template = await kv.get(id);
     await kv.del(id);
     await logAudit('delete', 'template', template?.name || 'Unknown', id);
     return c.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     console.log(`Error deleting template: ${error}`);
     return c.json({ error: `Failed to delete template: ${error.message}` }, 500);
   }
 });
 
 // AI-powered auto-tagging endpoint
-app.post('/make-server-7fe18c53/suggest-tags', async (c) => {
+app.post('/make-server-7fe18c53/suggest-tags', async (c: Context) => {
   try {
     const { content, title } = await c.req.json();
     const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
@@ -908,14 +911,14 @@ Return ONLY a JSON array of tags (lowercase, hyphenated). Example: ["patient-saf
     } else {
       return c.json({ tags: [] });
     }
-  } catch (error) {
+  } catch (error: any) {
     console.log(`Error suggesting tags: ${error}`);
     return c.json({ tags: [] });
   }
 });
 
 // Similarity detection endpoint
-app.post('/make-server-7fe18c53/find-similar', async (c) => {
+app.post('/make-server-7fe18c53/find-similar', async (c: Context) => {
   try {
     const { title, tags, content } = await c.req.json();
     const allReports = await kv.getByPrefix('report_');
@@ -927,7 +930,7 @@ app.post('/make-server-7fe18c53/find-similar', async (c) => {
       // Title similarity (basic word matching)
       const titleWords = title.toLowerCase().split(/\s+/);
       const reportTitleWords = (report.title || '').toLowerCase().split(/\s+/);
-      const commonWords = titleWords.filter(w => reportTitleWords.includes(w));
+      const commonWords = titleWords.filter((w: string) => reportTitleWords.includes(w));
       score += commonWords.length * 10;
       
       // Tag overlap
@@ -944,14 +947,14 @@ app.post('/make-server-7fe18c53/find-similar', async (c) => {
     .map(item => ({ ...item.report, similarityScore: item.score }));
     
     return c.json({ similar: similarities });
-  } catch (error) {
+  } catch (error: any) {
     console.log(`Error finding similar reports: ${error}`);
     return c.json({ similar: [] });
   }
 });
 
 // Smart recommendations - suggest prior reports based on session notes
-app.post('/make-server-7fe18c53/recommend-reports', async (c) => {
+app.post('/make-server-7fe18c53/recommend-reports', async (c: Context) => {
   try {
     const { sessionNotes, tags } = await c.req.json();
     const allReports = await kv.getByPrefix('report_');
@@ -986,14 +989,14 @@ app.post('/make-server-7fe18c53/recommend-reports', async (c) => {
     }));
     
     return c.json({ recommendations: scored });
-  } catch (error) {
+  } catch (error: any) {
     console.log(`Error recommending reports: ${error}`);
     return c.json({ recommendations: [] });
   }
 });
 
 // Bulk operations endpoint
-app.post('/make-server-7fe18c53/bulk-operation', async (c) => {
+app.post('/make-server-7fe18c53/bulk-operation', async (c: Context) => {
   try {
     const { operation, ids, data } = await c.req.json();
     
@@ -1022,7 +1025,7 @@ app.post('/make-server-7fe18c53/bulk-operation', async (c) => {
       default:
         return c.json({ error: 'Unknown operation' }, 400);
     }
-  } catch (error) {
+  } catch (error: any) {
     console.log(`Error in bulk operation: ${error}`);
     return c.json({ error: `Bulk operation failed: ${error.message}` }, 500);
   }
@@ -1031,7 +1034,7 @@ app.post('/make-server-7fe18c53/bulk-operation', async (c) => {
 // ============= CASE FILES ENDPOINTS =============
 
 // Upload a case file
-app.post('/make-server-7fe18c53/case-files/upload', async (c) => {
+app.post('/make-server-7fe18c53/case-files/upload', async (c: Context) => {
   try {
     let { title, content, htmlContent, date, tags, metadata } = await c.req.json();
     
@@ -1092,7 +1095,7 @@ app.post('/make-server-7fe18c53/case-files/upload', async (c) => {
     
     await logAudit('create', 'case_file', title, caseFileId);
     return c.json({ success: true, caseFile });
-  } catch (error) {
+  } catch (error: any) {
     console.log(`Error uploading case file: ${error}`);
     console.log(`Stack trace: ${error.stack}`);
     return c.json({ error: `Failed to upload case file: ${error.message}` }, 500);
@@ -1100,7 +1103,7 @@ app.post('/make-server-7fe18c53/case-files/upload', async (c) => {
 });
 
 // Get all case files
-app.get('/make-server-7fe18c53/case-files', async (c) => {
+app.get('/make-server-7fe18c53/case-files', async (c: Context) => {
   try {
     console.log('Fetching case files with prefix: case_');
     const allCaseFiles = await kv.getByPrefix('case_');
@@ -1129,7 +1132,7 @@ app.delete('/make-server-7fe18c53/case-files/:id', async (c) => {
     await kv.del(id);
     await logAudit('delete', 'case_file', caseFile?.title || 'Unknown', id);
     return c.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     console.log(`Error deleting case file: ${error}`);
     return c.json({ error: `Failed to delete case file: ${error.message}` }, 500);
   }
@@ -1140,24 +1143,22 @@ app.delete('/make-server-7fe18c53/case-files/:id', async (c) => {
 // ============================
 
 // Get all LSTs
-app.get('/make-server-7fe18c53/lsts', async (c) => {
+app.get('/make-server-7fe18c53/lsts', async (c: Context) => {
   try {
-    console.log('Fetching LSTs with prefix: lst_');
-    const allLSTs = await kv.getByPrefix('lst_');
-    console.log('All LSTs from KV:', allLSTs.length, 'items found');
+    const allLsts = await kv.getByPrefix('lst_');
+    const lsts = allLsts
+      .map(entry => entry.value)
+      .sort((a, b) => new Date(b.lastSeenDate).getTime() - new Date(a.lastSeenDate).getTime());
     
-    return c.json({ 
-      lsts: allLSTs,
-      count: allLSTs.length 
-    });
-  } catch (error) {
+    return c.json({ lsts });
+  } catch (error: any) {
     console.log(`Error fetching LSTs: ${error}`);
     return c.json({ error: `Failed to fetch LSTs: ${error.message}` }, 500);
   }
 });
 
 // Add a new LST
-app.post('/make-server-7fe18c53/lsts/add', async (c) => {
+app.post('/make-server-7fe18c53/lsts/add', async (c: Context) => {
   try {
     let lst = await c.req.json();
     
@@ -1185,14 +1186,14 @@ app.post('/make-server-7fe18c53/lsts/add', async (c) => {
     
     console.log('LST added successfully:', id);
     return c.json({ success: true, id });
-  } catch (error) {
+  } catch (error: any) {
     console.log(`Error adding LST: ${error}`);
     return c.json({ error: `Failed to add LST: ${error.message}` }, 500);
   }
 });
 
 // Update an LST
-app.put('/make-server-7fe18c53/lsts/:id', async (c) => {
+app.put('/make-server-7fe18c53/lsts/:id', async (c: Context) => {
   try {
     const id = c.req.param('id');
     let lst = await c.req.json();
@@ -1208,28 +1209,28 @@ app.put('/make-server-7fe18c53/lsts/:id', async (c) => {
     
     console.log('LST updated successfully:', id);
     return c.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     console.log(`Error updating LST: ${error}`);
     return c.json({ error: `Failed to update LST: ${error.message}` }, 500);
   }
 });
 
 // Delete an LST
-app.delete('/make-server-7fe18c53/lsts/:id', async (c) => {
+app.delete('/make-server-7fe18c53/lsts/:id', async (c: Context) => {
   try {
     const id = c.req.param('id');
     const lst = await kv.get(id);
     await kv.del(id);
     await logAudit('delete', 'lst', lst?.title || 'Unknown', id);
     return c.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     console.log(`Error deleting LST: ${error}`);
     return c.json({ error: `Failed to delete LST: ${error.message}` }, 500);
   }
 });
 
 // Batch extract LSTs from generated report text
-app.post('/make-server-7fe18c53/lsts/extract', async (c) => {
+app.post('/make-server-7fe18c53/lsts/extract', async (c: Context) => {
   try {
     const { reportId, reportText, reportTitle } = await c.req.json();
     
@@ -1405,14 +1406,14 @@ Extract all Latent Safety Threats now as a JSON array:`;
         updated: updatedLSTs,
       }
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error in LST extraction:', error);
     return c.json({ error: `Failed to extract LSTs: ${error.message}` }, 500);
   }
 });
 
 // Get AI Prompt Template (view-only)
-app.get('/make-server-7fe18c53/prompt-template', (c) => {
+app.get('/make-server-7fe18c53/prompt-template', (c: Context) => {
   const template = `Role: You are an expert Medical Simulation Specialist and Education Consultant for the Washington University Department of Emergency Medicine. Your goal is to generate professional, actionable Post-Session Reports that prioritize psychological safety and a "Just Culture" framework.
 
 Objective: Generate a Post-Session Report based on the provided session notes and case files that mirrors the structure of the prior reports while maintaining a supportive, growth-oriented tone.
@@ -1505,18 +1506,18 @@ Generate the Post-Session Report now using strict Markdown formatting.`;
 });
 
 // Get AI model preference
-app.get('/make-server-7fe18c53/model-preference', async (c) => {
+app.get('/make-server-7fe18c53/model-preference', async (c: Context) => {
   try {
     const preference = await kv.get('ai_model_preference');
     return c.json({ model: preference || 'gemini-flash-latest' });
-  } catch (error) {
+  } catch (error: any) {
     console.log(`Error fetching model preference: ${error}`);
     return c.json({ model: 'gemini-flash-latest' });
   }
 });
 
-// Set AI model preference
-app.post('/make-server-7fe18c53/model-preference', async (c) => {
+// Update AI model preference
+app.post('/make-server-7fe18c53/settings/ai-model', async (c: Context) => {
   try {
     const { model } = await c.req.json();
     
@@ -1527,19 +1528,14 @@ app.post('/make-server-7fe18c53/model-preference', async (c) => {
     }
     
     await kv.set('ai_model_preference', model);
-    
-    // Log audit event
-    await kv.set(`audit_${Date.now()}_model_change`, {
-      action: 'model_preference_changed',
-      model,
-      timestamp: new Date().toISOString(),
-    });
+    await logAudit('update', 'settings', `Changed AI model to ${model}`, 'settings');
     
     return c.json({ success: true, model });
-  } catch (error) {
-    console.log(`Error setting model preference: ${error}`);
-    return c.json({ error: `Failed to set model preference: ${error.message}` }, 500);
+  } catch (error: any) {
+    console.log(`Error updating AI model: ${error}`);
+    return c.json({ error: error.message }, 500);
   }
 });
 
+// Final Deno serve
 Deno.serve(app.fetch);
