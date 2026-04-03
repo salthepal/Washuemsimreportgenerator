@@ -1,95 +1,96 @@
-# WashU EM Sim Intelligence v2.1.0 (Enterprise Edition)
+<div align="center">
+  <img src="./banner.png" alt="WashU Sim Intelligence Hero Banner" width="100%">
+  <br />
+  <h1>WashU Sim Intelligence v3.1.0</h1>
+  <p><b>Enterprise Simulation & Safety Intelligence Edition</b></p>
+  <p><i>Washington University School of Medicine - Department of Emergency Medicine</i></p>
 
-A high-performance, professional-grade platform for Medical Simulation Specialists at **Washington University - Department of Emergency Medicine**. 
-
-This system automates the generation of Post-Session Simulation Reports and tracks **Latent Safety Threats (LSTs)** within a "Just Culture" framework.
+  [![Version](https://img.shields.io/badge/version-3.1.0-A51417?style=for-the-badge)](https://github.com/salthepal/WashUSimIntelligence)
+  [![Architecture](https://img.shields.io/badge/stack-Cloudflare_Native-007A33?style=for-the-badge)](https://cloudflare.com)
+  [![Security](https://img.shields.io/badge/security-CodeQL_%26_Dependabot-blue?style=for-the-badge)](https://github.com/salthepal/WashUSimIntelligence/security)
+</div>
 
 ---
 
-## 🏗️ Architecture (v2.0 "The Cloudflare Shift")
+## 🏛️ Architecture (v3.1.0 Enterprise)
 
-The platform has been migrated from a legacy Supabase-blob backend to a robust, "forever free" distributed architecture on **Cloudflare**.
+The **WashU Sim Intelligence** platform is built on a high-concurrency, Zero-Latency distributed architecture. By leveraging Cloudflare's global edge network, we deliver sub-millisecond data persistence and real-time AI report generation.
 
+### 🧩 System Design
 ```mermaid
 graph TD
-    A[React Dashboard (GitHub Pages)] --> B[Cloudflare Worker]
-    B --> C[(Cloudflare D1 SQL)]
+    A[React Dashboard (SPA)] --> B[Cloudflare Edge Worker (Hono)]
+    B --> C[(Cloudflare D1 SQL)] 
     B --> D[Cloudflare R2 Object Storage]
-    B --> E[Cloudflare KV Rate Limiter]
-    B --> F[Google Gemini AI]
+    B --> E[Cloudflare KV Space]
+    B --> F[Google Gemini Flash 1.5]
     
-    subgraph "Backend (worker/)"
-    B
+    subgraph "Persistent Storage"
     C
     D
-    E
     end
     
-    subgraph "Frontend (src/)"
-    A
+    subgraph "Intelligence Engine"
+    B
+    F
     end
 ```
 
 ### 🗝️ Core Technologies
-*   **Frontend**: React 18 / TypeScript / Vite / TailwindCSS / Lucide-React
-*   **Backend**: Cloudflare Workers (Hono JS)
-*   **Database**: Cloudflare D1 (SQLite-compatible)
-*   **Storage**: Cloudflare R2 (Object storage for large reports/files)
-*   **AI Engine**: Google Gemini Flash 1.5 (Secure API Integration)
-*   **Security**: Cloudflare KV (Rate Limiting), Dependabot (SCA), CodeQL (SAST)
+- **Frontend**: `React 18` / `TypeScript` / `Vite` / `TailwindCSS`
+- **Backend API**: `Cloudflare Workers` / `Hono` (Asynchronous Streaming)
+- **Data Persistence**: `D1 SQL` (Relational) / `R2` (Documents) / `KV` (Security)
+- **AI Intelligence**: `Google Gemini 1.5 Flash` (Direct Edge Integration)
+- **Design System**: `WashU PMS 200` (Primary Red) & `PMS 350` (Forest Green)
 
 ---
 
-### ✨ Key Features
-- **Streaming AI Report Generation**: Real-time token streaming for instant "as-it-types" report generation (0s perceived latency).
-- **Full-Text Search (FTS5)**: Deep-content searching across all simulation reports using a synchronized SQLite virtual table.
-- **Offline-First Dashboard**: Instant loading using React Query persistence (LocalStorage/IndexedDB), even on unstable hospital Wi-Fi.
-- **LST Tracking & Merging**: Identifies and tracks Latent Safety Threats over time with a structured "Just Culture" framework.
-- **Professional File Management**: Direct R2 storage for persisting report documents and large media.
-- **Secure by Design**: Rate-limiting on AI endpoints and automated security scanning (CodeQL/Dependabot).
+## 🚀 v3.1.0 Enterprise Features
+
+### 🍱 Official Simulation Prompt (v3.1.0)
+The platform now strictly adheres to the **Washington University EM Simulation Department** official guidelines. 
+- **Just Culture Framework**: Automated post-session reports prioritize psychological safety and system-level improvements (LSTs).
+- **Strict Markdown Structure**: Ensures reports are always ready for institutional executive review.
+- **Safety Lexicon**: Integrated standardized safety definitions (In-Situ, Latent Safety Threats, Best Practice Supports).
+
+### 🍱 Streaming Safety Intelligence
+*   **Asynchronous Tokens**: Simulation reports generate in real-time, providing instant "voice of the room" synthesis without perceived server latency.
+*   **Deep-Content Search (FTS5)**: SQLite-native Full-Text Search enables sub-millisecond queries across thousands of historical clinical scenarios and latent threats.
+*   **Offline-Ready (TanStack)**: Persistence layers ensure that simulation specialists can continue their workspace on hospital Wi-Fi without losing session notes.
 
 ---
 
-## 🚀 Getting Started
-
-### Prerequisites
-*   Node.js (LTS)
-*   [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/get-started/)
-*   A Cloudflare account with D1 and R2 enabled.
+## 🛠️ Deployment & Operations
 
 ### Local Development
-
-1.  **Frontend**:
-    ```bash
+1.  **Frontend Workspace**:
+    ```ps1
     npm run dev
     ```
-2.  **Backend (Worker)**:
-    ```bash
+2.  **Simulation Backend**:
+    ```ps1
     cd worker
     npx wrangler dev
     ```
 
-### Deployment
-
-*   **Production Frontend**: Deploys automatically to GitHub Pages via `.github/workflows/deploy.yml`.
-*   **Production Backend**:
-    ```bash
-    cd worker
-    npx wrangler deploy
-    ```
-
----
-
-## 🔒 Security
-This repository is monitored by **GitHub Dependabot** and scanned by **CodeQL** on every push. 
-
-Private secrets (like the Gemini API Key) are managed via Cloudflare Secret Management and never committed to this repository.
+### Production Deployment
+The system is automated via GitHub Actions for the frontend and Wrangler for the edge.
+```ps1
+# Deploy Simulation Backend
+cd worker
+npx wrangler deploy
+```
 
 ---
 
-## 📜 Versioning & Governance
-This project follows **Semantic Versioning (SemVer)**.
-- **v1.x**: Legacy Supabase / JSON-blob architecture.
-- **v2.x**: Current Cloudflare SQL / Distributed Architecture.
+## 🔒 Governance & Security
+- **Data Sovereignty**: Managed through Cloudflare's HIPAA-compliant storage primitives (D1/R2).
+- **Infrastructure as Code**: All D1 schemas and worker configurations are version-controlled.
+- **Institutional Alignment**: Branding and terminology strictly follow the *Washington University School of Medicine* style guidelines.
 
-Maintainer: **Sim Intelligence Team - Washington University**
+---
+
+<p align="center">
+  <b>Built for Clinical Safety, Powered by Intelligence.</b><br />
+  © 2026 Washington University Simulation Intelligence Team
+</p>
