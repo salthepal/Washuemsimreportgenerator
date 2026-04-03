@@ -35,51 +35,6 @@ export function Dashboard({ reports, sessionNotes, generatedReports, lsts, isLoa
     filteredLsts.filter(l => l.severity === 'High' && l.status !== 'Resolved').length,
   [filteredLsts]);
 
-  // ── Safety Score Logic ──
-  const systemSafetyIndex = useMemo(() => {
-    if (filteredLsts.length === 0) return 100;
-    
-    let score = 100;
-    filteredLsts.forEach(l => {
-      if (l.status !== 'Resolved') {
-        if (l.severity === 'High') score -= 12;
-        else if (l.severity === 'Medium') score -= 6;
-        else if (l.severity === 'Low') score -= 3;
-      }
-    });
-    
-    return Math.max(0, score);
-  }, [filteredLsts]);
-
-  const getSafetyIndexColor = (score: number) => {
-    if (score >= 85) return 'text-green-600 dark:text-green-400';
-    if (score >= 60) return 'text-amber-500 dark:text-amber-400';
-    return 'text-red-600 dark:text-red-400';
-  };
-
-  const getSafetyIndexBg = (score: number) => {
-    if (score >= 85) return 'from-green-50 to-green-100 dark:from-green-950/40 dark:to-green-900/30 border-green-300 dark:border-green-700';
-    if (score >= 60) return 'from-amber-50 to-amber-100 dark:from-amber-950/40 dark:to-amber-900/30 border-amber-300 dark:border-amber-700';
-    return 'from-red-50 to-red-100 dark:from-red-950/40 dark:to-red-900/30 border-red-300 dark:border-red-700';
-  };
-
-  const topSimulationSite = useMemo(() => {
-    const locationCounts: Record<string, number> = {};
-    filteredLsts.forEach(l => {
-      const loc = l.location || 'Unknown';
-      locationCounts[loc] = (locationCounts[loc] || 0) + 1;
-    });
-    let topSite = 'N/A';
-    let maxCount = 0;
-    Object.entries(locationCounts).forEach(([loc, count]) => {
-      if (count > maxCount && loc !== 'Unknown') {
-        topSite = loc;
-        maxCount = count;
-      }
-    });
-    return { name: topSite, count: maxCount };
-  }, [filteredLsts]);
-
   // ── Gaps Found vs Gaps Resolved over time ──
   const gapTimelineData = useMemo(() => {
     const monthMap: Record<string, { found: number; resolved: number }> = {};
@@ -104,30 +59,6 @@ export function Dashboard({ reports, sessionNotes, generatedReports, lsts, isLoa
       })
       .map(([month, data], idx) => ({ id: `gap-${idx}`, month, ...data }))
       .slice(-8);
-  }, [filteredLsts]);
-
-  // ── Severity distribution pie ──
-  const severityPieData = useMemo(() => {
-    const counts = { High: 0, Medium: 0, Low: 0 };
-    filteredLsts.forEach(l => { counts[l.severity] = (counts[l.severity] || 0) + 1; });
-    return [
-      { name: 'High', value: counts.High, color: '#A51417' },
-      { name: 'Medium', value: counts.Medium, color: '#f97316' },
-      { name: 'Low', value: counts.Low, color: '#94a3b8' },
-    ].filter(d => d.value > 0);
-  }, [filteredLsts]);
-
-  // ── LSTs by Location bar chart ──
-  const locationBarData = useMemo(() => {
-    const counts: Record<string, number> = {};
-    filteredLsts.forEach(l => {
-      const loc = l.location || 'Unknown';
-      counts[loc] = (counts[loc] || 0) + 1;
-    });
-    return Object.entries(counts)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 6);
   }, [filteredLsts]);
 
   // ── Category distribution ──
@@ -203,17 +134,6 @@ export function Dashboard({ reports, sessionNotes, generatedReports, lsts, isLoa
           <p className="text-sm text-slate-600 dark:text-slate-400">
             System safety posture at a glance &mdash; {filteredLsts.length} tracked threats at {selectedSite || 'All Sites'}
           </p>
-        </div>
-        
-        {/* Safety Score Card (Small Integrated) */}
-        <div className={`flex items-center gap-3 px-4 py-2 bg-gradient-to-br ${getSafetyIndexBg(systemSafetyIndex)} border rounded-xl shadow-sm`}>
-          <div className="p-2 bg-white/50 dark:bg-black/20 rounded-full">
-            <Gauge className={`w-5 h-5 ${getSafetyIndexColor(systemSafetyIndex)}`} />
-          </div>
-          <div>
-            <div className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 tracking-wider">System Safety Index</div>
-            <div className={`text-xl font-black ${getSafetyIndexColor(systemSafetyIndex)}`}>{systemSafetyIndex}/100</div>
-          </div>
         </div>
       </div>
 

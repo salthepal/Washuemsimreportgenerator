@@ -297,55 +297,12 @@ export default function App() {
                         </div>
                       </div>
 
-                      <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-4 md:p-6 border border-blue-200 dark:border-blue-800">
-                        <h3 className="text-base md:text-lg font-bold text-blue-900 dark:text-blue-200 mb-2">System Information</h3>
-                        <div className="space-y-2 text-xs md:text-sm text-blue-800 dark:text-blue-300">
-                          <p><strong>Version:</strong> 3.0.0 (Comprehensive Intelligence Platform)</p>
-                          <p><strong>Build:</strong> 26 Major Optimization Features</p>
-                          <p><strong>Total Documents:</strong> {reports.length + sessionNotes.length + generatedReports.length}</p>
-                          <p><strong>Active LSTs:</strong> {lsts.filter(lst => lst.status !== 'Resolved').length}</p>
-                          <p><strong>AI Model:</strong> Gemini 3.0 Flash Experimental</p>
-                          <p><strong>Backend:</strong> Supabase Edge Functions + KV Store</p>
-                          <p><strong>Core Capabilities:</strong> AI-Powered Report Generation, LST Intelligence, Workflow Automation</p>
-                          <p><strong>UX Features:</strong> Dark Mode (WCAG AA), Sidebar Navigation, 3 Export Formats (Copy/DOCX/PDF)</p>
-                          <p><strong>Data Management:</strong> Batch Operations, Audit Logging, Backup/Restore, Advanced Filtering</p>
-                          <p><strong>Branding:</strong> WashU PMS 200 (#A51417) & PMS 350 (#007A33)</p>
-                        </div>
-                      </div>
                     </div>
                   </div>
                 } />
               </Routes>
             </main>
           </div>
-
-          {/* Quick Actions Bar */}
-          <QuickActionsBar
-            onQuickUpload={() => navigate('/upload')}
-            onQuickGenerate={() => navigate('/generate')}
-            onExportAll={async () => {
-              try {
-                const response = await fetch(`${API_BASE}/backup`, {
-                  headers: API_HEADERS,
-                });
-                if (response.ok) {
-                  const data = await response.json();
-                  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = `backup-${new Date().toISOString().split('T')[0]}.json`;
-                  a.click();
-                  URL.revokeObjectURL(url);
-                  toast.success('Data exported successfully');
-                }
-              } catch (error) {
-                console.error('Export error:', error);
-                toast.error('Failed to export data');
-              }
-            }}
-            onNewNote={() => navigate('/notes')}
-          />
         </div>
       </div>
     </ErrorBoundary>
