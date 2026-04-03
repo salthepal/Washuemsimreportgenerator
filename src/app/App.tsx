@@ -18,7 +18,6 @@ import { Toaster } from './components/ui/sonner';
 import { FileText, Moon, Sun, HelpCircle, Menu, MapPin, X } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Skeleton } from './components/ui/skeleton';
-import { projectId, publicAnonKey } from '../../utils/supabase/info';
 import { useDarkMode } from './hooks/useDarkMode';
 import { useKeyboardShortcut } from './hooks/useKeyboardShortcut';
 import { useLocalStorage } from './hooks/useLocalStorage';

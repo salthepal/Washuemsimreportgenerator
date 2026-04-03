@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { ScrollArea } from './ui/scroll-area';
 import { Badge } from './ui/badge';
 import { toast } from 'sonner';
-import { projectId, publicAnonKey } from '/utils/supabase/info';
+import { fetchTemplates, addTemplate, deleteTemplate } from '../api';
 
 interface Template {
   id: string;
@@ -25,21 +25,13 @@ export function TemplatesManager() {
   const [dialogOpen, setDialogOpen] = useState(false);
 
   useEffect(() => {
-    fetchTemplates();
+    loadTemplates();
   }, []);
 
-  const fetchTemplates = async () => {
+  const loadTemplates = async () => {
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-7fe18c53/templates`,
-        {
-          headers: { Authorization: `Bearer ${publicAnonKey}` },
-        }
-      );
-      if (response.ok) {
-        const data = await response.json();
-        setTemplates(data);
-      }
+      const data = await fetchTemplates();
+      setTemplates(data);
     } catch (error) {
       console.error('Error fetching templates:', error);
     }
@@ -52,28 +44,15 @@ export function TemplatesManager() {
     }
 
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-7fe18c53/templates`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${publicAnonKey}`,
-          },
-          body: JSON.stringify({
-            ...newTemplate,
-            id: `template-${Date.now()}`,
-            createdAt: new Date().toISOString(),
-          }),
-        }
-      );
-
-      if (response.ok) {
-        toast.success('Template saved successfully');
-        setNewTemplate({ name: '', description: '', structure: '' });
-        setDialogOpen(false);
-        fetchTemplates();
-      }
+      await addTemplate({
+        ...newTemplate,
+        id: `template-${Date.now()}`,
+        createdAt: new Date().toISOString(),
+      });
+      toast.success('Template saved successfully');
+      setNewTemplate({ name: '', description: '', structure: '' });
+      setDialogOpen(false);
+      loadTemplates();
     } catch (error) {
       console.error('Error saving template:', error);
       toast.error('Failed to save template');
@@ -82,18 +61,9 @@ export function TemplatesManager() {
 
   const handleDeleteTemplate = async (id: string) => {
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-7fe18c53/templates/${id}`,
-        {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${publicAnonKey}` },
-        }
-      );
-
-      if (response.ok) {
-        toast.success('Template deleted');
-        fetchTemplates();
-      }
+      await deleteTemplate(id);
+      toast.success('Template deleted');
+      loadTemplates();
     } catch (error) {
       console.error('Error deleting template:', error);
       toast.error('Failed to delete template');

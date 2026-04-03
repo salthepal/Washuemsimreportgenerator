@@ -1,9 +1,9 @@
-import { Hono } from 'npm:hono';
-import type { Context } from 'npm:hono';
-import { cors } from 'npm:hono/cors';
-import { logger } from 'npm:hono/logger';
+import { Hono } from 'hono';
+import type { Context } from 'hono';
+import { cors } from 'hono/cors';
+import { logger } from 'hono/logger';
 import * as kv from './kv_store.tsx';
-import { createClient } from 'jsr:@supabase/supabase-js@2.49.8';
+import { createClient } from 'supabase';
 import { sanitizeText, sanitizeObject, validateText } from './text-sanitizer.tsx';
 
 const app = new Hono();

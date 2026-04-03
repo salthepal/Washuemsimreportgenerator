@@ -3,7 +3,7 @@ import { Download, Upload, AlertCircle, CheckCircle } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Alert, AlertDescription } from './ui/alert';
-import { projectId, publicAnonKey } from '/utils/supabase/info';
+import { fetchBackup, restoreData } from '../api';
 import { toast } from 'sonner';
 
 export function BackupRestore() {
@@ -14,27 +14,16 @@ export function BackupRestore() {
     setLoading(true);
     setStatus(null);
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-7fe18c53/backup`,
-        {
-          headers: { Authorization: `Bearer ${publicAnonKey}` },
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `latent-safety-backup-${new Date().toISOString().split('T')[0]}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-        setStatus({ type: 'success', message: 'Backup downloaded successfully' });
-        toast.success('Backup created successfully');
-      } else {
-        throw new Error('Backup failed');
-      }
+      const data = await fetchBackup();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `latent-safety-backup-${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setStatus({ type: 'success', message: 'Backup downloaded successfully' });
+      toast.success('Backup created successfully');
     } catch (error) {
       console.error('Backup error:', error);
       setStatus({ type: 'error', message: 'Failed to create backup' });
@@ -54,25 +43,9 @@ export function BackupRestore() {
     try {
       const text = await file.text();
       const data = JSON.parse(text);
-
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-7fe18c53/restore`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${publicAnonKey}`,
-          },
-          body: JSON.stringify(data),
-        }
-      );
-
-      if (response.ok) {
-        setStatus({ type: 'success', message: 'Data restored successfully. Reload the page to see changes.' });
-        toast.success('Data restored successfully. Please reload the page.');
-      } else {
-        throw new Error('Restore failed');
-      }
+      await restoreData(data);
+      setStatus({ type: 'success', message: 'Data restored successfully. Reload the page to see changes.' });
+      toast.success('Data restored successfully. Please reload the page.');
     } catch (error) {
       console.error('Restore error:', error);
       setStatus({ type: 'error', message: 'Failed to restore data. Please check the file format.' });

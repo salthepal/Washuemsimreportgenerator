@@ -1,0 +1,21 @@
+name = "washu-em-sim-intelligence"
+main = "src/index.ts"
+compatibility_date = "2024-04-03"
+
+[vars]
+# Add any public environment variables here
+
+[[d1_databases]]
+binding = "DB"
+database_name = "washu_sim_db"
+database_id = "51d29c82-d58d-46b0-8695-d08690ed669a"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "washu-sim-intel-storage-2026"
+
+# Commands to remember:
+# npx wrangler d1 create washu_sim_db
+# npx wrangler d1 execute washu_sim_db --file=./schema.sql
+# npx wrangler dev
+# npx wrangler deploy

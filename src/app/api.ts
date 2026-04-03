@@ -1,10 +1,12 @@
-import { projectId, publicAnonKey } from '../../utils/supabase/info';
 import type { Report, SessionNote, CaseFile, LST } from './types';
 
-export const API_BASE = `https://${projectId}.supabase.co/functions/v1/make-server-7fe18c53`;
+// Base URL for the backend API
+// Original Supabase URL (commented out): 
+// const API_BASE = 'https://zuvhkazgoonarugqlvwi.supabase.co/functions/v1/make-server-7fe18c53';
+export const API_BASE = 'https://washu-em-sim-intelligence.sphadnisuf.workers.dev';
+
 export const API_HEADERS = {
   'Content-Type': 'application/json',
-  Authorization: `Bearer ${publicAnonKey}`,
 };
 
 export async function fetchReports(): Promise<Report[]> {
@@ -97,3 +99,57 @@ export async function clearErrorLog(): Promise<{ success: boolean }> {
   if (!response.ok) throw new Error('Failed to clear error log');
   return response.json();
 }
+
+export async function fetchTemplates(): Promise<any[]> {
+  const response = await fetch(`${API_BASE}/templates`, {
+    headers: API_HEADERS,
+  });
+  if (!response.ok) throw new Error('Failed to fetch templates');
+  return response.json();
+}
+
+export async function addTemplate(template: any): Promise<{ success: boolean }> {
+  const response = await fetch(`${API_BASE}/templates`, {
+    method: 'POST',
+    headers: API_HEADERS,
+    body: JSON.stringify(template),
+  });
+  if (!response.ok) throw new Error('Failed to add template');
+  return response.json();
+}
+
+export async function deleteTemplate(id: string): Promise<{ success: boolean }> {
+  const response = await fetch(`${API_BASE}/templates/${id}`, {
+    method: 'DELETE',
+    headers: API_HEADERS,
+  });
+  if (!response.ok) throw new Error('Failed to delete template');
+  return response.json();
+}
+
+export async function fetchAuditLog(): Promise<any[]> {
+  const response = await fetch(`${API_BASE}/audit-log`, {
+    headers: API_HEADERS,
+  });
+  if (!response.ok) throw new Error('Failed to fetch audit log');
+  return response.json();
+}
+
+export async function fetchBackup(): Promise<any> {
+  const response = await fetch(`${API_BASE}/backup`, {
+    headers: API_HEADERS,
+  });
+  if (!response.ok) throw new Error('Failed to fetch backup');
+  return response.json();
+}
+
+export async function restoreData(data: any): Promise<{ success: boolean }> {
+  const response = await fetch(`${API_BASE}/restore`, {
+    method: 'POST',
+    headers: API_HEADERS,
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) throw new Error('Failed to restore data');
+  return response.json();
+}
+

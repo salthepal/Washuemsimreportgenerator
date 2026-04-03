@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
 import { Badge } from './ui/badge';
-import { projectId, publicAnonKey } from '/utils/supabase/info';
+import { fetchAuditLog } from '../api';
 
 interface AuditEntry {
   id: string;
@@ -22,21 +22,13 @@ export function AuditLog() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchAuditLog();
+    loadAuditLog();
   }, []);
 
-  const fetchAuditLog = async () => {
+  const loadAuditLog = async () => {
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-7fe18c53/audit-log`,
-        {
-          headers: { Authorization: `Bearer ${publicAnonKey}` },
-        }
-      );
-      if (response.ok) {
-        const data = await response.json();
-        setAuditLog(data);
-      }
+      const data = await fetchAuditLog();
+      setAuditLog(data);
     } catch (error) {
       console.error('Error fetching audit log:', error);
     } finally {
