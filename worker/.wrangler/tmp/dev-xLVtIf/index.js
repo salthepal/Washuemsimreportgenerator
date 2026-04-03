@@ -2367,10 +2367,13 @@ app.post("/lsts/merge", async (c) => {
 app.post("/upload-file", async (c) => {
   try {
     const formData = await c.req.formData();
-    const file = formData.get("file");
+    const fileItem = formData.get("file");
+    if (!fileItem || typeof fileItem === "string") {
+      return c.json({ error: "No file provided" }, 400);
+    }
+    const file = fileItem;
     const name = formData.get("name") || file.name;
     const key = `${Date.now()}_${name}`;
-    if (!file) return c.json({ error: "No file provided" }, 400);
     await c.env.BUCKET.put(key, await file.arrayBuffer(), {
       httpMetadata: { contentType: file.type }
     });

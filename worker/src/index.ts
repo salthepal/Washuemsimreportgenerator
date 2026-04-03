@@ -134,11 +134,15 @@ app.post('/lsts/merge', async (c) => {
 app.post('/upload-file', async (c) => {
   try {
     const formData = await c.req.formData();
-    const file = formData.get('file') as File;
-    const name = formData.get('name') as string || file.name;
-    const key = `${Date.now()}_${name}`;
+    const fileItem = formData.get('file');
+    
+    if (!fileItem || typeof fileItem === 'string') {
+      return c.json({ error: 'No file provided' }, 400);
+    }
 
-    if (!file) return c.json({ error: 'No file provided' }, 400);
+    const file = fileItem as unknown as File;
+    const name = (formData.get('name') as string) || file.name;
+    const key = `${Date.now()}_${name}`;
 
     // Save to R2
     await c.env.BUCKET.put(key, await file.arrayBuffer(), {
