@@ -310,10 +310,10 @@ app.post('/reports/upload', async (c) => {
     const id = reportData.id || `report_${Date.now()}_${Math.random().toString(36).substring(7)}`;
     
     await c.env.DB.prepare('INSERT INTO reports (id, title, content, type, metadata) VALUES (?, ?, ?, ?, ?)')
-      .bind(id, reportData.title, reportData.content, reportData.type, JSON.stringify(reportData.metadata || {}))
+      .bind(id, reportData.title || 'Untitled Report', reportData.content || '', reportData.type || 'prior_report', JSON.stringify(reportData.metadata || {}))
       .run();
       
-    await logAudit(c.env.DB, 'upload', reportData.type, reportData.title, id);
+    await logAudit(c.env.DB, 'upload', reportData.type || 'report', reportData.title || 'Untitled Report', id);
     return c.json({ success: true, report: reportData });
   } catch (error: any) {
     await logError(c.env.DB, 'report_upload', error);
@@ -483,10 +483,10 @@ app.post('/case-files/upload', async (c) => {
     await c.env.DB.prepare('CREATE TABLE IF NOT EXISTS case_files (id TEXT PRIMARY KEY, title TEXT, content TEXT, html_content TEXT, date TEXT, uploader_name TEXT, case_type TEXT)').run();
     
     await c.env.DB.prepare('INSERT INTO case_files (id, title, content, html_content, date, uploader_name, case_type) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .bind(id, data.title, data.content, data.htmlContent || '', data.date || new Date().toISOString(), data.metadata?.uploaderName || '', data.metadata?.caseType || '')
+      .bind(id, data.title || 'Untitled Case', data.content || '', data.htmlContent || '', data.date || new Date().toISOString(), data.metadata?.uploaderName || '', data.metadata?.caseType || '')
       .run();
       
-    await logAudit(c.env.DB, 'upload', 'case_file', data.title, id);
+    await logAudit(c.env.DB, 'upload', 'case_file', data.title || 'Untitled Case', id);
     return c.json({ success: true, id });
   } catch (error: any) {
     await logError(c.env.DB, 'case_file_upload', error);
