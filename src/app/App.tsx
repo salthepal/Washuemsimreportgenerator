@@ -246,6 +246,7 @@ export default function App() {
                   <div className="p-2 md:p-6">
                     <GenerateReport
                       selectedSite={selectedSite}
+                      onRefresh={fetchData}
                     />
                   </div>
                 } />

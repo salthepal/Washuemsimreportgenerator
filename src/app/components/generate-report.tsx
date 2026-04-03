@@ -7,15 +7,15 @@ import { downloadDocxFromMarkdown } from '../utils/docx';
 import { useSelection } from '../hooks/useSelection';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useDebounce } from 'use-debounce';
-import { FixedSizeList as List } from 'react-window';
 import jsPDF from 'jspdf';
 import { useReports, useNotes, useCaseFiles } from '../hooks/useQueries';
 
 interface GenerateReportProps {
   selectedSite?: string;
+  onRefresh: () => void;
 }
 
-export function GenerateReport({ selectedSite }: GenerateReportProps) {
+export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps) {
   const { data: reports = [] } = useReports();
   const { data: sessionNotes = [] } = useNotes();
   const { data: caseFiles = [] } = useCaseFiles();
@@ -203,13 +203,30 @@ export function GenerateReport({ selectedSite }: GenerateReportProps) {
           });
         });
       } else {
-        const error = await response.text();
-        console.error('Generation error:', error);
-        toast.error(`Failed to generate report: ${error}`);
+        let errorMessage = 'Unknown error';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorData.message || 'Unknown server error';
+        } catch (e) {
+          errorMessage = await response.text();
+        }
+        
+        console.error('Generation error:', errorMessage);
+        toast.error('Failed to generate report', {
+          description: errorMessage.slice(0, 150) + (errorMessage.length > 150 ? '...' : ''),
+          duration: 8000,
+          action: {
+            label: 'Retry',
+            onClick: () => handleGenerate(),
+          },
+        });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Generation error:', error);
-      toast.error('Failed to generate report');
+      toast.error('Connection Error', {
+        description: error.message || 'Failed to reach the generation server. Please check your internet connection.',
+        duration: 8000,
+      });
     } finally {
       setGenerating(false);
     }

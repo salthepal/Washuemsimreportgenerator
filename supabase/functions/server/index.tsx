@@ -471,7 +471,7 @@ Generate the Post-Session Report now using strict Markdown formatting, followed 
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
         }),
-        signal: AbortSignal.timeout(60000), // 60 second timeout
+        signal: AbortSignal.timeout(120000), // 120 second timeout for complex synthesis
       }
     );
 
@@ -513,11 +513,36 @@ Generate the Post-Session Report now using strict Markdown formatting, followed 
           } catch (parseError) {
             console.error('Failed to parse LST JSON:', parseError);
             console.error('LST JSON content:', lstJson);
-            // Continue without LST data rather than failing the entire request
+            // Attempt a more aggressive JSON extraction if standard parse fails
+            try {
+              const jsonRegex = /\[\s*\{[\s\S]*\}\s*\]/;
+              const secondAttempt = lstJson.match(jsonRegex);
+              if (secondAttempt) {
+                extractedLSTs = JSON.parse(secondAttempt[0]);
+                console.log('Recovery parse of LST JSON successful');
+              }
+            } catch (innerError) {
+               console.error('Recovery parse also failed');
+            }
           }
         }
       } else {
-        console.log('Response does not contain LST delimiters, using full response as report content');
+        console.log('Response does not contain LST delimiters, attempting heuristic extraction');
+        // If delimiters are missing, try to find the JSON array at the end of the response
+        const lastJsonArray = fullResponse.lastIndexOf('[');
+        if (lastJsonArray !== -1) {
+          try {
+            const potentialJson = fullResponse.substring(lastJsonArray);
+            extractedLSTs = JSON.parse(potentialJson);
+            reportContent = fullResponse.substring(0, lastJsonArray).trim();
+            console.log('Heuristic LST extraction successful');
+          } catch (e) {
+            console.log('Heuristic extraction failed, using full response as report');
+            reportContent = fullResponse;
+          }
+        } else {
+          reportContent = fullResponse;
+        }
       }
     } catch (parseError) {
       console.error('Error parsing dual response:', parseError);
@@ -864,7 +889,7 @@ Content: ${content.slice(0, 1000)}
 Return ONLY a JSON array of tags (lowercase, hyphenated). Example: ["patient-safety", "equipment-failure", "communication"]`;
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${geminiApiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${geminiApiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1221,7 +1246,7 @@ app.post('/make-server-7fe18c53/lsts/extract', async (c) => {
     // Get selected model from settings (default to gemini-2.0-flash-exp)
     const settingsKey = 'settings_model_selection';
     const settings = await kv.get(settingsKey);
-    const selectedModel = settings?.selectedModel || 'gemini-2.0-flash-exp';
+    const selectedModel = settings?.selectedModel || 'gemini-flash-latest';
     
     console.log(`Extracting LSTs using model: ${selectedModel}`);
     
@@ -1498,7 +1523,7 @@ app.post('/make-server-7fe18c53/model-preference', async (c) => {
     // Validate model
     const validModels = ['gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-pro-latest'];
     if (!validModels.includes(model)) {
-      return c.json({ error: 'Invalid model' }, 400);
+      return c.json({ error: 'Invalid model series' }, 400);
     }
     
     await kv.set('ai_model_preference', model);
