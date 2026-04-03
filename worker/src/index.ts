@@ -94,10 +94,10 @@ app.post('/lsts', async (c) => {
     const id = lst.id || `lst_${Date.now()}_${Math.random().toString(36).substring(7)}`;
     
     await c.env.DB.prepare('INSERT INTO lsts (id, title, description, recommendation, severity, status, category, location, identified_date, last_seen_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(id, lst.title, lst.description, lst.recommendation, lst.severity, lst.status, lst.category, lst.location, lst.identifiedDate, lst.lastSeenDate)
+      .bind(id, lst.title || 'Untitled', lst.description || '', lst.recommendation || '', lst.severity || 'Medium', lst.status || 'Identified', lst.category || '', lst.location || '', lst.identifiedDate || new Date().toISOString(), lst.lastSeenDate || new Date().toISOString())
       .run();
       
-    await logAudit(c.env.DB, 'create', 'lst', lst.title, id);
+    await logAudit(c.env.DB, 'create', 'lst', lst.title || 'Untitled LST', id);
     return c.json({ success: true, id });
   } catch (error: any) {
     return c.json({ error: error.message }, 500);
@@ -115,7 +115,7 @@ app.post('/lsts/merge', async (c) => {
     
     // Create new LST
     await c.env.DB.prepare('INSERT INTO lsts (id, title, description, recommendation, severity, status, category, location, identified_date, last_seen_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(newId, mergedLST.title, mergedLST.description, mergedLST.recommendation, mergedLST.severity, mergedLST.status, mergedLST.category, mergedLST.location, mergedLST.identifiedDate, mergedLST.lastSeenDate)
+      .bind(newId, mergedLST.title || 'Merged LST', mergedLST.description || '', mergedLST.recommendation || '', mergedLST.severity || 'Medium', mergedLST.status || 'Identified', mergedLST.category || '', mergedLST.location || '', mergedLST.identifiedDate || new Date().toISOString(), mergedLST.lastSeenDate || new Date().toISOString())
       .run();
 
     // Delete old ones
@@ -438,10 +438,10 @@ app.post('/notes/add', async (c) => {
     const id = note.id || `notes_${Date.now()}_${Math.random().toString(36).substring(7)}`;
     
     await c.env.DB.prepare('INSERT INTO session_notes (id, session_name, notes, participants, tags, metadata) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(id, note.sessionName, note.notes, JSON.stringify(note.participants || []), JSON.stringify(note.tags || []), JSON.stringify(note.metadata || {}))
+      .bind(id, note.sessionName || 'Untitled Session', note.notes || '', JSON.stringify(note.participants || []), JSON.stringify(note.tags || []), JSON.stringify(note.metadata || {}))
       .run();
       
-    await logAudit(c.env.DB, 'create', 'session_notes', note.sessionName, id);
+    await logAudit(c.env.DB, 'create', 'session_notes', note.sessionName || 'Untitled Session', id);
     return c.json({ success: true, notes: { ...note, id } });
   } catch (error: any) {
     await logError(c.env.DB, 'note_upload', error);
