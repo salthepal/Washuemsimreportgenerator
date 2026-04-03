@@ -1,0 +1,31 @@
+
+> washu-em-sim-safety-intelligence@1.0.0 build
+> vite build
+
+[36mvite v6.4.1 [32mbuilding for production...[36m[39m
+transforming...
+[32mΓ£ô[39m 54 modules transformed.
+Γ£ù Build failed in 735ms
+error during build:
+[vite:esbuild] Transform failed with 1 error:
+C:/Users/salil/OneDrive/Miscellaneous/WashUSimIntelligence/src/app/components/dashboard.tsx:162:54: ERROR: Expected "{" but found "\\"
+file: C:/Users/salil/OneDrive/Miscellaneous/WashUSimIntelligence/src/app/components/dashboard.tsx:162:54
+
+Expected "{" but found "\\"
+160|    const getActivityIcon = (type: string, severity?: string) => {
+161|      switch (type) {
+162|        case 'prior_report': return <FileText className=\"w-4 h-4 text-blue-600 dark:text-blue-400\" />;
+   |                                                        ^
+163|        case 'session_notes': return <Users className=\"w-4 h-4 text-[#007A33] dark:text-green-400\" />;
+164|        case 'generated_report': return <Sparkles className=\"w-4 h-4 text-purple-600 dark:text-purple-400\" />;
+
+    at failureErrorWithLog (C:\Users\salil\OneDrive\Miscellaneous\WashUSimIntelligence\node_modules\esbuild\lib\main.js:1467:15)
+    at C:\Users\salil\OneDrive\Miscellaneous\WashUSimIntelligence\node_modules\esbuild\lib\main.js:736:50
+    at responseCallbacks.<computed> (C:\Users\salil\OneDrive\Miscellaneous\WashUSimIntelligence\node_modules\esbuild\lib\main.js:603:9)
+    at handleIncomingPacket (C:\Users\salil\OneDrive\Miscellaneous\WashUSimIntelligence\node_modules\esbuild\lib\main.js:658:12)
+    at Socket.readFromStdout (C:\Users\salil\OneDrive\Miscellaneous\WashUSimIntelligence\node_modules\esbuild\lib\main.js:581:7)
+    at Socket.emit (node:events:508:28)
+    at addChunk (node:internal/streams/readable:563:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:514:3)
+    at Readable.push (node:internal/streams/readable:394:5)
+    at Pipe.onStreamRead (node:internal/stream_base_commons:189:23)
