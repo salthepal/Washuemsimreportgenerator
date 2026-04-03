@@ -17,6 +17,13 @@
 The **WashU Sim Intelligence** platform is built on a high-concurrency, Zero-Latency distributed architecture. By leveraging Cloudflare's global edge network, we deliver sub-millisecond data persistence and real-time AI report generation.
 
 ### 🧩 System Design
+<div align="center">
+  <img src="./architecture.png" alt="WashU Sim Intelligence System Architecture" width="100%">
+</div>
+
+<details>
+<summary><b>Click to view technical diagram (Mermaid)</b></summary>
+
 ```mermaid
 graph TD
     A[React Dashboard (SPA)] --> B[Cloudflare Edge Worker (Hono)]
@@ -35,6 +42,7 @@ graph TD
     F
     end
 ```
+</details>
 
 ### 🗝️ Core Technologies
 - **Frontend**: `React 18` / `TypeScript` / `Vite` / `TailwindCSS`
