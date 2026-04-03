@@ -34,7 +34,7 @@ export async function fetchCaseFiles(): Promise<CaseFile[]> {
   const res = await fetch(`${API_BASE}/case-files`, { headers: API_HEADERS });
   if (!res.ok) throw new Error('Failed to fetch case files');
   const data = await res.json();
-  return data.caseFiles || [];
+  return Array.isArray(data) ? data : (data.caseFiles || []);
 }
 
 export async function fetchLSTs(): Promise<LST[]> {
