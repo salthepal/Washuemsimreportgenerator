@@ -31,17 +31,17 @@ A comprehensive web application designed for Washington University Emergency Med
 - **Advanced Filtering** - Search by tags, metadata, date ranges, and custom fields
 - **Backup & Restore** - Full data export/import capabilities
 - **Audit Logging** - Complete action history tracking
-- **Safe Parallel Loading** - Promise.allSettled for reliable database operations
+- **React Query State Management** - Extensively cached data layer prioritizing background syncing and stale-time caching.
 
 ## 🛠️ Technology Stack
 
 - **Frontend**: React 18.3.1 + TypeScript
 - **Styling**: Tailwind CSS v4 + Radix UI Components
 - **AI Model**: Google Gemini 3.0 Flash Experimental
-- **Backend**: Supabase Edge Functions (Deno/Hono)
+- **Backend/State**: Supabase Edge Functions + TanStack React Query
 - **Database**: Supabase PostgreSQL with KV Store
 - **Build Tool**: Vite 6.3.5
-- **Routing**: React Router 7 (Data Mode)
+- **Routing**: React Router (HashRouter Mode for static hosts)
 - **Deployment**: GitHub Pages
 
 ## 📦 Installation
@@ -274,7 +274,7 @@ Colors are applied subtly throughout the interface while maintaining excellent c
 ## 🚀 Performance Optimizations
 
 - **Skeleton Loading**: Instant UI feedback while data loads
-- **Promise.allSettled**: Safe parallel data loading prevents database connection errors
+- **TanStack Query Caching**: Hooks automatically deduplicate requests and cache payloads across routes.
 - **Lazy Loading**: Components loaded on-demand for faster initial load
 - **Debounced Search**: Reduces API calls during filtering/search
 - **Cached Data**: Local storage for theme preferences and session state

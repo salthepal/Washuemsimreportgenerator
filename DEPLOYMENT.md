@@ -17,7 +17,7 @@ The project is pre-configured for GitHub Pages deployment with:
 
 - **Base Path**: `/washusimintelligence/` (defined in `vite.config.ts`)
 - **Build Output**: `dist` folder
-- **Routing**: React Router with browser history mode
+- **Routing**: React Router with Hash History mode (`HashRouter`) to prevent 404 errors on page reload.
 
 ### Method 1: Automated Deployment with GitHub Actions (Recommended)
 
@@ -160,16 +160,8 @@ For complete control over the deployment process:
 npm run build
 ```
 
-#### Step 2: Create dist Folder with 404 Handler
-
-GitHub Pages needs a 404.html for client-side routing:
-
-```bash
-# Copy index.html as 404.html
-cp dist/index.html dist/404.html
-```
-
-#### Step 3: Push to gh-pages Branch
+#### Step 2: Push to gh-pages Branch
+(Note: Using HashRouter eliminates the need to duplicate index.html to 404.html, as the server naturally loads index.html and React Router intercepts the URL hash).
 
 ```bash
 # Create gh-pages branch if it doesn't exist
@@ -243,7 +235,7 @@ After deployment, verify:
 **Solution**: 
 1. Verify `vite.config.ts` has correct `base: '/washusimintelligence/'`
 2. Ensure repository name matches base path
-3. Copy `index.html` to `404.html` in dist folder
+3. Check `main.tsx` to verify `<HashRouter>` is wrapping the component tree (Browser router causes 404 on refresh on GH Pages).
 
 ### Issue: Assets Not Loading
 
