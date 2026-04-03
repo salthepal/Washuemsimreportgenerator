@@ -55,6 +55,9 @@ export function sanitizeHTML(html: string): string {
     sanitized = sanitized.replaceAll(/<object[\s\S]*?<\/object>/gi, '');
     sanitized = sanitized.replaceAll(/<embed[\s\S]*?<\/embed>/gi, '');
     
+    // Remove all img tags (prevents base64 bloat causing SQLITE_TOOBIG in D1)
+    sanitized = sanitized.replaceAll(/<img[^>]*>/gi, '');
+    
     // Remove event handlers with various formats
     sanitized = sanitized.replaceAll(/on\w+\s*=\s*"[^"]*"/gi, '');
     sanitized = sanitized.replaceAll(/on\w+\s*=\s*'[^']*'/gi, '');
