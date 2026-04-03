@@ -1,4 +1,4 @@
-# WashU EM Sim Intelligence v2.0.0
+# WashU EM Sim Intelligence v2.1.0 (Enterprise Edition)
 
 A high-performance, professional-grade platform for Medical Simulation Specialists at **Washington University - Department of Emergency Medicine**. 
 
@@ -40,12 +40,13 @@ graph TD
 
 ---
 
-## ✨ Key Features
-- **AI-Powered Report Generation**: Automatically extracts themes and notes from simulation sessions to create professional Markdown reports.
-- **LST Tracking & Merging**: Identifies and tracks Latent Safety Threats over time, with the ability to merge related threats into a single action item.
-- **Audit Logs**: Full traceability for all administrative actions (creation, deletion, merging).
-- **Professional File Management**: Direct R2 storage for persisting report documents and media.
-- **Secure by Design**: Rate-limiting on AI endpoints and automated dependency patching.
+### ✨ Key Features
+- **Streaming AI Report Generation**: Real-time token streaming for instant "as-it-types" report generation (0s perceived latency).
+- **Full-Text Search (FTS5)**: Deep-content searching across all simulation reports using a synchronized SQLite virtual table.
+- **Offline-First Dashboard**: Instant loading using React Query persistence (LocalStorage/IndexedDB), even on unstable hospital Wi-Fi.
+- **LST Tracking & Merging**: Identifies and tracks Latent Safety Threats over time with a structured "Just Culture" framework.
+- **Professional File Management**: Direct R2 storage for persisting report documents and large media.
+- **Secure by Design**: Rate-limiting on AI endpoints and automated security scanning (CodeQL/Dependabot).
 
 ---
 

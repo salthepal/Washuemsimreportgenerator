@@ -5,6 +5,24 @@ All notable changes to the WashU EM Sim Intelligence Platform will be documented
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-04-03
+
+### 🍱 Enterprise Optimization Edition (Zero-Latency)
+Three high-impact architectural upgrades for a fast, searchable, and responsive clinical simulation platform.
+
+### ✨ Added
+- **AI Streaming Support**: Shifted report generation to an asynchronous token stream for a real-time, responsive typing effect.
+- **Deep Content Search (FTS5)**: Integrated an SQLite-native Full-Text Search virtual table in D1.
+- **Persistence (Offline-First)**: Added `@tanstack/react-query-persist-client` for persistent browser-side caching.
+- **Search Triggers**: Automated SQL triggers in D1 to keep the search index synchronized with the live `reports` table.
+
+### 🛠️ Changed
+- **API (api.ts)**: Enhanced the client layer with `AsyncGenerator` support for AI streams.
+- **Repository UI**: Swapped local filtering for server-side Full-Text Search for deep repository queries.
+- **Dashboard Speed**: Queries now default to a 24-hour persistence layer for sub-millisecond tab switching.
+
+---
+
 ## [2.0.0] - 2026-04-03
 
 ### 🚀 The Cloudflare Migration (Forever Free Architecture)

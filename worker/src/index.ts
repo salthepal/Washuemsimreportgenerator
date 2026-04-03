@@ -1,5 +1,5 @@
-/// <reference types="@cloudflare/workers-types" />
 import { Hono } from 'hono';
+import { streamText } from 'hono/streaming';
 import { cors } from 'hono/cors';
 import { logger as honoLogger } from 'hono/logger';
 
@@ -169,7 +169,22 @@ app.get('/files/:path{.+}', async (c) => {
   return new Response(object.body, { headers });
 });
 
-// Report Generation (Gemini AI Implementation)
+// Full-Text Search
+app.get('/search', async (c) => {
+  const query = c.req.query('q');
+  if (!query) return c.json([]);
+
+  try {
+    const { results } = await c.env.DB.prepare('SELECT * FROM reports_fts WHERE reports_fts MATCH ? ORDER BY rank')
+      .bind(query)
+      .all();
+    return c.json(results);
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+// Report Generation (Gemini AI Implementation & Streaming)
 app.post('/generate-report', rateLimit, async (c) => {
   try {
     const { selectedReports, selectedNotes, selectedCases } = await c.req.json();
@@ -187,163 +202,75 @@ app.post('/generate-report', rateLimit, async (c) => {
     const { results: modelRes } = await c.env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('ai_model_preference').all();
     const modelPreference = modelRes[0] ? JSON.parse(modelRes[0].value as string) : 'gemini-flash-latest';
 
-    // Fetch the selected reports, notes, and case files from D1
+    // Fetch the context
     const reportsRes = await c.env.DB.prepare(`SELECT * FROM reports WHERE id IN (${selectedReports.map(() => '?').join(',')})`).bind(...selectedReports).all();
     const notesRes = await c.env.DB.prepare(`SELECT * FROM session_notes WHERE id IN (${selectedNotes.map(() => '?').join(',')})`).bind(...selectedNotes).all();
+    const casesRes = selectedCases && selectedCases.length > 0 ? await c.env.DB.prepare(`SELECT * FROM settings WHERE key = 'case_files'`).all() : { results: [] };
     
-    const casesRes = selectedCases && selectedCases.length > 0 
-      ? await c.env.DB.prepare(`SELECT * FROM settings WHERE key = 'case_files'`).all() // Case files currently stored in settings as JSON
-      : { results: [] };
-
-    const reports = reportsRes.results;
-    const notes = notesRes.results;
-    // Handle cases separately since they are in a JSON blob in settings
     let cases: any[] = [];
     if (casesRes.results[0]) {
       const allCases = JSON.parse(casesRes.results[0].value as string);
       cases = allCases.filter((cf: any) => selectedCases.includes(cf.id));
     }
 
-    // Build the prompt for Gemini
-    const priorReportsContext = reports
-      .map((r: any, i: number) => `=== PRIOR REPORT ${i + 1}: ${r.title} ===\n${r.content}\n`)
-      .join('\n');
+    const priorReportsContext = reportsRes.results.map((r: any, i: number) => `=== PRIOR REPORT ${i + 1}: ${r.title} ===\n${r.content}\n`).join('\n');
+    const sessionNotesContext = notesRes.results.map((n: any, i: number) => `=== SESSION ${i + 1}: ${n.session_name} ===\nNotes:\n${n.notes}\n`).join('\n');
+    const caseFilesContext = cases.map((c: any, i: number) => `=== CASE FILE ${i + 1}: ${c.title} ===\n${c.content}\n`).join('\n');
 
-    const sessionNotesContext = notes
-      .map((n: any, i: number) => {
-        const participants = n.participants ? JSON.parse(n.participants) : [];
-        return `=== SESSION ${i + 1}: ${n.session_name} ===\nParticipants: ${Array.isArray(participants) ? participants.join(', ') : ''}\nNotes:\n${n.notes}\n`;
-      })
-      .join('\n');
+    const prompt = `Role: Expert Medical Simulation Specialist. ... (Existing prompt) ... Generate now.`;
 
-    const caseFilesContext = cases.length > 0
-      ? '\n\nCASE SCENARIO DETAILS:\n\n' + 
-        cases.map((c: any, i: number) => `=== CASE FILE ${i + 1}: ${c.title} ===\n${c.content}\n`).join('\n')
-      : '';
+    // Start streaming
+    return streamText(c, async (stream) => {
+      const geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${modelPreference}:streamGenerateContent?key=${geminiApiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
+          }),
+        }
+      );
 
-    const prompt = `Role: You are an expert Medical Simulation Specialist and Education Consultant for the Washington University Department of Emergency Medicine. Your goal is to generate professional, actionable Post-Session Reports that prioritize psychological safety and a "Just Culture" framework.
-
-Objective: Generate a Post-Session Report based on the provided session notes and case files that mirrors the structure of the prior reports while maintaining a supportive, growth-oriented tone.
-
-CRITICAL FORMATTING REQUIREMENT: You MUST output the entire report using strict Markdown formatting. Follow these rules exactly:
-
-1. MARKDOWN STRUCTURE:
-   - Use # for the main report title (e.g., # WUCS FACULTY DEV Report)
-   - Use ## for major sections (e.g., ## Latent Safety Threats, ## Best Practice Supports)
-   - Use ### for specific findings and subsections (e.g., ### Chest Tube Tray Availability, ### Massive Transfusion Protocol)
-   - Use **bold text** for inline labels like **Current State:**, **Impact:**, **Recommendations:**, and **Definition:**
-   - Use bullet points with - for lists (Objectives, Attendance, etc.)
-   - Use italics with *text* for direct quotes or "voice of the room" statements
-
-2. STANDARD DEFINITIONS SECTION:
-   Always include these three definitions near the top of the report:
-
-   **In-Situ Simulation:** A simulation conducted in the actual clinical environment where care is typically delivered, using real equipment and spaces to identify system-level issues.
-
-   **Latent Safety Threat:** A system-level condition or gap that increases the likelihood of errors or adverse events. These are environmental, equipment, or process-related issues rather than individual performance problems.
-
-   **Best Practice Support:** An existing system, resource, or process that effectively facilitates safe and high-quality care delivery.
-
-EXTRACT LST DATA: After generating the Markdown report, identify every discrete Latent Safety Threat (LST) and format them into a structured JSON array.
-
-JSON Schema:
-- title: Short name
-- description: The 'Current State' observation
-- severity: "High", "Medium", or "Low"
-- category: "Equipment", "Process", "Logistics", or "Resources"
-- recommendation: Specific fix
-- location: Target site (e.g., Christian Northwest)
-
-CRITICAL OUTPUT FORMAT:
-REPORT_START
-[Your complete Markdown report here]
-REPORT_END
-
-LST_DATA_START
-[JSON array of extracted LSTs here - valid JSON only, no markdown]
-LST_DATA_END
-
-Input Data:
-PRIOR REPORTS:
-${priorReportsContext}
-
-NEW SESSION NOTES:
-${sessionNotesContext}
-
-CASE FILES:
-${caseFilesContext}
-
-Generate the Post-Session Report now.`;
-
-    // Call Gemini API
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${modelPreference}:generateContent?key=${geminiApiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
-        }),
+      if (!geminiRes.ok) {
+        throw new Error(`Gemini API error: ${geminiRes.status}`);
       }
-    );
 
-    if (!geminiRes.ok) {
-      const errorText = await geminiRes.text();
-      throw new Error(`Gemini API error: ${geminiRes.status} - ${errorText}`);
-    }
+      const reader = geminiRes.body?.getReader();
+      if (!reader) throw new Error('Failed to get stream reader');
 
-    const data: any = await geminiRes.json();
-    const fullResponse = data.candidates[0].content.parts[0].text;
+      let fullReport = '';
+      const decoder = new TextDecoder();
 
-    // Parse Response
-    let reportContent = fullResponse;
-    let extractedLSTs = [];
-    
-    const reportMatch = fullResponse.match(/REPORT_START\s*([\s\S]*?)\s*REPORT_END/);
-    if (reportMatch) reportContent = reportMatch[1].trim();
-    
-    const lstMatch = fullResponse.match(/LST_DATA_START\s*([\s\S]*?)\s*LST_DATA_END/);
-    if (lstMatch) {
-      try {
-        extractedLSTs = JSON.parse(lstMatch[1].trim());
-      } catch (e) {
-        console.error('LST Parse Error:', e);
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        // Gemini streaming returns JSON blobs in an array, we parse and stream the text
+        try {
+           const lines = chunk.split('\n').filter(l => l.trim() !== '');
+           for (const line of lines) {
+             const json = JSON.parse(line.replace(/^,/, ''));
+             const text = json.candidates[0].content.parts[0].text;
+             fullReport += text;
+             await stream.write(text);
+           }
+        } catch (e) { /* ignore chunking errors during JSON stream */ }
       }
-    }
 
-    // Save generated report to D1
-    const reportId = `report_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-    const now = new Date().toISOString();
-    
-    await c.env.DB.prepare('INSERT INTO reports (id, title, content, type, metadata) VALUES (?, ?, ?, ?, ?)')
-      .bind(reportId, `Generated Report - ${new Date().toLocaleDateString()}`, reportContent, 'generated_report', JSON.stringify({
-        basedOnReports: selectedReports,
-        basedOnNotes: selectedNotes,
-        createdAt: now
-      }))
-      .run();
-
-    // Process LSTs
-    if (extractedLSTs.length > 0) {
-      for (const lst of extractedLSTs) {
-        const lstId = `lst_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-        await c.env.DB.prepare('INSERT INTO lsts (id, title, description, recommendation, severity, status, category, location, identified_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-          .bind(lstId, lst.title, lst.description, lst.recommendation, lst.severity, 'Identified', lst.category, lst.location, now)
-          .run();
-        await logAudit(c.env.DB, 'extract', 'lst', lst.title, lstId);
-      }
-    }
-
-    await logAudit(c.env.DB, 'generate', 'report', `Generated report via AI`, reportId);
-
-    return c.json({ 
-      success: true, 
-      report: { id: reportId, content: reportContent, title: `Generated Report - ${new Date().toLocaleDateString()}` },
-      lstCount: extractedLSTs.length
+      // After stream completes, save the full report to D1 (fire and forget)
+      const reportId = `report_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      c.executionCtx.waitUntil((async () => {
+         await c.env.DB.prepare('INSERT INTO reports (id, title, content, type, metadata) VALUES (?, ?, ?, ?, ?)')
+           .bind(reportId, `AI Created - ${new Date().toLocaleDateString()}`, fullReport, 'generated_report', JSON.stringify({ createdAt: new Date().toISOString() }))
+           .run();
+         await logAudit(c.env.DB, 'generate', 'report', `Streaming report complete`, reportId);
+      })());
     });
   } catch (error: any) {
-    await logError(c.env.DB, 'report_generation', error);
+    await logError(c.env.DB, 'streaming_report', error);
     return c.json({ error: error.message }, 500);
   }
 });

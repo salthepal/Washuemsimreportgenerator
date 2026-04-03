@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Sparkles, CheckCircle2, AlertCircle, Download, Copy, Lightbulb, Target, FolderOpen, Search, Edit3, FileText } from 'lucide-react';
 import { Report, SessionNote, CaseFile } from '../types';
-import { API_BASE, API_HEADERS } from '../api';
+import { API_BASE, API_HEADERS, streamGenerateReport } from '../api';
 import { toast } from 'sonner';
 import { downloadDocxFromMarkdown } from '../utils/docx';
 import { useSelection } from '../hooks/useSelection';
@@ -115,117 +115,33 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
     }
 
     setGenerating(true);
-    setGeneratedReport(null);
+    setGeneratedReport(''); // Start with empty string for streaming
     setSuggestedTags([]);
     setSimilarReports([]);
     
     try {
-      const response = await fetch(`${API_BASE}/reports/generate`, {
-        method: 'POST',
-        headers: API_HEADERS,
-        body: JSON.stringify({
-          selectedReports: reportSelection.selected,
-          selectedNotes: noteSelection.selected,
-          selectedCases: caseSelection.selected,
-          selectedSite: selectedSite || '',
-        }),
-      });
+      const payload = {
+        selectedReports: reportSelection.selected,
+        selectedNotes: noteSelection.selected,
+        selectedCases: caseSelection.selected,
+        selectedSite: selectedSite || '',
+      };
 
-      if (response.ok) {
-        const data = await response.json();
-        const reportContent = data.report.content;
-        const lstStats = data.lstStats || { new: 0, updated: 0, total: 0 };
-        
-        setGeneratedReport(reportContent);
-        
-        // Show success message with LST extraction info
-        if (lstStats.total > 0) {
-          toast.success(
-            `Report generated successfully!`,
-            {
-              description: `${lstStats.total} Latent Safety Threats identified: ${lstStats.new} new, ${lstStats.updated} recurring`,
-              duration: 5000,
-              icon: '🔍',
-            }
-          );
-          
-          // Show additional safety alert if high-priority threats detected
-          if (lstStats.new > 0) {
-            setTimeout(() => {
-              toast.info(
-                `Safety Alert: ${lstStats.new} new threats added to LST Tracker`,
-                {
-                  description: 'Review and prioritize these system-level safety concerns',
-                  duration: 6000,
-                }
-              );
-            }, 1000);
-          }
-        } else {
-          toast.success('Report generated successfully!');
-        }
-        
-        onRefresh();
-
-        // Parallelize post-generation tasks (tags and similar reports)
-        const postGenerationTasks = Promise.allSettled([
-          // Task 1: Suggest tags
-          fetch(`${API_BASE}/suggest-tags`, {
-            method: 'POST',
-            headers: API_HEADERS,
-            body: JSON.stringify({ content: reportContent }),
-          }).then(async (tagsResponse) => {
-            if (tagsResponse.ok) {
-              const tagsData = await tagsResponse.json();
-              setSuggestedTags(tagsData.tags || []);
-            }
-          }),
-          // Task 2: Find similar reports
-          fetch(`${API_BASE}/find-similar`, {
-            method: 'POST',
-            headers: API_HEADERS,
-            body: JSON.stringify({ content: reportContent }),
-          }).then(async (similarResponse) => {
-            if (similarResponse.ok) {
-              const similarData = await similarResponse.json();
-              setSimilarReports(similarData.similar || []);
-            }
-          }),
-        ]);
-
-        // Log any errors from post-generation tasks without blocking the UX
-        postGenerationTasks.then((results) => {
-          results.forEach((result, index) => {
-            if (result.status === 'rejected') {
-              const taskName = index === 0 ? 'tag suggestion' : 'similar report search';
-              console.error(`Failed ${taskName}:`, result.reason);
-            }
-          });
-        });
-      } else {
-        let errorMessage = 'Unknown error';
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData.error || errorData.message || 'Unknown server error';
-        } catch (e) {
-          errorMessage = await response.text();
-        }
-        
-        console.error('Generation error:', errorMessage);
-        toast.error('Failed to generate report', {
-          description: errorMessage.slice(0, 150) + (errorMessage.length > 150 ? '...' : ''),
-          duration: 8000,
-          action: {
-            label: 'Retry',
-            onClick: () => handleGenerate(),
-          },
-        });
+      let fullContent = '';
+      const stream = streamGenerateReport(payload);
+      
+      for await (const chunk of stream) {
+        fullContent += chunk;
+        setGeneratedReport(fullContent);
       }
+
+      toast.success('Report generated successfully!');
+      onRefresh();
+
     } catch (error: any) {
       console.error('Generation error:', error);
-      toast.error('Connection Error', {
-        description: error.message || 'Failed to reach the generation server. Please check your internet connection.',
-        duration: 8000,
+      toast.error('Generation Failed', {
+        description: error.message || 'Failed to generate report. Please try again.',
       });
     } finally {
       setGenerating(false);

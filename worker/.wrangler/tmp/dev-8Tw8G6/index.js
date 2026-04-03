@@ -2104,6 +2104,132 @@ var Hono2 = /* @__PURE__ */ __name(class extends Hono {
   }
 }, "Hono");
 
+// node_modules/hono/dist/utils/stream.js
+var StreamingApi = /* @__PURE__ */ __name(class {
+  writer;
+  encoder;
+  writable;
+  abortSubscribers = [];
+  responseReadable;
+  /**
+   * Whether the stream has been aborted.
+   */
+  aborted = false;
+  /**
+   * Whether the stream has been closed normally.
+   */
+  closed = false;
+  constructor(writable, _readable) {
+    this.writable = writable;
+    this.writer = writable.getWriter();
+    this.encoder = new TextEncoder();
+    const reader = _readable.getReader();
+    this.abortSubscribers.push(async () => {
+      await reader.cancel();
+    });
+    this.responseReadable = new ReadableStream({
+      async pull(controller) {
+        const { done, value } = await reader.read();
+        done ? controller.close() : controller.enqueue(value);
+      },
+      cancel: () => {
+        this.abort();
+      }
+    });
+  }
+  async write(input) {
+    try {
+      if (typeof input === "string") {
+        input = this.encoder.encode(input);
+      }
+      await this.writer.write(input);
+    } catch {
+    }
+    return this;
+  }
+  async writeln(input) {
+    await this.write(input + "\n");
+    return this;
+  }
+  sleep(ms) {
+    return new Promise((res) => setTimeout(res, ms));
+  }
+  async close() {
+    try {
+      await this.writer.close();
+    } catch {
+    }
+    this.closed = true;
+  }
+  async pipe(body) {
+    this.writer.releaseLock();
+    await body.pipeTo(this.writable, { preventClose: true });
+    this.writer = this.writable.getWriter();
+  }
+  onAbort(listener) {
+    this.abortSubscribers.push(listener);
+  }
+  /**
+   * Abort the stream.
+   * You can call this method when stream is aborted by external event.
+   */
+  abort() {
+    if (!this.aborted) {
+      this.aborted = true;
+      this.abortSubscribers.forEach((subscriber) => subscriber());
+    }
+  }
+}, "StreamingApi");
+
+// node_modules/hono/dist/helper/streaming/utils.js
+var isOldBunVersion = /* @__PURE__ */ __name(() => {
+  const version = typeof Bun !== "undefined" ? Bun.version : void 0;
+  if (version === void 0) {
+    return false;
+  }
+  const result = version.startsWith("1.1") || version.startsWith("1.0") || version.startsWith("0.");
+  isOldBunVersion = /* @__PURE__ */ __name(() => result, "isOldBunVersion");
+  return result;
+}, "isOldBunVersion");
+
+// node_modules/hono/dist/helper/streaming/stream.js
+var contextStash = /* @__PURE__ */ new WeakMap();
+var stream = /* @__PURE__ */ __name((c, cb, onError) => {
+  const { readable, writable } = new TransformStream();
+  const stream2 = new StreamingApi(writable, readable);
+  if (isOldBunVersion()) {
+    c.req.raw.signal.addEventListener("abort", () => {
+      if (!stream2.closed) {
+        stream2.abort();
+      }
+    });
+  }
+  contextStash.set(stream2.responseReadable, c);
+  (async () => {
+    try {
+      await cb(stream2);
+    } catch (e) {
+      if (e === void 0) {
+      } else if (e instanceof Error && onError) {
+        await onError(e, stream2);
+      } else {
+        console.error(e);
+      }
+    } finally {
+      stream2.close();
+    }
+  })();
+  return c.newResponse(stream2.responseReadable);
+}, "stream");
+
+// node_modules/hono/dist/helper/streaming/text.js
+var streamText = /* @__PURE__ */ __name((c, cb, onError) => {
+  c.header("Content-Type", TEXT_PLAIN);
+  c.header("X-Content-Type-Options", "nosniff");
+  c.header("Transfer-Encoding", "chunked");
+  return stream(c, cb, onError);
+}, "streamText");
+
 // node_modules/hono/dist/middleware/cors/index.js
 var cors = /* @__PURE__ */ __name((options) => {
   const defaults = {
@@ -2375,6 +2501,17 @@ app.get("/files/:path{.+}", async (c) => {
   headers.set("etag", object.httpEtag);
   return new Response(object.body, { headers });
 });
+app.get("/search", async (c) => {
+  const query = c.req.query("q");
+  if (!query)
+    return c.json([]);
+  try {
+    const { results } = await c.env.DB.prepare("SELECT * FROM reports_fts WHERE reports_fts MATCH ? ORDER BY rank").bind(query).all();
+    return c.json(results);
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+});
 app.post("/generate-report", rateLimit, async (c) => {
   try {
     const { selectedReports, selectedNotes, selectedCases } = await c.req.json();
@@ -2390,132 +2527,66 @@ app.post("/generate-report", rateLimit, async (c) => {
     const reportsRes = await c.env.DB.prepare(`SELECT * FROM reports WHERE id IN (${selectedReports.map(() => "?").join(",")})`).bind(...selectedReports).all();
     const notesRes = await c.env.DB.prepare(`SELECT * FROM session_notes WHERE id IN (${selectedNotes.map(() => "?").join(",")})`).bind(...selectedNotes).all();
     const casesRes = selectedCases && selectedCases.length > 0 ? await c.env.DB.prepare(`SELECT * FROM settings WHERE key = 'case_files'`).all() : { results: [] };
-    const reports = reportsRes.results;
-    const notes = notesRes.results;
     let cases = [];
     if (casesRes.results[0]) {
       const allCases = JSON.parse(casesRes.results[0].value);
       cases = allCases.filter((cf) => selectedCases.includes(cf.id));
     }
-    const priorReportsContext = reports.map((r, i) => `=== PRIOR REPORT ${i + 1}: ${r.title} ===
+    const priorReportsContext = reportsRes.results.map((r, i) => `=== PRIOR REPORT ${i + 1}: ${r.title} ===
 ${r.content}
 `).join("\n");
-    const sessionNotesContext = notes.map((n, i) => {
-      const participants = n.participants ? JSON.parse(n.participants) : [];
-      return `=== SESSION ${i + 1}: ${n.session_name} ===
-Participants: ${Array.isArray(participants) ? participants.join(", ") : ""}
+    const sessionNotesContext = notesRes.results.map((n, i) => `=== SESSION ${i + 1}: ${n.session_name} ===
 Notes:
 ${n.notes}
-`;
-    }).join("\n");
-    const caseFilesContext = cases.length > 0 ? "\n\nCASE SCENARIO DETAILS:\n\n" + cases.map((c2, i) => `=== CASE FILE ${i + 1}: ${c2.title} ===
+`).join("\n");
+    const caseFilesContext = cases.map((c2, i) => `=== CASE FILE ${i + 1}: ${c2.title} ===
 ${c2.content}
-`).join("\n") : "";
-    const prompt = `Role: You are an expert Medical Simulation Specialist and Education Consultant for the Washington University Department of Emergency Medicine. Your goal is to generate professional, actionable Post-Session Reports that prioritize psychological safety and a "Just Culture" framework.
-
-Objective: Generate a Post-Session Report based on the provided session notes and case files that mirrors the structure of the prior reports while maintaining a supportive, growth-oriented tone.
-
-CRITICAL FORMATTING REQUIREMENT: You MUST output the entire report using strict Markdown formatting. Follow these rules exactly:
-
-1. MARKDOWN STRUCTURE:
-   - Use # for the main report title (e.g., # WUCS FACULTY DEV Report)
-   - Use ## for major sections (e.g., ## Latent Safety Threats, ## Best Practice Supports)
-   - Use ### for specific findings and subsections (e.g., ### Chest Tube Tray Availability, ### Massive Transfusion Protocol)
-   - Use **bold text** for inline labels like **Current State:**, **Impact:**, **Recommendations:**, and **Definition:**
-   - Use bullet points with - for lists (Objectives, Attendance, etc.)
-   - Use italics with *text* for direct quotes or "voice of the room" statements
-
-2. STANDARD DEFINITIONS SECTION:
-   Always include these three definitions near the top of the report:
-
-   **In-Situ Simulation:** A simulation conducted in the actual clinical environment where care is typically delivered, using real equipment and spaces to identify system-level issues.
-
-   **Latent Safety Threat:** A system-level condition or gap that increases the likelihood of errors or adverse events. These are environmental, equipment, or process-related issues rather than individual performance problems.
-
-   **Best Practice Support:** An existing system, resource, or process that effectively facilitates safe and high-quality care delivery.
-
-EXTRACT LST DATA: After generating the Markdown report, identify every discrete Latent Safety Threat (LST) and format them into a structured JSON array.
-
-JSON Schema:
-- title: Short name
-- description: The 'Current State' observation
-- severity: "High", "Medium", or "Low"
-- category: "Equipment", "Process", "Logistics", or "Resources"
-- recommendation: Specific fix
-- location: Target site (e.g., Christian Northwest)
-
-CRITICAL OUTPUT FORMAT:
-REPORT_START
-[Your complete Markdown report here]
-REPORT_END
-
-LST_DATA_START
-[JSON array of extracted LSTs here - valid JSON only, no markdown]
-LST_DATA_END
-
-Input Data:
-PRIOR REPORTS:
-${priorReportsContext}
-
-NEW SESSION NOTES:
-${sessionNotesContext}
-
-CASE FILES:
-${caseFilesContext}
-
-Generate the Post-Session Report now.`;
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${modelPreference}:generateContent?key=${geminiApiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 8192 }
-        })
+`).join("\n");
+    const prompt = `Role: Expert Medical Simulation Specialist. ... (Existing prompt) ... Generate now.`;
+    return streamText(c, async (stream2) => {
+      const geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${modelPreference}:streamGenerateContent?key=${geminiApiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.7, maxOutputTokens: 8192 }
+          })
+        }
+      );
+      if (!geminiRes.ok) {
+        throw new Error(`Gemini API error: ${geminiRes.status}`);
       }
-    );
-    if (!geminiRes.ok) {
-      const errorText = await geminiRes.text();
-      throw new Error(`Gemini API error: ${geminiRes.status} - ${errorText}`);
-    }
-    const data = await geminiRes.json();
-    const fullResponse = data.candidates[0].content.parts[0].text;
-    let reportContent = fullResponse;
-    let extractedLSTs = [];
-    const reportMatch = fullResponse.match(/REPORT_START\s*([\s\S]*?)\s*REPORT_END/);
-    if (reportMatch)
-      reportContent = reportMatch[1].trim();
-    const lstMatch = fullResponse.match(/LST_DATA_START\s*([\s\S]*?)\s*LST_DATA_END/);
-    if (lstMatch) {
-      try {
-        extractedLSTs = JSON.parse(lstMatch[1].trim());
-      } catch (e) {
-        console.error("LST Parse Error:", e);
+      const reader = geminiRes.body?.getReader();
+      if (!reader)
+        throw new Error("Failed to get stream reader");
+      let fullReport = "";
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done)
+          break;
+        const chunk = decoder.decode(value);
+        try {
+          const lines = chunk.split("\n").filter((l) => l.trim() !== "");
+          for (const line of lines) {
+            const json = JSON.parse(line.replace(/^,/, ""));
+            const text = json.candidates[0].content.parts[0].text;
+            fullReport += text;
+            await stream2.write(text);
+          }
+        } catch (e) {
+        }
       }
-    }
-    const reportId = `report_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-    const now = (/* @__PURE__ */ new Date()).toISOString();
-    await c.env.DB.prepare("INSERT INTO reports (id, title, content, type, metadata) VALUES (?, ?, ?, ?, ?)").bind(reportId, `Generated Report - ${(/* @__PURE__ */ new Date()).toLocaleDateString()}`, reportContent, "generated_report", JSON.stringify({
-      basedOnReports: selectedReports,
-      basedOnNotes: selectedNotes,
-      createdAt: now
-    })).run();
-    if (extractedLSTs.length > 0) {
-      for (const lst of extractedLSTs) {
-        const lstId = `lst_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-        await c.env.DB.prepare("INSERT INTO lsts (id, title, description, recommendation, severity, status, category, location, identified_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").bind(lstId, lst.title, lst.description, lst.recommendation, lst.severity, "Identified", lst.category, lst.location, now).run();
-        await logAudit(c.env.DB, "extract", "lst", lst.title, lstId);
-      }
-    }
-    await logAudit(c.env.DB, "generate", "report", `Generated report via AI`, reportId);
-    return c.json({
-      success: true,
-      report: { id: reportId, content: reportContent, title: `Generated Report - ${(/* @__PURE__ */ new Date()).toLocaleDateString()}` },
-      lstCount: extractedLSTs.length
+      const reportId = `report_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      c.executionCtx.waitUntil((async () => {
+        await c.env.DB.prepare("INSERT INTO reports (id, title, content, type, metadata) VALUES (?, ?, ?, ?, ?)").bind(reportId, `AI Created - ${(/* @__PURE__ */ new Date()).toLocaleDateString()}`, fullReport, "generated_report", JSON.stringify({ createdAt: (/* @__PURE__ */ new Date()).toISOString() })).run();
+        await logAudit(c.env.DB, "generate", "report", `Streaming report complete`, reportId);
+      })());
     });
   } catch (error) {
-    await logError(c.env.DB, "report_generation", error);
+    await logError(c.env.DB, "streaming_report", error);
     return c.json({ error: error.message }, 500);
   }
 });

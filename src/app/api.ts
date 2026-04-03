@@ -153,3 +153,30 @@ export async function restoreData(data: any): Promise<{ success: boolean }> {
   return response.json();
 }
 
+export async function searchReports(query: string): Promise<Report[]> {
+  const response = await fetch(`${API_BASE}/search?q=${encodeURIComponent(query)}`, {
+    headers: API_HEADERS,
+  });
+  if (!response.ok) throw new Error('Search failed');
+  return response.json();
+}
+
+export async function* streamGenerateReport(payload: any): AsyncGenerator<string> {
+  const response = await fetch(`${API_BASE}/generate-report`, {
+    method: 'POST',
+    headers: API_HEADERS,
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) throw new Error('Generation failed');
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('No stream reader');
+
+  const decoder = new TextDecoder();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    yield decoder.decode(value);
+  }
+}
+

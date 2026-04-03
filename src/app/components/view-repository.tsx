@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { FileText, Calendar, Users, Sparkles, ChevronDown, ChevronUp, Eye, Trash2, Search, Filter, Download, X, GitCompare } from 'lucide-react';
 import { Report, SessionNote, API_BASE, API_HEADERS } from '../App';
 import { ReportViewer } from './report-viewer';
@@ -24,11 +24,38 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
   const [viewingReport, setViewingReport] = useState<Report | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearch = useDebounce(searchQuery, 300);
+  const [searchResults, setSearchResults] = useState<Report[] | null>(null);
+  const [searching, setSearching] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState<'all' | 'week' | 'month' | 'year'>('all');
   const [selectedForBulk, setSelectedForBulk] = useState<string[]>([]);
   const [showBulkExport, setShowBulkExport] = useState(false);
   const [comparingReports, setComparingReports] = useState<Report[]>([]);
+
+  // Server-side Full-Text Search
+  useEffect(() => {
+    const performSearch = async () => {
+      if (debouncedSearch && debouncedSearch.length > 2) {
+        setSearching(true);
+        try {
+          const response = await fetch(`${API_BASE}/search?q=${encodeURIComponent(debouncedSearch)}`, {
+            headers: API_HEADERS,
+          });
+          if (response.ok) {
+            const data = await response.json();
+            setSearchResults(data);
+          }
+        } catch (error) {
+          console.error('Search error:', error);
+        } finally {
+          setSearching(false);
+        }
+      } else {
+        setSearchResults(null);
+      }
+    };
+    performSearch();
+  }, [debouncedSearch]);
 
   const toggleReport = (id: string) => {
     setExpandedReport(expandedReport === id ? null : id);
@@ -70,26 +97,30 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
 
   // Filter documents
   const filterDocuments = <T extends Report | SessionNote>(docs: T[]) => {
+    const isReportType = docs.length > 0 && 'title' in docs[0];
+    
+    if (isReportType && searchResults) {
+      return (searchResults as unknown as T[]).filter(doc => {
+        if (selectedSite && selectedSite !== 'All Sites') {
+          const loc = doc.metadata?.location;
+          if (loc && loc !== selectedSite) return false;
+        }
+        const matchesTags = selectedTags.length === 0 || selectedTags.some(tag => doc.tags?.includes(tag));
+        return matchesTags;
+      });
+    }
+
     return docs.filter(doc => {
-      // Site filter
       if (selectedSite && selectedSite !== 'All Sites') {
         const loc = doc.metadata?.location;
         if (loc && loc !== selectedSite) return false;
       }
-
-      // Search filter
       const searchLower = debouncedSearch.toLowerCase();
       const matchesSearch = searchLower === '' || 
         ('title' in doc && doc.title.toLowerCase().includes(searchLower)) ||
-        ('sessionName' in doc && doc.sessionName.toLowerCase().includes(searchLower)) ||
-        ('content' in doc && doc.content.toLowerCase().includes(searchLower)) ||
-        ('notes' in doc && doc.notes.toLowerCase().includes(searchLower));
-
-      // Tag filter
+        ('sessionName' in doc && doc.sessionName.toLowerCase().includes(searchLower));
       const matchesTags = selectedTags.length === 0 || 
         selectedTags.some(tag => doc.tags?.includes(tag));
-
-      // Date filter
       let matchesDate = true;
       if (dateRange !== 'all') {
         const docDate = new Date(doc.createdAt);
@@ -97,7 +128,6 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
         const daysAgo = dateRange === 'week' ? 7 : dateRange === 'month' ? 30 : 365;
         matchesDate = (now.getTime() - docDate.getTime()) / (1000 * 60 * 60 * 24) <= daysAgo;
       }
-
       return matchesSearch && matchesTags && matchesDate;
     });
   };
@@ -203,6 +233,11 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
               placeholder="Search documents..."
               className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
             />
+            {searching && (
+              <div className="absolute right-10 top-1/2 transform -translate-y-1/2">
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent"></div>
+              </div>
+            )}
           </div>
           <select
             value={dateRange}
@@ -315,7 +350,7 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <GitCompare className="w-5 h-5 text-amber-700" />
+              < GitCompare className="w-5 h-5 text-amber-700" />
               <span className="font-medium text-amber-900">
                 {comparingReports.length} reports ready to compare
               </span>
@@ -423,7 +458,7 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
                         }`}
                       >
                         <GitCompare className="w-4 h-4" />
-                        {comparingReports.find(r => r.id === report.id) ? 'Remove from Compare' : 'Compare'}
+                        {comparingReports.find(r => r.id === report.id) ? 'Remove' : 'Compare'}
                       </button>
                       <button
                         onClick={() => deleteReport(report.id, 'report')}
@@ -615,11 +650,6 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
                               {tag}
                             </span>
                           ))}
-                        </div>
-                      )}
-                      {note.participants.length > 0 && (
-                        <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                          {note.participants.join(', ')}
                         </div>
                       )}
                     </div>
