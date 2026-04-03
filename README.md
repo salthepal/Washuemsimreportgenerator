@@ -243,11 +243,12 @@ Colors are applied subtly throughout the interface while maintaining excellent c
 
 ## 🔒 Security & Privacy
 
+- **Private Repository Hosting**: This repository is designed to be hosted Privately, ensuring that your Supabase Anon Keys are isolated securely from public view.
+- **Client-Side Auth Flow**: The application binds dynamically at runtime securely with your Supabase schema.
 - All API keys stored securely in Supabase environment variables (never exposed in code)
 - Private Supabase storage buckets with time-limited signed URLs
 - Service role key isolated to backend Edge Functions only
 - Comprehensive audit logging for compliance and accountability
-- Input sanitization and validation on all user-submitted data
 - CORS protection on backend endpoints
 
 ## 📊 System Requirements

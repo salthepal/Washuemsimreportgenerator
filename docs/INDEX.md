@@ -132,9 +132,9 @@ Store simulation case information for reference.
 #### Frontend Stack
 - **Framework:** React 18.3.1 with TypeScript
 - **Styling:** Tailwind CSS v4 + Radix UI
-- **Routing:** React Router 7 (Data Mode)
+- **Routing:** React Router (HashRouter Mode)
 - **Build Tool:** Vite 6.3.5
-- **State Management:** React hooks + local storage
+- **State Management:** TanStack React Query + local storage
 
 #### Backend Stack
 - **Platform:** Supabase

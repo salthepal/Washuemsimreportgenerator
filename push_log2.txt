@@ -1,6 +1,0 @@
-remote: 
-remote: Create a pull request for 'fix-deployment-config' on GitHub by visiting:        
-remote:      https://github.com/salthepal/WashUSimIntelligence/pull/new/fix-deployment-config        
-remote: 
-To https://github.com/salthepal/WashUSimIntelligence.git
- * [new branch]      fix-deployment-config -> fix-deployment-config
