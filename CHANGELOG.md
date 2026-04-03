@@ -5,6 +5,30 @@ All notable changes to the WashU EM Sim Intelligence Platform will be documented
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-04-03
+
+### 🚀 The Cloudflare Migration (Forever Free Architecture)
+A major architectural overhaul migrating from Supabase to a high-performance, cost-effective Cloudflare-native stack.
+
+### ✨ Added
+- **Cloudflare Worker Backend**: High-performance API powered by Hono.
+- **D1 SQL Database**: Structured relational storage for Reports, LSTs, Session Notes, and Audit Logs.
+- **R2 Object Storage**: 10GB free space for persisting actual report documents and media files.
+- **KV Rate Limiter**: Protective layer for Gemini API consumption using Cloudflare Key-Value store.
+- **Gemini Port**: Secure integration of AI report generation in the edge worker.
+- **Enhanced Audit Logs**: Detailed tracking of all administrative events in SQL.
+- **Dependabot & CodeQL**: Automated security scanning and dependency patching.
+
+### 🛠️ Changed
+- **API Architecture**: Unified all frontend calls into a centralized `api.ts` layer.
+- **Storage Strategy**: Migrated from JSON-blob/KV approach to structured, queryable relational tables.
+- **Security**: Moved all AI keys to Cloudflare secret management.
+
+### 🗑️ Removed
+- **Supabase Integration**: Completely removed all legacy Supabase SDKs, IDs, and keys.
+
+---
+
 ## [1.0.0] - 2026-04-02
 
 ### 🎉 Initial Release - Comprehensive Intelligence Platform

@@ -10,6 +10,10 @@ binding = "DB"
 database_name = "washu_sim_db"
 database_id = "51d29c82-d58d-46b0-8695-d08690ed669a"
 
+[[kv_namespaces]]
+binding = "RATELIMIT"
+id = "c33f40661cf9465bb2e9ef4e88396f01"
+
 [[r2_buckets]]
 binding = "BUCKET"
 bucket_name = "washu-sim-intel-storage-2026"

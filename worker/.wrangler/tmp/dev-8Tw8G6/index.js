@@ -1,7 +1,7 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
-// .wrangler/tmp/bundle-mY56np/checked-fetch.js
+// .wrangler/tmp/bundle-bmdp0d/checked-fetch.js
 var urls = /* @__PURE__ */ new Set();
 function checkURL(request, init) {
   const url = request instanceof URL ? request : new URL(
@@ -24,6 +24,21 @@ globalThis.fetch = new Proxy(globalThis.fetch, {
     const [request, init] = argArray;
     checkURL(request, init);
     return Reflect.apply(target, thisArg, argArray);
+  }
+});
+
+// .wrangler/tmp/bundle-bmdp0d/strip-cf-connecting-ip-header.js
+function stripCfConnectingIPHeader(input, init) {
+  const request = new Request(input, init);
+  request.headers.delete("CF-Connecting-IP");
+  return request;
+}
+__name(stripCfConnectingIPHeader, "stripCfConnectingIPHeader");
+globalThis.fetch = new Proxy(globalThis.fetch, {
+  apply(target, thisArg, argArray) {
+    return Reflect.apply(target, thisArg, [
+      stripCfConnectingIPHeader.apply(null, argArray)
+    ]);
   }
 });
 
@@ -355,10 +370,7 @@ var decodeURIComponent_ = decodeURIComponent;
 
 // node_modules/hono/dist/request.js
 var tryDecodeURIComponent = /* @__PURE__ */ __name((str) => tryDecode(str, decodeURIComponent_), "tryDecodeURIComponent");
-var HonoRequest = class {
-  static {
-    __name(this, "HonoRequest");
-  }
+var HonoRequest = /* @__PURE__ */ __name(class {
   /**
    * `.raw` can get the raw Request object.
    *
@@ -439,7 +451,7 @@ var HonoRequest = class {
   async parseBody(options) {
     return parseBody(this, options);
   }
-  #cachedBody = /* @__PURE__ */ __name((key) => {
+  #cachedBody = (key) => {
     const { bodyCache, raw: raw2 } = this;
     const cachedBody = bodyCache[key];
     if (cachedBody) {
@@ -455,7 +467,7 @@ var HonoRequest = class {
       });
     }
     return bodyCache[key] = raw2[key]();
-  }, "#cachedBody");
+  };
   /**
    * `.json()` can parse Request body of type `application/json`
    *
@@ -622,7 +634,7 @@ var HonoRequest = class {
   get routePath() {
     return this.#matchResult[0].map(([[, route]]) => route)[this.routeIndex].path;
   }
-};
+}, "HonoRequest");
 
 // node_modules/hono/dist/utils/html.js
 var HtmlEscapedCallbackPhase = {
@@ -675,10 +687,7 @@ var setDefaultContentType = /* @__PURE__ */ __name((contentType, headers) => {
   };
 }, "setDefaultContentType");
 var createResponseInstance = /* @__PURE__ */ __name((body, init) => new Response(body, init), "createResponseInstance");
-var Context = class {
-  static {
-    __name(this, "Context");
-  }
+var Context = /* @__PURE__ */ __name(class {
   #rawRequest;
   #req;
   /**
@@ -818,23 +827,23 @@ var Context = class {
    * })
    * ```
    */
-  render = /* @__PURE__ */ __name((...args) => {
+  render = (...args) => {
     this.#renderer ??= (content) => this.html(content);
     return this.#renderer(...args);
-  }, "render");
+  };
   /**
    * Sets the layout for the response.
    *
    * @param layout - The layout to set.
    * @returns The layout function.
    */
-  setLayout = /* @__PURE__ */ __name((layout) => this.#layout = layout, "setLayout");
+  setLayout = (layout) => this.#layout = layout;
   /**
    * Gets the current layout for the response.
    *
    * @returns The current layout function.
    */
-  getLayout = /* @__PURE__ */ __name(() => this.#layout, "getLayout");
+  getLayout = () => this.#layout;
   /**
    * `.setRenderer()` can set the layout in the custom middleware.
    *
@@ -856,9 +865,9 @@ var Context = class {
    * })
    * ```
    */
-  setRenderer = /* @__PURE__ */ __name((renderer) => {
+  setRenderer = (renderer) => {
     this.#renderer = renderer;
-  }, "setRenderer");
+  };
   /**
    * `.header()` can set headers.
    *
@@ -875,7 +884,7 @@ var Context = class {
    * })
    * ```
    */
-  header = /* @__PURE__ */ __name((name, value, options) => {
+  header = (name, value, options) => {
     if (this.finalized) {
       this.#res = createResponseInstance(this.#res.body, this.#res);
     }
@@ -887,10 +896,10 @@ var Context = class {
     } else {
       headers.set(name, value);
     }
-  }, "header");
-  status = /* @__PURE__ */ __name((status) => {
+  };
+  status = (status) => {
     this.#status = status;
-  }, "status");
+  };
   /**
    * `.set()` can set the value specified by the key.
    *
@@ -904,10 +913,10 @@ var Context = class {
    * })
    * ```
    */
-  set = /* @__PURE__ */ __name((key, value) => {
+  set = (key, value) => {
     this.#var ??= /* @__PURE__ */ new Map();
     this.#var.set(key, value);
-  }, "set");
+  };
   /**
    * `.get()` can use the value specified by the key.
    *
@@ -921,9 +930,9 @@ var Context = class {
    * })
    * ```
    */
-  get = /* @__PURE__ */ __name((key) => {
+  get = (key) => {
     return this.#var ? this.#var.get(key) : void 0;
-  }, "get");
+  };
   /**
    * `.var` can access the value of a variable.
    *
@@ -968,7 +977,7 @@ var Context = class {
     const status = typeof arg === "number" ? arg : arg?.status ?? this.#status;
     return createResponseInstance(data, { status, headers: responseHeaders });
   }
-  newResponse = /* @__PURE__ */ __name((...args) => this.#newResponse(...args), "newResponse");
+  newResponse = (...args) => this.#newResponse(...args);
   /**
    * `.body()` can return the HTTP response.
    * You can set headers with `.header()` and set HTTP status code with `.status`.
@@ -990,7 +999,7 @@ var Context = class {
    * })
    * ```
    */
-  body = /* @__PURE__ */ __name((data, arg, headers) => this.#newResponse(data, arg, headers), "body");
+  body = (data, arg, headers) => this.#newResponse(data, arg, headers);
   /**
    * `.text()` can render text as `Content-Type:text/plain`.
    *
@@ -1003,13 +1012,13 @@ var Context = class {
    * })
    * ```
    */
-  text = /* @__PURE__ */ __name((text, arg, headers) => {
+  text = (text, arg, headers) => {
     return !this.#preparedHeaders && !this.#status && !arg && !headers && !this.finalized ? new Response(text) : this.#newResponse(
       text,
       arg,
       setDefaultContentType(TEXT_PLAIN, headers)
     );
-  }, "text");
+  };
   /**
    * `.json()` can render JSON as `Content-Type:application/json`.
    *
@@ -1022,17 +1031,17 @@ var Context = class {
    * })
    * ```
    */
-  json = /* @__PURE__ */ __name((object, arg, headers) => {
+  json = (object, arg, headers) => {
     return this.#newResponse(
       JSON.stringify(object),
       arg,
       setDefaultContentType("application/json", headers)
     );
-  }, "json");
-  html = /* @__PURE__ */ __name((html, arg, headers) => {
+  };
+  html = (html, arg, headers) => {
     const res = /* @__PURE__ */ __name((html2) => this.#newResponse(html2, arg, setDefaultContentType("text/html; charset=UTF-8", headers)), "res");
     return typeof html === "object" ? resolveCallback(html, HtmlEscapedCallbackPhase.Stringify, false, {}).then(res) : res(html);
-  }, "html");
+  };
   /**
    * `.redirect()` can Redirect, default status code is 302.
    *
@@ -1048,7 +1057,7 @@ var Context = class {
    * })
    * ```
    */
-  redirect = /* @__PURE__ */ __name((location, status) => {
+  redirect = (location, status) => {
     const locationString = String(location);
     this.header(
       "Location",
@@ -1057,7 +1066,7 @@ var Context = class {
       !/[^\x00-\xFF]/.test(locationString) ? locationString : encodeURI(locationString)
     );
     return this.newResponse(null, status ?? 302);
-  }, "redirect");
+  };
   /**
    * `.notFound()` can return the Not Found Response.
    *
@@ -1070,22 +1079,19 @@ var Context = class {
    * })
    * ```
    */
-  notFound = /* @__PURE__ */ __name(() => {
+  notFound = () => {
     this.#notFoundHandler ??= () => createResponseInstance();
     return this.#notFoundHandler(this);
-  }, "notFound");
-};
+  };
+}, "Context");
 
 // node_modules/hono/dist/router.js
 var METHOD_NAME_ALL = "ALL";
 var METHOD_NAME_ALL_LOWERCASE = "all";
 var METHODS = ["get", "post", "put", "delete", "options", "patch"];
 var MESSAGE_MATCHER_IS_ALREADY_BUILT = "Can not add a route since the matcher is already built.";
-var UnsupportedPathError = class extends Error {
-  static {
-    __name(this, "UnsupportedPathError");
-  }
-};
+var UnsupportedPathError = /* @__PURE__ */ __name(class extends Error {
+}, "UnsupportedPathError");
 
 // node_modules/hono/dist/utils/constants.js
 var COMPOSED_HANDLER = "__COMPOSED_HANDLER";
@@ -1102,10 +1108,7 @@ var errorHandler = /* @__PURE__ */ __name((err, c) => {
   console.error(err);
   return c.text("Internal Server Error", 500);
 }, "errorHandler");
-var Hono = class _Hono {
-  static {
-    __name(this, "_Hono");
-  }
+var Hono = /* @__PURE__ */ __name(class _Hono {
   get;
   post;
   put;
@@ -1246,10 +1249,10 @@ var Hono = class _Hono {
    * })
    * ```
    */
-  onError = /* @__PURE__ */ __name((handler) => {
+  onError = (handler) => {
     this.errorHandler = handler;
     return this;
-  }, "onError");
+  };
   /**
    * `.notFound()` allows you to customize a Not Found Response.
    *
@@ -1265,10 +1268,10 @@ var Hono = class _Hono {
    * })
    * ```
    */
-  notFound = /* @__PURE__ */ __name((handler) => {
+  notFound = (handler) => {
     this.#notFoundHandler = handler;
     return this;
-  }, "notFound");
+  };
   /**
    * `.mount()` allows you to mount applications built with other frameworks into your Hono application.
    *
@@ -1411,9 +1414,9 @@ var Hono = class _Hono {
    * @returns {Response | Promise<Response>} response of request
    *
    */
-  fetch = /* @__PURE__ */ __name((request, ...rest) => {
+  fetch = (request, ...rest) => {
     return this.#dispatch(request, rest[1], rest[0], request.method);
-  }, "fetch");
+  };
   /**
    * `.request()` is a useful method for testing.
    * You can pass a URL or pathname to send a GET request.
@@ -1426,7 +1429,7 @@ var Hono = class _Hono {
    * ```
    * @see https://hono.dev/docs/api/hono#request
    */
-  request = /* @__PURE__ */ __name((input, requestInit, Env, executionCtx) => {
+  request = (input, requestInit, Env, executionCtx) => {
     if (input instanceof Request) {
       return this.fetch(requestInit ? new Request(input, requestInit) : input, Env, executionCtx);
     }
@@ -1439,7 +1442,7 @@ var Hono = class _Hono {
       Env,
       executionCtx
     );
-  }, "request");
+  };
   /**
    * `.fire()` automatically adds a global fetch event listener.
    * This can be useful for environments that adhere to the Service Worker API, such as non-ES module Cloudflare Workers.
@@ -1457,18 +1460,18 @@ var Hono = class _Hono {
    * @see https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API
    * @see https://developers.cloudflare.com/workers/reference/migrate-to-module-workers/
    */
-  fire = /* @__PURE__ */ __name(() => {
+  fire = () => {
     addEventListener("fetch", (event) => {
       event.respondWith(this.#dispatch(event.request, event, void 0, event.request.method));
     });
-  }, "fire");
-};
+  };
+}, "_Hono");
 
 // node_modules/hono/dist/router/reg-exp-router/matcher.js
 var emptyParam = [];
 function match(method, path) {
   const matchers = this.buildAllMatchers();
-  const match2 = /* @__PURE__ */ __name(((method2, path2) => {
+  const match2 = /* @__PURE__ */ __name((method2, path2) => {
     const matcher = matchers[method2] || matchers[METHOD_NAME_ALL];
     const staticMatch = matcher[2][path2];
     if (staticMatch) {
@@ -1480,7 +1483,7 @@ function match(method, path) {
     }
     const index = match3.indexOf("", 1);
     return [matcher[1][index], match3];
-  }), "match2");
+  }, "match2");
   this.match = match2;
   return match2(method, path);
 }
@@ -1512,10 +1515,7 @@ function compareKey(a, b) {
   return a.length === b.length ? a < b ? -1 : 1 : b.length - a.length;
 }
 __name(compareKey, "compareKey");
-var Node = class _Node {
-  static {
-    __name(this, "_Node");
-  }
+var Node = /* @__PURE__ */ __name(class _Node {
   #index;
   #varIndex;
   #children = /* @__PURE__ */ Object.create(null);
@@ -1596,13 +1596,10 @@ var Node = class _Node {
     }
     return "(?:" + strList.join("|") + ")";
   }
-};
+}, "_Node");
 
 // node_modules/hono/dist/router/reg-exp-router/trie.js
-var Trie = class {
-  static {
-    __name(this, "Trie");
-  }
+var Trie = /* @__PURE__ */ __name(class {
   #context = { varIndex: 0 };
   #root = new Node();
   insert(path, index, pathErrorCheckOnly) {
@@ -1655,7 +1652,7 @@ var Trie = class {
     });
     return [new RegExp(`^${regexp}`), indexReplacementMap, paramReplacementMap];
   }
-};
+}, "Trie");
 
 // node_modules/hono/dist/router/reg-exp-router/router.js
 var nullMatcher = [/^$/, [], /* @__PURE__ */ Object.create(null)];
@@ -1743,10 +1740,7 @@ function findMiddleware(middleware, path) {
   return void 0;
 }
 __name(findMiddleware, "findMiddleware");
-var RegExpRouter = class {
-  static {
-    __name(this, "RegExpRouter");
-  }
+var RegExpRouter = /* @__PURE__ */ __name(class {
   name = "RegExpRouter";
   #middleware;
   #routes;
@@ -1841,13 +1835,10 @@ var RegExpRouter = class {
       return buildMatcherFromPreprocessedRoutes(routes);
     }
   }
-};
+}, "RegExpRouter");
 
 // node_modules/hono/dist/router/smart-router/router.js
-var SmartRouter = class {
-  static {
-    __name(this, "SmartRouter");
-  }
+var SmartRouter = /* @__PURE__ */ __name(class {
   name = "SmartRouter";
   #routers = [];
   #routes = [];
@@ -1899,7 +1890,7 @@ var SmartRouter = class {
     }
     return this.#routers[0];
   }
-};
+}, "SmartRouter");
 
 // node_modules/hono/dist/router/trie-router/node.js
 var emptyParams = /* @__PURE__ */ Object.create(null);
@@ -1909,10 +1900,7 @@ var hasChildren = /* @__PURE__ */ __name((children) => {
   }
   return false;
 }, "hasChildren");
-var Node2 = class _Node2 {
-  static {
-    __name(this, "_Node");
-  }
+var Node2 = /* @__PURE__ */ __name(class _Node2 {
   #methods;
   #children;
   #patterns;
@@ -2077,13 +2065,10 @@ var Node2 = class _Node2 {
     }
     return [handlerSets.map(({ handler, params }) => [handler, params])];
   }
-};
+}, "_Node");
 
 // node_modules/hono/dist/router/trie-router/router.js
-var TrieRouter = class {
-  static {
-    __name(this, "TrieRouter");
-  }
+var TrieRouter = /* @__PURE__ */ __name(class {
   name = "TrieRouter";
   #node;
   constructor() {
@@ -2102,13 +2087,10 @@ var TrieRouter = class {
   match(method, path) {
     return this.#node.search(method, path);
   }
-};
+}, "TrieRouter");
 
 // node_modules/hono/dist/hono.js
-var Hono2 = class extends Hono {
-  static {
-    __name(this, "Hono");
-  }
+var Hono2 = /* @__PURE__ */ __name(class extends Hono {
   /**
    * Creates an instance of the Hono class.
    *
@@ -2120,7 +2102,7 @@ var Hono2 = class extends Hono {
       routers: [new RegExpRouter(), new TrieRouter()]
     });
   }
-};
+}, "Hono");
 
 // node_modules/hono/dist/middleware/cors/index.js
 var cors = /* @__PURE__ */ __name((options) => {
@@ -2308,6 +2290,21 @@ async function logAudit(db, action, type, target, id) {
   }
 }
 __name(logAudit, "logAudit");
+async function rateLimit(c, next) {
+  const ip = c.req.header("cf-connecting-ip") || "unknown";
+  const key = `rl_${ip}`;
+  const limit = 5;
+  const window = 60;
+  const current = await c.env.RATELIMIT.get(key);
+  const count = current ? parseInt(current) : 0;
+  if (count >= limit) {
+    await logError(c.env.DB, "rate_limit_exceeded", new Error(`IP ${ip} exceeded rate limit`), { ip, count });
+    return c.json({ error: "Too many requests. Please try again in a minute." }, 429);
+  }
+  await c.env.RATELIMIT.put(key, (count + 1).toString(), { expirationTtl: window });
+  return next();
+}
+__name(rateLimit, "rateLimit");
 app.onError((err, c) => {
   console.error("Server error:", err);
   logError(c.env.DB, "global_unhandled", err);
@@ -2355,7 +2352,8 @@ app.post("/upload-file", async (c) => {
     const file = formData.get("file");
     const name = formData.get("name") || file.name;
     const key = `${Date.now()}_${name}`;
-    if (!file) return c.json({ error: "No file provided" }, 400);
+    if (!file)
+      return c.json({ error: "No file provided" }, 400);
     await c.env.BUCKET.put(key, await file.arrayBuffer(), {
       httpMetadata: { contentType: file.type }
     });
@@ -2368,13 +2366,14 @@ app.post("/upload-file", async (c) => {
 app.get("/files/:path{.+}", async (c) => {
   const path = c.req.param("path");
   const object = await c.env.BUCKET.get(path);
-  if (!object) return c.json({ error: "File not found" }, 404);
+  if (!object)
+    return c.json({ error: "File not found" }, 404);
   const headers = new Headers();
   object.writeHttpMetadata(headers);
   headers.set("etag", object.httpEtag);
   return new Response(object.body, { headers });
 });
-app.post("/generate-report", async (c) => {
+app.post("/generate-report", rateLimit, async (c) => {
   try {
     const { selectedReports, selectedNotes, selectedCases } = await c.req.json();
     if (!selectedNotes || selectedNotes.length === 0) {
@@ -2483,7 +2482,8 @@ Generate the Post-Session Report now.`;
     let reportContent = fullResponse;
     let extractedLSTs = [];
     const reportMatch = fullResponse.match(/REPORT_START\s*([\s\S]*?)\s*REPORT_END/);
-    if (reportMatch) reportContent = reportMatch[1].trim();
+    if (reportMatch)
+      reportContent = reportMatch[1].trim();
     const lstMatch = fullResponse.match(/LST_DATA_START\s*([\s\S]*?)\s*LST_DATA_END/);
     if (lstMatch) {
       try {
@@ -2635,7 +2635,7 @@ app.post("/settings/ai-model", async (c) => {
 });
 var src_default = app;
 
-// ../../../../AppData/Local/npm-cache/_npx/32026684e21afda6/node_modules/wrangler/templates/middleware/middleware-ensure-req-body-drained.ts
+// node_modules/wrangler/templates/middleware/middleware-ensure-req-body-drained.ts
 var drainBody = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx) => {
   try {
     return await middlewareCtx.next(request, env);
@@ -2653,7 +2653,7 @@ var drainBody = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "drainBody");
 var middleware_ensure_req_body_drained_default = drainBody;
 
-// ../../../../AppData/Local/npm-cache/_npx/32026684e21afda6/node_modules/wrangler/templates/middleware/middleware-miniflare3-json-error.ts
+// node_modules/wrangler/templates/middleware/middleware-miniflare3-json-error.ts
 function reduceError(e) {
   return {
     name: e?.name,
@@ -2676,14 +2676,14 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// .wrangler/tmp/bundle-mY56np/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-bmdp0d/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
 ];
 var middleware_insertion_facade_default = src_default;
 
-// ../../../../AppData/Local/npm-cache/_npx/32026684e21afda6/node_modules/wrangler/templates/middleware/common.ts
+// node_modules/wrangler/templates/middleware/common.ts
 var __facade_middleware__ = [];
 function __facade_register__(...args) {
   __facade_middleware__.push(...args.flat());
@@ -2708,24 +2708,22 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// .wrangler/tmp/bundle-mY56np/middleware-loader.entry.ts
-var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
+// .wrangler/tmp/bundle-bmdp0d/middleware-loader.entry.ts
+var __Facade_ScheduledController__ = class {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;
     this.cron = cron;
     this.#noRetry = noRetry;
   }
-  static {
-    __name(this, "__Facade_ScheduledController__");
-  }
   #noRetry;
   noRetry() {
-    if (!(this instanceof ___Facade_ScheduledController__)) {
+    if (!(this instanceof __Facade_ScheduledController__)) {
       throw new TypeError("Illegal invocation");
     }
     this.#noRetry();
   }
 };
+__name(__Facade_ScheduledController__, "__Facade_ScheduledController__");
 function wrapExportedHandler(worker) {
   if (__INTERNAL_WRANGLER_MIDDLEWARE__ === void 0 || __INTERNAL_WRANGLER_MIDDLEWARE__.length === 0) {
     return worker;
@@ -2766,15 +2764,15 @@ function wrapWorkerEntrypoint(klass) {
     __facade_register__(middleware);
   }
   return class extends klass {
-    #fetchDispatcher = /* @__PURE__ */ __name((request, env, ctx) => {
+    #fetchDispatcher = (request, env, ctx) => {
       this.env = env;
       this.ctx = ctx;
       if (super.fetch === void 0) {
         throw new Error("Entrypoint class does not define a fetch() function.");
       }
       return super.fetch(request);
-    }, "#fetchDispatcher");
-    #dispatcher = /* @__PURE__ */ __name((type, init) => {
+    };
+    #dispatcher = (type, init) => {
       if (type === "scheduled" && super.scheduled !== void 0) {
         const controller = new __Facade_ScheduledController__(
           Date.now(),
@@ -2784,7 +2782,7 @@ function wrapWorkerEntrypoint(klass) {
         );
         return super.scheduled(controller);
       }
-    }, "#dispatcher");
+    };
     fetch(request) {
       return __facade_invoke__(
         request,

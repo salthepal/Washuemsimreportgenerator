@@ -5,6 +5,7 @@ import { logger as honoLogger } from 'hono/logger';
 type Bindings = {
   DB: D1Database;
   BUCKET: R2Bucket;
+  RATELIMIT: KVNamespace;
   GEMINI_API_KEY: string;
 };
 
@@ -46,6 +47,25 @@ async function logAudit(db: D1Database, action: string, type: string, target: st
   } catch (error) {
     console.log(`Error logging audit: ${error}`);
   }
+}
+
+// Rate Limiting Middleware
+async function rateLimit(c: any, next: any) {
+  const ip = c.req.header('cf-connecting-ip') || 'unknown';
+  const key = `rl_${ip}`;
+  const limit = 5; // 5 reports per minute per IP
+  const window = 60; // 60 seconds
+
+  const current = await c.env.RATELIMIT.get(key);
+  const count = current ? parseInt(current) : 0;
+
+  if (count >= limit) {
+    await logError(c.env.DB, 'rate_limit_exceeded', new Error(`IP ${ip} exceeded rate limit`), { ip, count });
+    return c.json({ error: 'Too many requests. Please try again in a minute.' }, 429);
+  }
+
+  await c.env.RATELIMIT.put(key, (count + 1).toString(), { expirationTtl: window });
+  return next();
 }
 
 // Global error handler
@@ -145,7 +165,7 @@ app.get('/files/:path{.+}', async (c) => {
 });
 
 // Report Generation (Gemini AI Implementation)
-app.post('/generate-report', async (c) => {
+app.post('/generate-report', rateLimit, async (c) => {
   try {
     const { selectedReports, selectedNotes, selectedCases } = await c.req.json();
     
