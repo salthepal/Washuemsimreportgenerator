@@ -45,7 +45,7 @@ async function initializeDatabase() {
     } else {
       console.log('✅ Database table verified successfully');
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Database initialization error:', error);
     console.log('Please ensure the kv_store_7fe18c53 table exists in your Supabase database');
   }
@@ -253,8 +253,11 @@ app.get('/make-server-7fe18c53/notes', async (c: Context) => {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     
     return c.json({ notes });
-  } catch (error) {
+  } catch (error: any) {
     console.log(`Error fetching session notes: ${error}`);
+    return c.json({ error: `Failed to fetch session notes: ${error.message}` }, 500);
+  }
+});
 // Delete a report
 app.delete('/make-server-7fe18c53/reports/:id', async (c: Context) => {
   try {
@@ -754,7 +757,7 @@ async function logAudit(action: string, type: string, target: string, id: string
       timestamp: new Date().toISOString()
     };
     await kv.set(auditId, entry);
-  } catch (error) {
+  } catch (error: any) {
     console.log(`Error logging audit: ${error}`);
   }
 }
@@ -1118,14 +1121,14 @@ app.get('/make-server-7fe18c53/case-files', async (c: Context) => {
     
     console.log('Filtered case files:', caseFiles.length);
     return c.json({ caseFiles });
-  } catch (error) {
+  } catch (error: any) {
     console.log(`Error fetching case files: ${error}`);
     return c.json({ error: `Failed to fetch case files: ${error.message}` }, 500);
   }
 });
 
 // Delete a case file
-app.delete('/make-server-7fe18c53/case-files/:id', async (c) => {
+app.delete('/make-server-7fe18c53/case-files/:id', async (c: Context) => {
   try {
     const id = c.req.param('id');
     const caseFile = await kv.get(id);
