@@ -4,34 +4,20 @@ import {
   TrendingUp, Users, Calendar, PlayCircle, Archive, AlertCircle,
   Download, MapPin, Pencil, X, Save
 } from 'lucide-react';
-import { LST, API_BASE, API_HEADERS } from '../App';
+import { LST } from '../types';
 import { toast } from 'sonner';
 
 interface LSTTrackerProps {
-  lsts: LST[];
-  onRefresh: () => void;
   selectedSite?: string;
 }
 
-// ── Edit Modal State ──
-interface EditModalState {
-  open: boolean;
-  lst: LST | null;
-  status: string;
-  severity: string;
-  category: string;
-  location: string;
-  recommendation: string;
-  resolutionNote: string;
-  assignee: string;
-}
+import { EditModalState, INITIAL_EDIT, LstEditModal } from './lst-edit-modal';
+import { useLSTs, useUpdateLST } from '../hooks/useQueries';
 
-const INITIAL_EDIT: EditModalState = {
-  open: false, lst: null, status: '', severity: '', category: '',
-  location: '', recommendation: '', resolutionNote: '', assignee: '',
-};
-
-export function LSTTracker({ lsts, onRefresh, selectedSite }: LSTTrackerProps) {
+export function LSTTracker({ selectedSite }: LSTTrackerProps) {
+  const { data } = useLSTs();
+  const lsts = (data || []) as LST[];
+  const updateLstMutation = useUpdateLST();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('All');
   const [filterSeverity, setFilterSeverity] = useState<string>('All');
@@ -45,12 +31,12 @@ export function LSTTracker({ lsts, onRefresh, selectedSite }: LSTTrackerProps) {
 
   // ── Derived Data ──
   const uniqueLocations = useMemo(() => {
-    const locations = lsts.map(l => l.location).filter(Boolean) as string[];
+    const locations = lsts.map((l: LST) => l.location).filter(Boolean) as string[];
     return ['All', ...Array.from(new Set(locations))];
   }, [lsts]);
 
   const filteredLsts = useMemo(() => {
-    return lsts.filter((lst) => {
+    return lsts.filter((lst: LST) => {
       const q = searchQuery.toLowerCase();
       const matchesSearch = !q || lst.title.toLowerCase().includes(q) || lst.description.toLowerCase().includes(q);
       const matchesStatus = filterStatus === 'All' || lst.status === filterStatus;
@@ -63,7 +49,7 @@ export function LSTTracker({ lsts, onRefresh, selectedSite }: LSTTrackerProps) {
   }, [lsts, searchQuery, filterStatus, filterSeverity, filterCategory, filterLocation, selectedSite]);
 
   const sortedLsts = useMemo(() => {
-    return [...filteredLsts].sort((a, b) => {
+    return [...filteredLsts].sort((a: LST, b: LST) => {
       const ord: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
       const d = ord[a.severity] - ord[b.severity];
       if (d !== 0) return d;
@@ -72,12 +58,12 @@ export function LSTTracker({ lsts, onRefresh, selectedSite }: LSTTrackerProps) {
   }, [filteredLsts]);
 
   const stats = useMemo(() => {
-    const siteLsts = (!selectedSite || selectedSite === 'All Sites') ? lsts : lsts.filter(l => l.location === selectedSite);
+    const siteLsts = (!selectedSite || selectedSite === 'All Sites') ? lsts : lsts.filter((l: LST) => l.location === selectedSite);
     return {
       total: siteLsts.length,
-      active: siteLsts.filter(l => l.status === 'Identified').length,
-      highSeverity: siteLsts.filter(l => l.severity === 'High' && l.status !== 'Resolved').length,
-      resolved: siteLsts.filter(l => l.status === 'Resolved').length,
+      active: siteLsts.filter((l: LST) => l.status === 'Identified').length,
+      highSeverity: siteLsts.filter((l: LST) => l.severity === 'High' && l.status !== 'Resolved').length,
+      resolved: siteLsts.filter((l: LST) => l.status === 'Resolved').length,
     };
   }, [lsts, selectedSite]);
 
@@ -116,21 +102,9 @@ export function LSTTracker({ lsts, onRefresh, selectedSite }: LSTTrackerProps) {
           : {}),
       };
 
-      const response = await fetch(`${API_BASE}/lsts/${editModal.lst.id}`, {
-        method: 'PUT',
-        headers: API_HEADERS,
-        body: JSON.stringify(payload),
-      });
-
-      if (response.ok) {
-        toast.success('LST updated successfully');
-        setEditModal(INITIAL_EDIT);
-        onRefresh();
-      } else {
-        const err = await response.text();
-        console.error('Update LST error:', err);
-        toast.error('Failed to update LST');
-      }
+      await updateLstMutation.mutateAsync({ id: editModal.lst.id, payload });
+      toast.success('LST updated successfully');
+      setEditModal(INITIAL_EDIT);
     } catch (error) {
       console.error('Error updating LST:', error);
       toast.error('Failed to update LST');
@@ -149,17 +123,8 @@ export function LSTTracker({ lsts, onRefresh, selectedSite }: LSTTrackerProps) {
     if (!newStatus) return;
 
     try {
-      const response = await fetch(`${API_BASE}/lsts/${lst.id}`, {
-        method: 'PUT',
-        headers: API_HEADERS,
-        body: JSON.stringify({ ...lst, status: newStatus }),
-      });
-      if (response.ok) {
-        toast.success(`Advanced to "${newStatus}"`);
-        onRefresh();
-      } else {
-        toast.error('Failed to update status');
-      }
+      await updateLstMutation.mutateAsync({ id: lst.id, payload: { ...lst, status: newStatus } });
+      toast.success(`Advanced to "${newStatus}"`);
     } catch (error) {
       console.error('Error updating status:', error);
       toast.error('Failed to update status');
@@ -169,7 +134,7 @@ export function LSTTracker({ lsts, onRefresh, selectedSite }: LSTTrackerProps) {
   // ── CSV Export ──
   const handleDownloadCSV = () => {
     const headers = ['Title', 'Description', 'Status', 'Severity', 'Category', 'Location', 'Assignee', 'Identified Date', 'Last Seen', 'Resolved Date', 'Recommendation', 'Resolution Note', 'Recurrence Count'];
-    const rows = sortedLsts.map(lst => [
+    const rows = sortedLsts.map((lst: LST) => [
       `"${(lst.title || '').replace(/"/g, '""')}"`,
       `"${(lst.description || '').replace(/"/g, '""')}"`,
       lst.status, lst.severity, lst.category,
@@ -181,7 +146,7 @@ export function LSTTracker({ lsts, onRefresh, selectedSite }: LSTTrackerProps) {
       `"${(lst.resolutionNote || '').replace(/"/g, '""')}"`,
       lst.recurrenceCount || 0,
     ]);
-    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const csv = [headers.join(','), ...rows.map((r: any) => r.join(','))].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -216,147 +181,7 @@ export function LSTTracker({ lsts, onRefresh, selectedSite }: LSTTrackerProps) {
   return (
     <div className="space-y-4 md:space-y-5 p-2 md:p-0">
       {/* ── Edit Modal Overlay ── */}
-      {editModal.open && editModal.lst && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setEditModal(INITIAL_EDIT)}>
-          <div
-            className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto border border-slate-200 dark:border-slate-700"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 rounded-t-xl">
-              <div className="flex items-center gap-2">
-                <Pencil className="w-4 h-4 text-[#A51417]" />
-                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">Edit Latent Safety Threat</h3>
-              </div>
-              <button onClick={() => setEditModal(INITIAL_EDIT)} className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors">
-                <X className="w-4 h-4 text-slate-500" />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div className="p-4 space-y-4">
-              <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-3 border border-slate-200 dark:border-slate-700">
-                <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Threat Title</div>
-                <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{editModal.lst.title}</div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                {/* Status */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Status</label>
-                  <select
-                    value={editModal.status}
-                    onChange={(e) => setEditModal(prev => ({ ...prev, status: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="Identified">Identified</option>
-                    <option value="In Progress">In Progress</option>
-                    <option value="Resolved">Resolved</option>
-                    <option value="Recurring">Recurring</option>
-                  </select>
-                </div>
-
-                {/* Severity */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Severity</label>
-                  <select
-                    value={editModal.severity}
-                    onChange={(e) => setEditModal(prev => ({ ...prev, severity: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="High">High</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Low">Low</option>
-                  </select>
-                </div>
-
-                {/* Category */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Category</label>
-                  <select
-                    value={editModal.category}
-                    onChange={(e) => setEditModal(prev => ({ ...prev, category: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="Equipment">Equipment</option>
-                    <option value="Process">Process</option>
-                    <option value="Resources">Resources</option>
-                    <option value="Logistics">Logistics</option>
-                  </select>
-                </div>
-
-                {/* Location */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Location</label>
-                  <input
-                    type="text"
-                    value={editModal.location}
-                    onChange={(e) => setEditModal(prev => ({ ...prev, location: e.target.value }))}
-                    placeholder="e.g., Christian Northwest"
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-
-              {/* Assignee */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Assignee / Department</label>
-                <input
-                  type="text"
-                  value={editModal.assignee}
-                  onChange={(e) => setEditModal(prev => ({ ...prev, assignee: e.target.value }))}
-                  placeholder="e.g., Pharmacy, Dr. Smith"
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              {/* Recommendation */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Recommendation</label>
-                <textarea
-                  value={editModal.recommendation}
-                  onChange={(e) => setEditModal(prev => ({ ...prev, recommendation: e.target.value }))}
-                  rows={3}
-                  placeholder="Recommended intervention or corrective action..."
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-blue-500 resize-y"
-                />
-              </div>
-
-              {/* Resolution Note */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
-                  Resolution Note {editModal.status === 'Resolved' && <span className="text-[#A51417]">*</span>}
-                </label>
-                <textarea
-                  value={editModal.resolutionNote}
-                  onChange={(e) => setEditModal(prev => ({ ...prev, resolutionNote: e.target.value }))}
-                  rows={3}
-                  placeholder="Document corrective actions taken, equipment changes, or policy updates..."
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-blue-500 resize-y"
-                />
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="flex gap-3 p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 rounded-b-xl">
-              <button
-                onClick={handleSaveEdit}
-                disabled={saving || (editModal.status === 'Resolved' && !editModal.resolutionNote.trim())}
-                className="flex-1 px-4 py-2.5 bg-[#007A33] hover:bg-[#006428] disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white font-bold rounded-lg transition-all flex items-center justify-center gap-2 text-sm"
-              >
-                <Save className="w-4 h-4" />
-                {saving ? 'Saving...' : 'Save Changes'}
-              </button>
-              <button
-                onClick={() => setEditModal(INITIAL_EDIT)}
-                className="px-4 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 font-bold rounded-lg transition-all text-sm"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <LstEditModal editModal={editModal} setEditModal={setEditModal} saving={saving} onSave={handleSaveEdit} />
 
       {/* ── Header ── */}
       <div className="border-b-2 border-slate-200 dark:border-slate-700 pb-3">
@@ -400,7 +225,7 @@ export function LSTTracker({ lsts, onRefresh, selectedSite }: LSTTrackerProps) {
               type="text"
               placeholder="Search threats..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
@@ -408,10 +233,10 @@ export function LSTTracker({ lsts, onRefresh, selectedSite }: LSTTrackerProps) {
           {/* Location Dropdown */}
           <select
             value={filterLocation}
-            onChange={(e) => setFilterLocation(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilterLocation(e.target.value)}
             className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-xs focus:ring-2 focus:ring-blue-500"
           >
-            {uniqueLocations.map(loc => (
+            {uniqueLocations.map((loc: string) => (
               <option key={loc} value={loc}>{loc === 'All' ? 'All Locations' : loc}</option>
             ))}
           </select>
@@ -512,7 +337,7 @@ export function LSTTracker({ lsts, onRefresh, selectedSite }: LSTTrackerProps) {
         </div>
       ) : (
         <div className="space-y-2">
-          {sortedLsts.map((lst) => {
+          {sortedLsts.map((lst: LST) => {
             const borderColor = lst.status === 'Resolved'
               ? 'border-l-[#007A33]'
               : lst.severity === 'High'

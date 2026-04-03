@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Sparkles, CheckCircle2, AlertCircle, Download, Copy, Lightbulb, Target, FolderOpen, Search, Edit3, FileText } from 'lucide-react';
-import { Report, SessionNote, API_BASE, API_HEADERS } from '../App';
-import { CaseFile } from './case-files';
+import { Report, SessionNote, CaseFile } from '../types';
+import { API_BASE, API_HEADERS } from '../api';
 import { toast } from 'sonner';
 import { downloadDocxFromMarkdown } from '../utils/docx';
 import { useSelection } from '../hooks/useSelection';
@@ -9,16 +9,16 @@ import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useDebounce } from 'use-debounce';
 import { FixedSizeList as List } from 'react-window';
 import jsPDF from 'jspdf';
+import { useReports, useNotes, useCaseFiles } from '../hooks/useQueries';
 
 interface GenerateReportProps {
-  reports: Report[];
-  sessionNotes: SessionNote[];
-  caseFiles: CaseFile[];
-  onRefresh: () => void;
   selectedSite?: string;
 }
 
-export function GenerateReport({ reports, sessionNotes, caseFiles, onRefresh, selectedSite }: GenerateReportProps) {
+export function GenerateReport({ selectedSite }: GenerateReportProps) {
+  const { data: reports = [] } = useReports();
+  const { data: sessionNotes = [] } = useNotes();
+  const { data: caseFiles = [] } = useCaseFiles();
   const reportSelection = useSelection<string>();
   const noteSelection = useSelection<string>();
   const caseSelection = useSelection<string>();

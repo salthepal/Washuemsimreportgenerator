@@ -1,6 +1,7 @@
 import { LayoutDashboard, UploadCloud, FileStack, ClipboardPaste, Wand2, ShieldAlert, Database, Settings, PanelLeftClose, PanelLeft, Hospital, ChevronDown } from 'lucide-react';
 import { cn } from './ui/utils';
 import { useState, useRef, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 export interface SidebarItem {
   value: string;
@@ -21,8 +22,6 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
 ];
 
 interface AppSidebarProps {
-  activeTab: string;
-  onTabChange: (value: string) => void;
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
   mobile?: boolean;
@@ -131,9 +130,12 @@ function SiteSelector({ selectedSite, onSiteChange, availableSites, collapsed }:
   );
 }
 
-export function AppSidebar({ activeTab, onTabChange, collapsed, onCollapsedChange, mobile, open, onClose, selectedSite, onSiteChange, availableSites }: AppSidebarProps) {
+export function AppSidebar({ collapsed, onCollapsedChange, mobile, open, onClose, selectedSite, onSiteChange, availableSites }: AppSidebarProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const handleClick = (value: string) => {
-    onTabChange(value);
+    navigate(`/${value}`);
     if (mobile && onClose) onClose();
   };
 
@@ -164,24 +166,27 @@ export function AppSidebar({ activeTab, onTabChange, collapsed, onCollapsedChang
         />
       )}
 
-      {SIDEBAR_ITEMS.map((item) => (
-        <button
-          key={item.value}
-          onClick={() => handleClick(item.value)}
-          className={cn(
-            'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150',
-            item.className,
-            collapsed && !mobile && 'justify-center px-2',
-            activeTab === item.value
-              ? 'bg-[#A51417] text-white shadow-sm dark:bg-slate-700 dark:text-white'
-              : 'text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700/50'
-          )}
-          title={collapsed ? item.label : undefined}
-        >
-          {item.icon}
-          {(!collapsed || mobile) && <span>{item.label}</span>}
-        </button>
-      ))}
+      {SIDEBAR_ITEMS.map((item) => {
+        const isActive = location.pathname.includes(`/${item.value}`);
+        return (
+          <button
+            key={item.value}
+            onClick={() => handleClick(item.value)}
+            className={cn(
+              'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150',
+              item.className,
+              collapsed && !mobile && 'justify-center px-2',
+              isActive
+                ? 'bg-[#A51417] text-white shadow-sm dark:bg-slate-700 dark:text-white'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700/50'
+            )}
+            title={collapsed ? item.label : undefined}
+          >
+            {item.icon}
+            {(!collapsed || mobile) && <span>{item.label}</span>}
+          </button>
+        );
+      })}
     </nav>
   );
 

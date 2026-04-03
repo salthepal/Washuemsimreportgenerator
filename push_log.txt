@@ -1,0 +1,8 @@
+remote: error: GH013: Repository rule violations found for refs/heads/main.        
+remote: Review all repository rules at https://github.com/salthepal/WashUSimIntelligence/rules?ref=refs%2Fheads%2Fmain        
+remote: 
+remote: - Code scanning is waiting for results from CodeQL for the commit ae703db.        
+remote: 
+To https://github.com/salthepal/WashUSimIntelligence.git
+ ! [remote rejected] main -> main (push declined due to repository rule violations)
+error: failed to push some refs to 'https://github.com/salthepal/WashUSimIntelligence.git'
