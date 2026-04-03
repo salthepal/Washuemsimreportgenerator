@@ -1,319 +1,122 @@
 # WashU Emergency Medicine: Simulation & Safety Intelligence Platform
 
-**Version 1.0.0** - Comprehensive Intelligence Platform for Post-Session Report Generation & LST Management
+> **Clinical Workflow & Latent Safety Threat (LST) Tracking Architecture**
 
-![WashU Colors](https://img.shields.io/badge/WashU-PMS%20200%20%7C%20PMS%20350-A51417)
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
-![Build](https://img.shields.io/badge/build-26%20optimizations-success)
-![GitHub Pages](https://img.shields.io/badge/deploy-GitHub%20Pages-success)
+![React](https://img.shields.io/badge/React-18.3.1-61DAFB?logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6?logo=typescript&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-6.3-646CFF?logo=vite&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-Edge_Functions-3ECF8E?logo=supabase&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4-06B6D4?logo=tailwindcss&logoColor=white)
+![Private Repository](https://img.shields.io/badge/Security-Private_Access-A51417)
 
 ## Overview
 
-A comprehensive web application designed for Washington University Emergency Medicine simulation programs to streamline post-session report generation and track Latent Safety Threats (LSTs). Built with AI-powered intelligence using Google's Gemini 3.0 Flash Experimental model, this platform enables efficient documentation workflows for bedside clinical use.
+The **WashU Emergency Medicine Simulation & Safety Intelligence Platform** is a targeted enterprise web application engineered for the WashU Emergency Medicine department. The platform natively streamlines post-simulation qualitative report generation and securely tracks **Latent Safety Threats (LSTs)** identified during clinical bedside use.
 
-## 🚀 Key Features
+By integrating Google's Gemini 3.0 Flash Experimental AI via edge computing, the application drastically reduces clinical documentation overhead while identifying systemic improvement opportunities within the hospital ecosystem.
 
-### Core Capabilities
-- **AI-Powered Report Generation** - Synthesize professional reports from session notes using Gemini 3.0 Flash Experimental
-- **LST Intelligence** - Track, manage, and resolve system gaps with severity, location, and recurrence monitoring
-- **Workflow Automation** - Batch operations, audit logging, and streamlined document management
-- **Style Guide Training** - Upload past reports to establish consistent writing patterns
+---
 
-### User Experience
-- **Dark Mode** - Full WCAG AA compliant accessibility with theme persistence
-- **Horizontal Scroll Tabs** - Optimized for bedside tablet use
-- **3 Export Formats** - Copy to clipboard, DOCX download, and PDF export
-- **Responsive Design** - Mobile and desktop optimized
-- **Skeleton Loading** - Instant UI with background data loading
+## 🚀 Capabilities
 
-### Data Management
-- **7 Main Tabs**: Dashboard, Upload, Cases, Notes, Generate, LST Tracker, Repository, Settings
-- **Advanced Filtering** - Search by tags, metadata, date ranges, and custom fields
-- **Backup & Restore** - Full data export/import capabilities
-- **Audit Logging** - Complete action history tracking
-- **React Query State Management** - Extensively cached data layer prioritizing background syncing and stale-time caching.
+### Clinical Document Generation
+- **AI-Powered Synthesis**: Generate structured, professional clinical reports from raw session notes utilizing generative AI models.
+- **Style Guide Adaptation**: The system analyzes imported historical PDFs and DOCX files to conform newly generated reports to standard institutional formatting.
+- **Workflow Automation**: Batch reporting operations, one-click rich-text editing, and robust multi-format exporting (PDF, DOCX).
 
-## 🛠️ Technology Stack
+### Latent Safety Threat (LST) Core
+- **Threat Intelligence**: Track, categorize, and resolve critical system gaps. Includes metadata mapping for severity, hospital location, and personnel tagging.
+- **Recurrence Tracking**: Flags recurring safety threats algorithmically to highlight pervasive architectural protocols requiring root-cause intervention.
+- **Active Dashboarding**: High-level statistical views of facility performance directly aggregated from the active storage layer.
 
-- **Frontend**: React 18.3.1 + TypeScript
-- **Styling**: Tailwind CSS v4 + Radix UI Components
-- **AI Model**: Google Gemini 3.0 Flash Experimental
-- **Backend/State**: Supabase Edge Functions + TanStack React Query
-- **Database**: Supabase PostgreSQL with KV Store
-- **Build Tool**: Vite 6.3.5
-- **Routing**: React Router (HashRouter Mode for static hosts)
-- **Deployment**: GitHub Pages
+### Enterprise User Experience
+- **Accessibility Primary**: Full WCAG AA compliance with high-contrast accessibility themes and stateful Dark Mode.
+- **Asymmetric Loading**: Utilizes TanStack React Query for aggressive UI caching and background stale-time refreshing, optimizing mobile bandwidth constraints.
+- **Bedside Responsiveness**: Fully scalable layouts mapped distinctly for medical tablets vs clinical workstation desktop configurations.
 
-## 📦 Installation
+---
 
-### Prerequisites
-- Node.js 18+ or Bun
-- Supabase Account (for backend functionality)
-- Google Gemini API Key
-- GitHub Account (for deployment)
+## 🧩 Architectural Stack
 
-### Local Development
+The application employs a decoupled SPA design running locally in the client, securely proxying external queries to the edge.
 
-1. **Clone the repository**
+- **Frontend Structure**: React 18 / TypeScript
+- **State & Data Caching**: TanStack React Query
+- **Routing Engine**: React Router (HashRouter Mode)
+- **Styling**: Tailwind CSS v4 alongside Radix UI Access Primitives
+- **Artificial Intelligence**: Google Gemini API
+- **Middleware & Database**: Supabase PostgreSQL + Edge Functions (Deno)
+- **Primary Hosting**: GitHub Pages (Static Hosting)
+
+---
+
+## 🔒 Security Posture
+
+A strict layer of defense protects the computational boundaries:
+
+1. **Private Access Control**: This repository is securely hosted as a Private instance, ensuring access controls strictly govern the source logic.
+2. **Edge Variable Encryption**: Critical operational secrets, including the Google Gemini authorization tokens and Database keys, are isolated behind Supabase Edge Function environment variables.
+3. **Stateless Frontend**: The client operates efficiently without hardcoding root access. User authorization tokens negotiate dynamically against Row Level Security (RLS) tables.
+4. **Time-Limited Blob Addressing**: Extensively uses cryptographically signed URLs for all blob storage retrieval to prevent document data leakage.
+
+---
+
+## ⚙️ Quick Start
+
+### 1. Repository Installation
+Ensure you have Node.js 18+ installed on your local environment.
+
 ```bash
-git clone https://github.com/yourusername/washusimintelligence.git
-cd washusimintelligence
-```
-
-2. **Install dependencies**
-```bash
+git clone https://github.com/salthepal/WashUSimIntelligence.git
+cd WashUSimIntelligence
 npm install
-# or
-bun install
 ```
 
-3. **Set up Supabase**
-   - Create a new Supabase project at [supabase.com](https://supabase.com)
-   - Run the following SQL in the SQL Editor:
+### 2. Configure Database Backend
+Set up a Supabase KV store instance by executing the following DDL block in your instance:
+
 ```sql
 CREATE TABLE IF NOT EXISTS kv_store_7fe18c53 (
   key TEXT NOT NULL PRIMARY KEY,
   value JSONB NOT NULL
 );
 
--- Create index for faster queries
 CREATE INDEX IF NOT EXISTS idx_kv_store_key ON kv_store_7fe18c53(key);
 ```
 
-4. **Configure environment variables**
-   - The app will prompt you to enter:
-     - `GEMINI_API_KEY` - Your Google Gemini API key ([Get it here](https://ai.google.dev/))
-     - Supabase credentials (URL, Anon Key, Service Role Key) - Available in your Supabase project settings
+### 3. Local Deployment
+Boot up your Vite compiler for real-time HRM replacement over localhost:
 
-5. **Run development server**
 ```bash
 npm run dev
 ```
 
-6. **Build for production**
+### 4. Production Deployment
+This repository is configured natively for immediate delivery through the `npm run deploy` wrapper script via the `gh-pages` library.
+
 ```bash
-npm run build
+# This builds the production /dist target and strictly pushes to the remote gh-pages branch. 
+npm run deploy
 ```
-
-## 🌐 GitHub Pages Deployment
-
-This project is configured for GitHub Pages deployment at `/washusimintelligence/`.
-
-### Automated Deployment with GitHub Actions
-
-Create `.github/workflows/deploy.yml`:
-
-```yaml
-name: Deploy to GitHub Pages
-
-on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          
-      - name: Install dependencies
-        run: npm ci
-        
-      - name: Build
-        run: npm run build
-        
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ./dist
-
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-```
-
-### Manual Deployment Steps
-
-1. **Build the project**
-```bash
-npm run build
-```
-
-2. **Deploy to GitHub Pages**
-```bash
-# Install gh-pages if not already installed
-npm install -g gh-pages
-
-# Deploy dist folder to gh-pages branch
-gh-pages -d dist
-```
-
-3. **Configure GitHub Repository**
-   - Go to repository **Settings** → **Pages**
-   - Set **Source** to `gh-pages` branch
-   - The app will be available at: `https://yourusername.github.io/washusimintelligence/`
-
-### Important Notes for GitHub Pages
-
-- The base path `/washusimintelligence/` is configured in `vite.config.ts`
-- All routes will work correctly with this base path
-- Assets and imports are automatically prefixed with the base path
-- If you change the repository name, update the `base` in `vite.config.ts`
-
-## 📖 Usage Guide
-
-### 1. Upload Past Reports (Style Guides)
-Navigate to the **Upload** tab and upload previous post-session reports (PDF/DOCX format). These serve as AI training examples for consistent formatting and structure.
-
-### 2. Add Session Notes
-Use the **Notes** tab to document observations, debriefing notes, and facilitator comments with rich metadata (date, facilitator, participants).
-
-### 3. Manage Case Files
-Store simulation case information in the **Cases** tab including location, participants, equipment details, and scenario descriptions.
-
-### 4. Generate Reports
-In the **Generate** tab:
-- Select style guide reports (minimum 1 recommended)
-- Choose session notes and case files
-- Click "Generate Report" to create AI-synthesized documentation
-- Review, edit, and export in your preferred format (Copy/DOCX/PDF)
-
-### 5. Track LSTs
-The **LST Tracker** provides:
-- Color-coded severity badges (High/Medium/Low)
-- Status tracking (Identified/In Progress/Resolved/Recurring)
-- Location and assignee management
-- Full edit capabilities with resolution notes
-- Recurrence tracking for systemic issues
-
-### 6. Dashboard Analytics
-View real-time metrics including:
-- Total documents, cases, and active LSTs
-- Recent activity timeline with quick actions
-- LST distribution by status and severity
-- Document trend analysis over time
-- Quick action buttons for common workflows
-
-### 7. Repository Management
-Browse, search, and manage all generated reports with:
-- Tag-based filtering and metadata search
-- Bulk export and deletion operations
-- Document comparison view
-- Version history and audit trails
-
-## ⌨️ Keyboard Shortcuts
-
-- `T` - Start interactive tour
-- `Ctrl+G` - Quick generate report
-- `Ctrl+U` - Upload files
-- `Ctrl+F` - Search/filter
-- `Ctrl+/` - Show all shortcuts
-- `Esc` - Close modals
-
-## 🎨 Branding
-
-This application uses official Washington University color palette:
-- **PMS 200 (Red)**: `#A51417` - Primary brand color for headers, active states, and high-priority items
-- **PMS 350 (Green)**: `#007A33` - Accent color for success states and resolved LSTs
-
-Colors are applied subtly throughout the interface while maintaining excellent contrast ratios for WCAG AA accessibility.
-
-## 🔒 Security & Privacy
-
-- **Private Repository Hosting**: This repository is designed to be hosted Privately, ensuring that your Supabase Anon Keys are isolated securely from public view.
-- **Client-Side Auth Flow**: The application binds dynamically at runtime securely with your Supabase schema.
-- All API keys stored securely in Supabase environment variables (never exposed in code)
-- Private Supabase storage buckets with time-limited signed URLs
-- Service role key isolated to backend Edge Functions only
-- Comprehensive audit logging for compliance and accountability
-- CORS protection on backend endpoints
-
-## 📊 System Requirements
-
-### Browser Compatibility
-- Chrome/Edge 90+
-- Firefox 88+
-- Safari 14+
-- Mobile browsers (iOS Safari, Chrome Mobile)
-
-### Recommended Specifications
-- Minimum 1280x720 resolution (optimized for tablets)
-- Internet connection for AI generation features
-- Modern device with 4GB+ RAM for smooth performance
-
-## 🐛 Known Limitations
-
-- **Database Schema**: Migrations and DDL statements must be handled via Supabase UI (not in code)
-- **KV Store**: The `kv_store_7fe18c53` table is flexible for prototyping but not optimized for complex relational queries
-- **Auth**: Email confirmation is auto-enabled; email server configuration required for production authentication flows
-- **PDF Export**: Complex formatting may require post-processing for production-quality documents
-- **Batch Operations**: Large batch operations (500+ documents) may require pagination
-
-## 🚀 Performance Optimizations
-
-- **Skeleton Loading**: Instant UI feedback while data loads
-- **TanStack Query Caching**: Hooks automatically deduplicate requests and cache payloads across routes.
-- **Lazy Loading**: Components loaded on-demand for faster initial load
-- **Debounced Search**: Reduces API calls during filtering/search
-- **Cached Data**: Local storage for theme preferences and session state
-
-## 🤝 Contributing
-
-This is an internal tool for Washington University Emergency Medicine. For feature requests or bug reports, please contact the development team or open an issue on GitHub.
-
-### Development Guidelines
-- Follow React best practices and TypeScript strict mode
-- Maintain WCAG AA accessibility standards
-- Test dark mode compatibility for all new components
-- Document complex logic and API integrations
-- Use the existing component library before creating new components
-
-## 📄 License
-
-Proprietary - Washington University School of Medicine
-
-All rights reserved. This software is developed for internal use by Washington University Emergency Medicine and may not be redistributed or used outside the organization without explicit permission.
-
-## 🙏 Acknowledgments
-
-Built for the WashU Emergency Medicine Simulation & Safety team to enhance post-session documentation and latent safety threat identification.
-
-Special thanks to:
-- WashU EM Simulation & Safety Team
-- Google Gemini AI Platform
-- Supabase for backend infrastructure
-- shadcn/ui for component library
-- The React and TypeScript communities
 
 ---
 
-**Version**: 1.0.0 (Comprehensive Intelligence Platform)  
-**Build**: 26 Major Optimization Features  
-**AI Model**: Gemini 3.0 Flash Experimental  
-**Backend**: Supabase Edge Functions + KV Store  
-**Deployment**: GitHub Pages at `/washusimintelligence/`
+## ⌨️ Advanced Operations
 
-For support or questions, please contact the WashU EM development team.
+For experienced power-users, you can skip UI clicks through the following keybindings:
+
+*   **`T`** - Initiate Platform Interactive Tour
+*   **`Ctrl + G`** - Start Quick Generate Output
+*   **`Ctrl + U`** - Upload Clinical Files
+*   **`Ctrl + F`** - Search Active Focus Directory
+*   **`Esc`** - Dismiss Top-Level Dialogs
+
+---
+
+## 📄 Licensing & Administration
+
+**Proprietary Software - Washington University School of Medicine**
+
+All rights reserved. This software architecture was developed for internal data utilization by Washington University Emergency Medicine protocols and may not be redistributed, reverse-compiled, or used externally without explicit authorization.
+
+> For deployment operations, infrastructure modifications, or feature proposals, please contact the WashU EM intelligence development team.
