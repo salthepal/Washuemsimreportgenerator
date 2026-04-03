@@ -205,12 +205,26 @@ app.post('/generate-report', rateLimit, async (c) => {
     // Fetch the context
     const reportsRes = await c.env.DB.prepare(`SELECT * FROM reports WHERE id IN (${selectedReports.map(() => '?').join(',')})`).bind(...selectedReports).all();
     const notesRes = await c.env.DB.prepare(`SELECT * FROM session_notes WHERE id IN (${selectedNotes.map(() => '?').join(',')})`).bind(...selectedNotes).all();
-    const casesRes = selectedCases && selectedCases.length > 0 ? await c.env.DB.prepare(`SELECT * FROM settings WHERE key = 'case_files'`).all() : { results: [] };
-    
+    // Fetch the context for case files
     let cases: any[] = [];
-    if (casesRes.results[0]) {
-      const allCases = JSON.parse(casesRes.results[0].value as string);
-      cases = allCases.filter((cf: any) => selectedCases.includes(cf.id));
+    if (selectedCases && selectedCases.length > 0) {
+      // 1. Try relational table
+      const relCases = await c.env.DB.prepare(`SELECT * FROM case_files WHERE id IN (${selectedCases.map(() => '?').join(',')})`).bind(...selectedCases).all();
+      if (relCases.results) {
+        cases = [...relCases.results];
+      }
+      
+      // 2. Fallback to settings blob for missing cases
+      if (cases.length < selectedCases.length) {
+        const { results: fallbackRes } = await c.env.DB.prepare(`SELECT value FROM settings WHERE key = 'case_files'`).all();
+        if (fallbackRes[0]) {
+          const allLegacy = JSON.parse(fallbackRes[0].value as string);
+          const legacyMatches = allLegacy.filter((cf: any) => 
+            selectedCases.includes(cf.id) && !cases.some(c => c.id === cf.id)
+          );
+          cases = [...cases, ...legacyMatches];
+        }
+      }
     }
 
     const priorReportsContext = reportsRes.results.map((r: any, i: number) => `=== PRIOR REPORT ${i + 1}: ${r.title} ===\n${r.content}\n`).join('\n');
@@ -435,13 +449,68 @@ app.post('/notes/add', async (c) => {
   }
 });
 
-// Case Files (Placeholder for now, keeping same structure)
+// Case Files
 app.get('/case-files', async (c) => {
   try {
-    const { results } = await c.env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('case_files').all();
-    return c.json(results[0] ? JSON.parse(results[0].value as string) : []);
+    // Try relational table first
+    const { results } = await c.env.DB.prepare('SELECT * FROM case_files ORDER BY date DESC').all();
+    if (results && results.length > 0) {
+      return c.json(results.map((cf: any) => ({
+        ...cf,
+        type: 'case_file',
+        htmlContent: cf.html_content || '',
+        metadata: {
+          uploaderName: cf.uploader_name || '',
+          caseType: cf.case_type || ''
+        }
+      })));
+    }
+
+    // Fallback to settings blob for legacy data
+    const { results: fallback } = await c.env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('case_files').all();
+    return c.json(fallback[0] ? JSON.parse(fallback[0].value as string) : []);
   } catch (error: any) {
     return c.json([]);
+  }
+});
+
+app.post('/case-files/upload', async (c) => {
+  try {
+    const data = await c.req.json();
+    const id = data.id || `case_file_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    
+    // Ensure table exists (idempotent for safety)
+    await c.env.DB.prepare('CREATE TABLE IF NOT EXISTS case_files (id TEXT PRIMARY KEY, title TEXT, content TEXT, html_content TEXT, date TEXT, uploader_name TEXT, case_type TEXT)').run();
+    
+    await c.env.DB.prepare('INSERT INTO case_files (id, title, content, html_content, date, uploader_name, case_type) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, data.title, data.content, data.htmlContent || '', data.date || new Date().toISOString(), data.metadata?.uploaderName || '', data.metadata?.caseType || '')
+      .run();
+      
+    await logAudit(c.env.DB, 'upload', 'case_file', data.title, id);
+    return c.json({ success: true, id });
+  } catch (error: any) {
+    await logError(c.env.DB, 'case_file_upload', error);
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+app.delete('/case-files/:id', async (c) => {
+  try {
+    const id = c.req.param('id');
+    await c.env.DB.prepare('DELETE FROM case_files WHERE id = ?').bind(id).run();
+    
+    // Also try removing from legacy settings list (if present)
+    const { results } = await c.env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('case_files').all();
+    if (results[0]) {
+      const allCases = JSON.parse(results[0].value as string);
+      const filtered = allCases.filter((cf: any) => cf.id !== id);
+      await c.env.DB.prepare('UPDATE settings SET value = ? WHERE key = ?').bind(JSON.stringify(filtered), 'case_files').run();
+    }
+    
+    await logAudit(c.env.DB, 'delete', 'case_file', `Deleted case file ${id}`, id);
+    return c.json({ success: true });
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500);
   }
 });
 
