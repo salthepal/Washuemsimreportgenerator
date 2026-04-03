@@ -7,18 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.1.0] - 2026-04-03
 
-### 🏛️ Enterprise Intelligence Edition
-The final production-grade optimization, strictly aligning the platform with Washington University Department of Emergency Medicine’s professional standards and "Just Culture" framework.
+### 🏛️ Production Stability & Optimization
+Final production-grade optimizations, strictly aligning the platform with the Washington University Department of Emergency Medicine’s professional standards and "Just Culture" framework.
 
 ### ✨ Added
 - **Official Simulation Prompt**: Integrated the department's official high-fidelity simulation prompt, enforcing strict Markdown and standard safety definitions (In-Situ, LST, BPS).
-- **Enterprise UI Cleanup**: Removed the "System Safety Index", "Quick Actions Bar", and redundant "System Information" for a focused clinical interface.
+- **Core UI Cleanup**: Removed the "System Safety Index", "Quick Actions Bar", and redundant "System Information" for a focused clinical interface.
 - **Unified Security**: Full consolidation of all Dependabot security patches and development branches into the production core.
-- **Version 3.1.0 Stack**: Synchronized frontend and backend packages to the latest enterprise versioning.
+- **Version 3.1.0 Stack**: Synchronized frontend and backend packages to the latest stable versioning.
 
 ### 🛠️ Changed
 - **Dashboard**: Shifted focus to direct LST tracking and activity metrics, eliminating the calculated "Safety Index" in favor of absolute clinical data.
 - **Settings**: Streamlined the settings page to focus on data management and AI configuration.
+
+### 🐛 Fixed
+- **D1 Database**: Resolved `D1_TYPE_ERROR` undefined bindings across all API routes for prior reports and case files.
+- **Data Integrity**: Implemented relational table migration for case-files for improved data consistency.
+- **System Limits**: Automated stripping of base64 images from case files to prevent `SQLITE_TOOBIG` storage limits.
+- **API Parsing**: Corrected array response parsing for the unified case files library.
+- **CI/CD**: Optimized CodeQL security workflows for pushes and fork pull requests.
 
 ---
 

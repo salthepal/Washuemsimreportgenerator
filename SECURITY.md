@@ -6,8 +6,8 @@ Only the latest version of the WashU EM Sim Intelligence app is currently suppor
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 1.x     | :white_check_mark: |
-| < 1.x   | :x:                |
+| 3.x     | :white_check_mark: |
+| < 3.x   | :x:                |
 
 ## Reporting a Vulnerability
 
@@ -21,6 +21,6 @@ If you discover a security vulnerability in this project, please **do not open a
 
 ## Best Practices (In-Situ Simulation)
 This application handles **Latent Safety Threats** which are critical for patient care.
-*   **Access Control**: Ensure your GitHub repository is kept private if it contains patient-sensitive data (though currently, it is public).
+*   **Access Control**: Ensure your GitHub repository is kept private if it contains patient-sensitive data.
 *   **Secret Management**: Do not upload API keys to the repository. Use Cloudflare Secrets or GitHub Environment Secrets.
 *   **Data Minimization**: Avoid storing personally identifiable information (PII) of patients or staff in the session notes.

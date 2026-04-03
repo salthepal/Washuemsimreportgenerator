@@ -1,100 +1,66 @@
 <div align="center">
   <img src="./banner.png" alt="WashU Sim Intelligence Hero Banner" width="100%">
   <br />
-  <h1>WashU Sim Intelligence v3.1.0</h1>
-  <p><b>Enterprise Simulation & Safety Intelligence Edition</b></p>
+  <h1>WashU Sim Intelligence</h1>
+  <p><b>Simulation-driven Safety & Learning Intelligence System</b></p>
   <p><i>Washington University School of Medicine - Department of Emergency Medicine</i></p>
 
   [![Version](https://img.shields.io/badge/version-3.1.0-A51417?style=for-the-badge)](https://github.com/salthepal/WashUSimIntelligence)
-  [![Architecture](https://img.shields.io/badge/stack-Cloudflare_Native-007A33?style=for-the-badge)](https://cloudflare.com)
-  [![Security](https://img.shields.io/badge/security-CodeQL_%26_Dependabot-blue?style=for-the-badge)](https://github.com/salthepal/WashUSimIntelligence/security)
+  [![Stack](https://img.shields.io/badge/platform-Cloudflare_Native-007A33?style=for-the-badge)](https://cloudflare.com)
+  [![Intelligence](https://img.shields.io/badge/AI-Gemini_3_Flash-blue?style=for-the-badge)](https://ai.google.dev)
 </div>
 
 ---
 
-## 🏛️ Architecture (v3.1.0 Enterprise)
+## 🏛️ Project Overview
 
-The **WashU Sim Intelligence** platform is built on a high-concurrency, Zero-Latency distributed architecture. By leveraging Cloudflare's global edge network, we deliver sub-millisecond data persistence and real-time AI report generation.
+**WashU Sim Intelligence** is a specialized platform designed for the Washington University Department of Emergency Medicine simulation programs. The system streamlines the transition from high-fidelity clinical simulations to actionable safety insights by automating report generation and tracking system-level vulnerabilities.
 
-### 🧩 System Design
-<div align="center">
-  <img src="./architecture.png" alt="WashU Sim Intelligence System Architecture" width="100%">
-</div>
+### 🍱 Main Capabilities
 
-<details>
-<summary><b>Click to view technical diagram (Mermaid)</b></summary>
-
-```mermaid
-graph TD
-    A[React Dashboard (SPA)] --> B[Cloudflare Edge Worker (Hono)]
-    B --> C[(Cloudflare D1 SQL)] 
-    B --> D[Cloudflare R2 Object Storage]
-    B --> E[Cloudflare KV Space]
-    B --> F[Google Gemini Flash 1.5]
-    
-    subgraph "Persistent Storage"
-    C
-    D
-    end
-    
-    subgraph "Intelligence Engine"
-    B
-    F
-    end
-```
-</details>
-
-### 🗝️ Core Technologies
-- **Frontend**: `React 18` / `TypeScript` / `Vite` / `TailwindCSS`
-- **Backend API**: `Cloudflare Workers` / `Hono` (Asynchronous Streaming)
-- **Data Persistence**: `D1 SQL` (Relational) / `R2` (Documents) / `KV` (Security)
-- **AI Intelligence**: `Google Gemini 1.5 Flash` (Direct Edge Integration)
-- **Design System**: `WashU PMS 200` (Primary Red) & `PMS 350` (Forest Green)
+*   **AI-Powered Synthesis**: Real-time generation of simulation reports using advanced LLM prompts tailored to clinical safety and "Just Culture" frameworks.
+*   **LST Tracking**: Centralized management of **Latent Safety Threats** identified during sessions, categorized by severity, status, and department location.
+*   **Knowledge Repository**: High-performance searchable library of clinical scenarios, session notes, and historical reports using native Full-Text Search.
+*   **Offline Resilience**: Specialized persistence layers ensuring simulation specialists can maintain high-fidelity notes in hospital environments with intermittent Wi-Fi.
 
 ---
 
-## 🚀 v3.1.0 Enterprise Features
+## 🏗️ System Architecture
 
-### 🍱 Official Simulation Prompt (v3.1.0)
-The platform now strictly adheres to the **Washington University EM Simulation Department** official guidelines. 
-- **Just Culture Framework**: Automated post-session reports prioritize psychological safety and system-level improvements (LSTs).
-- **Strict Markdown Structure**: Ensures reports are always ready for institutional executive review.
-- **Safety Lexicon**: Integrated standardized safety definitions (In-Situ, Latent Safety Threats, Best Practice Supports).
+Built on a globally distributed Cloudflare-native stack for maximum reliability and edge-intelligence:
 
-### 🍱 Streaming Safety Intelligence
-*   **Asynchronous Tokens**: Simulation reports generate in real-time, providing instant "voice of the room" synthesis without perceived server latency.
-*   **Deep-Content Search (FTS5)**: SQLite-native Full-Text Search enables sub-millisecond queries across thousands of historical clinical scenarios and latent threats.
-*   **Offline-Ready (TanStack)**: Persistence layers ensure that simulation specialists can continue their workspace on hospital Wi-Fi without losing session notes.
+- **Frontend**: React-based dashboard optimized for clinical and bedside tablet use.
+- **Edge API**: High-concurrency Worker layer providing sub-millisecond response times.
+- **Intelligence**: Real-time asynchronous streaming via **Google Gemini 3 Flash**.
+- **Data Primitives**: Relational SQL (D1), Object Storage (R2), and high-speed metadata (KV).
 
 ---
 
-## 🛠️ Deployment & Operations
+## 🛠️ Getting Started
 
 ### Local Development
-1.  **Frontend Workspace**:
-    ```ps1
-    npm run dev
-    ```
-2.  **Simulation Backend**:
-    ```ps1
-    cd worker
-    npx wrangler dev
-    ```
+```bash
+# Frontend
+npm run dev
 
-### Production Deployment
-The system is automated via GitHub Actions for the frontend and Wrangler for the edge.
-```ps1
-# Deploy Simulation Backend
+# Simulation Worker
+cd worker
+npx wrangler dev
+```
+
+### Production Operations
+The system utilizes automated GitHub Actions for frontend deployments and Wrangler for edge worker updates.
+```bash
 cd worker
 npx wrangler deploy
 ```
 
 ---
 
-## 🔒 Governance & Security
-- **Data Sovereignty**: Managed through Cloudflare's HIPAA-compliant storage primitives (D1/R2).
-- **Infrastructure as Code**: All D1 schemas and worker configurations are version-controlled.
-- **Institutional Alignment**: Branding and terminology strictly follow the *Washington University School of Medicine* style guidelines.
+## 🔒 Security & Governance
+- **Just Culture**: Reports are structured to prioritize psychological safety and systemic improvements over individual performance.
+- **Data Integrity**: Institutional branding and safety lexicons are strictly enforced via standardized prompts and design tokens.
+- **Compliance**: Leveraging HIPAA-compliant storage primitives for clinical data sovereignty.
 
 ---
 
