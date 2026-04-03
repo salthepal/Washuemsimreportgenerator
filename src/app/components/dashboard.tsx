@@ -13,6 +13,17 @@ interface DashboardProps {
   selectedSite?: string;
 }
 
+interface ActivityItem {
+  id: string;
+  title: string;
+  type: 'prior_report' | 'session_notes' | 'generated_report' | 'lst_alert';
+  createdAt: string | Date;
+  tags?: string[];
+  status?: string;
+  severity?: string;
+}
+
+
 export function Dashboard({ reports, sessionNotes, generatedReports, lsts, isLoading, selectedSite }: DashboardProps) {
   // ── Site-filtered LSTs ──
   const filteredLsts = useMemo(() => {
@@ -137,6 +148,20 @@ export function Dashboard({ reports, sessionNotes, generatedReports, lsts, isLoa
         </div>
       </div>
 
+      {/* ── App Summary ── */}
+      <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm">
+        <div className="flex items-start gap-4">
+          <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg shrink-0">
+            <Activity className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+          </div>
+          <div>
+            <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+              <span className="font-bold text-slate-900 dark:text-white">WashU Sim Intelligence</span> is a specialized clinical safety platform for the Department of Emergency Medicine. It centralizes simulation data to identify **Latent Safety Threats (LSTs)**, automate institutional reporting with **AI synthesis**, and provide a searchable repository for clinical scenario intelligence.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* ── Primary Metric Cards ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         {/* Active System Gaps */}
@@ -254,7 +279,7 @@ export function Dashboard({ reports, sessionNotes, generatedReports, lsts, isLoa
           <div className="text-center text-slate-500 dark:text-slate-400 py-8 text-sm">System idle &mdash; no clinical activity recorded</div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {recentActivity.map((item: any) => (
+            {recentActivity.map((item: ActivityItem) => (
               <div key={`${item.type}-${item.id}`} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-900 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 rounded-lg transition-all shadow-sm">
                 <div className="p-2 bg-white dark:bg-slate-800 rounded-lg shadow-sm">
                     {getActivityIcon(item.type, item.severity)}
@@ -273,7 +298,7 @@ export function Dashboard({ reports, sessionNotes, generatedReports, lsts, isLoa
                 </div>
                 {item.tags?.length ? (
                   <div className="flex -space-x-1 overflow-hidden opacity-80">
-                    {item.tags.slice(0, 3).map((tag, i) => (
+                    {item.tags.slice(0, 3).map((tag: string, i: number) => (
                       <div key={i} title={tag} className="w-2 h-2 rounded-full border border-white dark:border-slate-800 bg-[#A51417]/40" />
                     ))}
                   </div>
