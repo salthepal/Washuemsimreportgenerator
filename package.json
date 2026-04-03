@@ -8,12 +8,12 @@
   "license": "SEE LICENSE IN LICENSE.md",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/washusimintelligence.git"
+    "url": "https://github.com/salthepal/WashUSimIntelligence.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/washusimintelligence/issues"
+    "url": "https://github.com/salthepal/WashUSimIntelligence/issues"
   },
-  "homepage": "https://yourusername.github.io/washusimintelligence/",
+  "homepage": "https://salthepal.github.io/WashUSimIntelligence/",
   "keywords": [
     "medical-education",
     "simulation",
