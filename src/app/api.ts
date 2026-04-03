@@ -3,7 +3,7 @@ import type { Report, SessionNote, CaseFile, LST } from './types';
 // Base URL for the backend API
 // Original Supabase URL (commented out): 
 // const API_BASE = 'https://zuvhkazgoonarugqlvwi.supabase.co/functions/v1/make-server-7fe18c53';
-export const API_BASE = 'https://washu-em-sim-intelligence.sphadnisuf.workers.dev';
+export const API_BASE = 'https://api.salphadnis.org';
 
 export const API_HEADERS = {
   'Content-Type': 'application/json',
