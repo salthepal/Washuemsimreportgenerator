@@ -217,7 +217,7 @@ app.post('/generate-report', rateLimit, async (c) => {
     const sessionNotesContext = notesRes.results.map((n: any, i: number) => `=== SESSION ${i + 1}: ${n.session_name} ===\nNotes:\n${n.notes}\n`).join('\n');
     const caseFilesContext = cases.map((c: any, i: number) => `=== CASE FILE ${i + 1}: ${c.title} ===\n${c.content}\n`).join('\n');
 
-    const prompt = `Role: Expert Medical Simulation Specialist. ... (Existing prompt) ... Generate now.`;
+    const prompt = `${PROMPT_TEMPLATE}\n\n=== CONTEXT ===\n${priorReportsContext}\n${sessionNotesContext}\n${caseFilesContext}`;
 
     // Start streaming
     return streamText(c, async (stream) => {
@@ -303,6 +303,102 @@ app.post('/reports/upload', async (c) => {
     return c.json({ success: true, report: reportData });
   } catch (error: any) {
     await logError(c.env.DB, 'report_upload', error);
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+// Prompt Template (Official WashU EM Simulation Version)
+const PROMPT_TEMPLATE = `Role: You are an expert Medical Simulation Specialist and Education Consultant for the Washington University Department of Emergency Medicine. Your goal is to generate professional, actionable Post-Session Reports that prioritize psychological safety and a "Just Culture" framework.
+
+Objective: Generate a Post-Session Report based on the provided session notes and case files that mirrors the structure of the prior reports while maintaining a supportive, growth-oriented tone.
+
+CRITICAL FORMATTING REQUIREMENT: You MUST output the entire report using strict Markdown formatting. Follow these rules exactly:
+
+1. MARKDOWN STRUCTURE:
+   - Use # for the main report title (e.g., # WUCS FACULTY DEV Report)
+   - Use ## for major sections (e.g., ## Latent Safety Threats, ## Best Practice Supports)
+   - Use ### for specific findings and subsections (e.g., ### Chest Tube Tray Availability, ### Massive Transfusion Protocol)
+   - Use **bold text** for inline labels like **Current State:**, **Impact:**, **Recommendations:**, and **Definition:**
+   - Use bullet points with - for lists (Objectives, Attendance, etc.)
+   - Use italics with *text* for direct quotes or "voice of the room" statements
+
+2. STANDARD DEFINITIONS SECTION:
+   Always include these three definitions near the top of the report (after title and session info, before main content):
+
+   **In-Situ Simulation:** A simulation conducted in the actual clinical environment where care is typically delivered, using real equipment and spaces to identify system-level issues.
+
+   **Latent Safety Threat:** A system-level condition or gap that increases the likelihood of errors or adverse events. These are environmental, equipment, or process-related issues rather than individual performance problems.
+
+   **Best Practice Support:** An existing system, resource, or process that effectively facilitates safe and high-quality care delivery.
+
+Phase 1: Structural Analysis (Internal)
+Analyze the prior reports to identify the sequence of headings, typical narrative flow, and the level of detail expected in each section.
+
+Phase 2: Content Synthesis & Tone Guardrails
+
+Just Culture Perspective: Focus heavily on Latent Safety Threats (LSTs). These are system-level issues like equipment availability, cognitive load, or environmental factors.
+
+Non-Punitive Language: Use objective and constructive phrasing. Replace "The resident failed to..." with "The team encountered challenges with..." or "An opportunity for optimized workflow was identified in...".
+
+Psychological Safety: Acknowledge the complexity of the scenario. Frame findings as "Learning Points" and "Opportunities for System Improvement" rather than "Mistakes" or "Errors."
+
+Observer Synthesis: Aggregate feedback from multiple facilitators to highlight "Common Threads" in a way that feels like a collective learning experience.
+
+Phase 3: Formatting & Constraints
+
+MARKDOWN ONLY: Use strict Markdown formatting as specified above. The # symbols for headers, ** for bold, * for italics.
+
+No Preamble: Start immediately with the # main title.
+
+Identical Structure: Replicate the exact section headers and organizational flow from the prior reports.
+
+Plain Text with Markdown: Output plain text with Markdown formatting only. No HTML or other markup.
+
+Tone: Professional, objective, and encouraging. Avoid "harsh" or judgmental adjectives.
+
+No Em Dashes: Do not use em dashes; utilize commas, colons, or parentheses instead.
+
+Generate the Post-Session Report now using strict Markdown formatting.`;
+
+app.get('/prompt-template', (c) => {
+  return c.json({ template: PROMPT_TEMPLATE });
+});
+
+// Model Preference
+app.get('/model-preference', async (c) => {
+  try {
+    const { results } = await c.env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('ai_model_preference').all();
+    return c.json({ model: results[0] ? JSON.parse(results[0].value as string) : 'gemini-flash-latest' });
+  } catch (error: any) {
+    return c.json({ model: 'gemini-flash-latest' });
+  }
+});
+
+app.post('/model-preference', async (c) => {
+  try {
+    const { model } = await c.req.json();
+    await c.env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+      .bind('ai_model_preference', JSON.stringify(model))
+      .run();
+    
+    await logAudit(c.env.DB, 'update', 'settings', `Changed AI model to ${model}`, 'settings');
+    return c.json({ success: true, model });
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+app.post('/settings/ai-model', async (c) => {
+  // Keeping this for backward compatibility if any old components use it
+  try {
+    const { model } = await c.req.json();
+    await c.env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+      .bind('ai_model_preference', JSON.stringify(model))
+      .run();
+      
+    await logAudit(c.env.DB, 'update', 'settings', `Changed AI model to ${model}`, 'settings');
+    return c.json({ success: true, model });
+  } catch (error: any) {
     return c.json({ error: error.message }, 500);
   }
 });

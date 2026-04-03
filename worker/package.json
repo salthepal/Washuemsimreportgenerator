@@ -1,6 +1,6 @@
 {
   "name": "washu-em-sim-intelligence-worker",
-  "version": "2.1.0",
+  "version": "3.1.0",
   "description": "Cloudflare Worker backend for WashU EM Sim Intelligence",
   "main": "src/index.ts",
   "scripts": {
