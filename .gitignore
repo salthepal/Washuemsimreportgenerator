@@ -1,1 +1,14 @@
 node_modules
+dist
+.wrangler
+.dev.vars
+*.log
+.DS_Store
+.env
+.env.local
+.vscode
+.idea
+build
+package-lock.json
+yarn-error.log
+npm-debug.log
