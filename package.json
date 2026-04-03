@@ -111,7 +111,10 @@
     "@vitejs/plugin-react": "4.7.0",
     "gh-pages": "^6.3.0",
     "tailwindcss": "4.1.12",
+<<<<<<< HEAD
     "typescript": "^6.0.2",
+=======
+>>>>>>> origin/dependabot/npm_and_yarn/npm_and_yarn-7372c7abf2
     "vite": "6.4.1"
   },
   "peerDependencies": {

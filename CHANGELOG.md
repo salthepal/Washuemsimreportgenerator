@@ -5,9 +5,24 @@ All notable changes to the WashU EM Sim Intelligence Platform will be documented
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.1.0] - 2026-04-03
+## [3.1.0] - 2026-04-03
 
-### 🍱 Enterprise Optimization Edition (Zero-Latency)
+### 🏛️ Enterprise Intelligence Edition
+The final production-grade optimization, strictly aligning the platform with Washington University Department of Emergency Medicine’s professional standards and "Just Culture" framework.
+
+### ✨ Added
+- **Official Simulation Prompt**: Integrated the department's official high-fidelity simulation prompt, enforcing strict Markdown and standard safety definitions (In-Situ, LST, BPS).
+- **Enterprise UI Cleanup**: Removed the "System Safety Index", "Quick Actions Bar", and redundant "System Information" for a focused clinical interface.
+- **Unified Security**: Full consolidation of all Dependabot security patches and development branches into the production core.
+- **Version 3.1.0 Stack**: Synchronized frontend and backend packages to the latest enterprise versioning.
+
+### 🛠️ Changed
+- **Dashboard**: Shifted focus to direct LST tracking and activity metrics, eliminating the calculated "Safety Index" in favor of absolute clinical data.
+- **Settings**: Streamlined the settings page to focus on data management and AI configuration.
+
+---
+
+## [2.1.0] - 2026-04-03
 Three high-impact architectural upgrades for a fast, searchable, and responsive clinical simulation platform.
 
 ### ✨ Added
