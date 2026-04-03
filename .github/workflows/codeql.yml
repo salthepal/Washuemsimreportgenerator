@@ -13,6 +13,8 @@ jobs:
   analyze:
     name: Analyze
     runs-on: ubuntu-latest
+    # Prevent fork PRs from causing permission failures
+    if: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
     permissions:
       actions: read
       contents: read
@@ -21,7 +23,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [ 'javascript', 'typescript' ]
+        # CodeQL 'javascript' language pack automatically covers both JS and TS
+        language: [ 'javascript' ]
 
     steps:
     - name: Checkout repository
