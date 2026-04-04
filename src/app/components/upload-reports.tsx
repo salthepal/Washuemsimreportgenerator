@@ -122,11 +122,6 @@ export function UploadReports({ reports, onRefresh }: UploadReportsProps) {
       return;
     }
 
-    if (!uploaderName.trim() || !sessionName.trim() || !sessionDate) {
-      toast.error('Please fill in all fields');
-      return;
-    }
-
     setUploading(true);
     setUploadProgress(10);
     
@@ -148,7 +143,7 @@ export function UploadReports({ reports, onRefresh }: UploadReportsProps) {
         title: processed.title,
         content: processed.content,
         htmlContent: processed.htmlContent,
-        date: sessionDate,
+        date: sessionDate || new Date().toISOString(),
         metadata: {
           uploaderName,
           sessionName,
@@ -320,6 +315,7 @@ export function UploadReports({ reports, onRefresh }: UploadReportsProps) {
               value={uploaderName}
               onChange={setUploaderName}
               placeholder="Enter your name"
+              optional
             />
 
             <FormField
@@ -327,6 +323,7 @@ export function UploadReports({ reports, onRefresh }: UploadReportsProps) {
               value={sessionName}
               onChange={setSessionName}
               placeholder="e.g., Cardiac Arrest Simulation"
+              optional
             />
 
             <FormField
@@ -334,6 +331,7 @@ export function UploadReports({ reports, onRefresh }: UploadReportsProps) {
               value={sessionDate}
               onChange={setSessionDate}
               type="date"
+              optional
             />
 
             <div className="flex gap-3">

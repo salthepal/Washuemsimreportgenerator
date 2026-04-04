@@ -44,7 +44,8 @@ export async function processDocxFile(file: File): Promise<ProcessedDocument> {
  */
 export function formatDate(dateString: string): string {
   try {
-    return new Date(dateString).toLocaleDateString();
+    const parsedDate = new Date(dateString.replace(' ', 'T'));
+    return isNaN(parsedDate.getTime()) ? dateString : parsedDate.toLocaleDateString();
   } catch {
     return dateString;
   }
@@ -55,7 +56,8 @@ export function formatDate(dateString: string): string {
  */
 export function formatDateTime(dateString: string): string {
   try {
-    return new Date(dateString).toLocaleString();
+    const parsedDate = new Date(dateString.replace(' ', 'T'));
+    return isNaN(parsedDate.getTime()) ? dateString : parsedDate.toLocaleString();
   } catch {
     return dateString;
   }
