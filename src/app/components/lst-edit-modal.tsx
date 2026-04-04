@@ -12,11 +12,12 @@ export interface EditModalState {
   recommendation: string;
   resolutionNote: string;
   assignee: string;
+  locationStatuses: Record<string, LST['status']>;
 }
 
 export const INITIAL_EDIT: EditModalState = {
   open: false, lst: null, status: '', severity: '', category: '',
-  location: '', recommendation: '', resolutionNote: '', assignee: '',
+  location: '', recommendation: '', resolutionNote: '', assignee: '', locationStatuses: {},
 };
 
 interface LstEditModalProps {
@@ -147,6 +148,46 @@ export function LstEditModal({ editModal, setEditModal, saving, onSave }: LstEdi
               placeholder="Document corrective actions taken, equipment changes, or policy updates..."
               className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-blue-500 resize-y"
             />
+          </div>
+
+          {/* Multi-Site Status Section */}
+          <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+             <div className="flex items-center justify-between mb-3">
+                <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Multi-Site Context</label>
+                <button 
+                  onClick={() => {
+                    const newStatuses = {...editModal.locationStatuses};
+                    Object.keys(newStatuses).forEach(loc => newStatuses[loc] = editModal.status as LST['status']);
+                    setEditModal(prev => ({...prev, locationStatuses: newStatuses}));
+                  }}
+                  className="text-[10px] bg-blue-50 hover:bg-blue-100 text-blue-700 px-2 py-1 rounded font-bold transition-all"
+                >
+                  Sync Master Status to All Sites
+                </button>
+             </div>
+             <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                {Object.entries(editModal.locationStatuses).map(([site, status]) => (
+                   <div key={site} className="flex items-center justify-between p-2 bg-slate-50 dark:bg-slate-900/50 rounded border border-slate-100 dark:border-slate-800">
+                      <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{site}</span>
+                      <select 
+                        value={status}
+                        onChange={(e) => {
+                          const newStatuses = {...editModal.locationStatuses, [site]: e.target.value as LST['status']};
+                          setEditModal(prev => ({...prev, locationStatuses: newStatuses}));
+                        }}
+                        className="text-[10px] bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded px-1.5 py-1 focus:ring-1 focus:ring-blue-500"
+                      >
+                         <option value="Identified">Identified</option>
+                         <option value="In Progress">In Progress</option>
+                         <option value="Resolved">Resolved</option>
+                         <option value="Recurring">Recurring</option>
+                      </select>
+                   </div>
+                ))}
+                {Object.keys(editModal.locationStatuses).length === 0 && (
+                   <p className="text-[10px] text-slate-400 italic">No multi-site data available for this issue.</p>
+                )}
+             </div>
           </div>
         </div>
 

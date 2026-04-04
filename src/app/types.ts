@@ -59,6 +59,8 @@ export interface LST {
   recurrenceCount?: number;
   assignee?: string;
   location?: string;
+  parentIssueId?: string; // Links identical issues across sites
+  locationStatuses?: Record<string, 'Identified' | 'In Progress' | 'Resolved' | 'Recurring'>; // Maps specific sites to local status
 }
 
 export interface CaseFile {

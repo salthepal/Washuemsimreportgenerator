@@ -48,19 +48,43 @@ Format: [{"title": "...", "description": "...", "recommendation": "...", "severi
     for (const lst of parsedLSTs) {
       const lstId = `lst_${Date.now()}_${Math.random().toString(36).substring(7)}`;
       
-      // Semantic Deduplication (Basic Title Check)
-      const existing = await db.prepare('SELECT id, recurrence_count FROM lsts WHERE title = ?').bind(lst.title).all();
+      // Step 1: Detect Current Report Location (if available)
+      const reportRes = await db.prepare('SELECT metadata FROM reports WHERE id = ?').bind(reportId).all();
+      let reportLocation = 'Default Site';
+      if (reportRes.results?.[0]) {
+        const meta = JSON.parse(reportRes.results[0].metadata as string);
+        reportLocation = meta.location || 'Default Site';
+      }
+
+      // Semantic Deduplication (Basic Title Check for 'Master' tracking)
+      const existing = await db.prepare('SELECT id, recurrence_count, location_statuses FROM lsts WHERE title = ?').bind(lst.title).all();
       
       if (existing.results?.[0]) {
-        const id = existing.results[0].id as string;
+        const masterId = existing.results[0].id as string;
         const count = (existing.results[0].recurrence_count as number || 1) + 1;
         
-        await db.prepare('UPDATE lsts SET last_seen_date = ?, status = ?, recurrence_count = ? WHERE id = ?')
-          .bind(new Date().toISOString(), 'Recurring', count, id)
+        let locStatuses: Record<string, string> = {};
+        try {
+          locStatuses = existing.results[0].location_statuses ? JSON.parse(existing.results[0].location_statuses as string) : {};
+        } catch (e) {}
+
+        // Update status only for THIS location
+        locStatuses[reportLocation] = lst.status;
+        
+        await db.prepare('UPDATE lsts SET last_seen_date = ?, status = ?, recurrence_count = ?, location_statuses = ? WHERE id = ?')
+          .bind(new Date().toISOString(), 'Recurring', count, JSON.stringify(locStatuses), masterId)
           .run();
       } else {
-        await db.prepare('INSERT INTO lsts (id, title, description, recommendation, severity, status, category, identified_date, last_seen_date, related_report_id, recurrence_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-          .bind(lstId, lst.title, lst.description, lst.recommendation || '', lst.severity, 'Identified', lst.category, new Date().toISOString(), new Date().toISOString(), reportId, 1)
+        // Initialize location statuses for the new Master record
+        const initialLocStatuses = { [reportLocation]: 'Identified' };
+        
+        await db.prepare('INSERT INTO lsts (id, title, description, recommendation, severity, status, category, identified_date, last_seen_date, related_report_id, recurrence_count, location, location_statuses) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+          .bind(
+            lstId, lst.title, lst.description, lst.recommendation || '', 
+            lst.severity, 'Identified', lst.category, 
+            new Date().toISOString(), new Date().toISOString(), 
+            reportId, 1, reportLocation, JSON.stringify(initialLocStatuses)
+          )
           .run();
       }
     }

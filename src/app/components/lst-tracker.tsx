@@ -100,6 +100,7 @@ export function LSTTracker({ selectedSite }: LSTTrackerProps) {
       recommendation: lst.recommendation || '',
       resolutionNote: lst.resolutionNote || '',
       assignee: lst.assignee || '',
+      locationStatuses: lst.locationStatuses || {},
     });
   }, []);
 
@@ -116,6 +117,7 @@ export function LSTTracker({ selectedSite }: LSTTrackerProps) {
         recommendation: editModal.recommendation,
         resolutionNote: editModal.resolutionNote || undefined,
         assignee: editModal.assignee || undefined,
+        locationStatuses: editModal.locationStatuses,
         ...(editModal.status === 'Resolved' && !editModal.lst.resolvedDate
           ? { resolvedDate: new Date().toISOString() }
           : {}),

@@ -154,7 +154,9 @@ app.get('/lsts', async (c) => {
         resolvedDate: l.resolved_date,
         relatedReportId: l.related_report_id,
         resolutionNote: l.resolution_note,
-        recurrenceCount: l.recurrence_count || 1
+        recurrenceCount: l.recurrence_count || 1,
+        parentIssueId: l.parent_issue_id,
+        locationStatuses: l.location_statuses ? JSON.parse(l.location_statuses) : {}
       }))
     });
   } catch (error: any) {
@@ -172,7 +174,8 @@ app.put('/lsts/:id', async (c) => {
         title = ?, description = ?, recommendation = ?, 
         severity = ?, status = ?, category = ?, 
         location = ?, resolution_note = ?, 
-        resolved_date = ?, assignee = ?
+        resolved_date = ?, assignee = ?,
+        parent_issue_id = ?, location_statuses = ?
       WHERE id = ?
     `)
     .bind(
@@ -180,6 +183,7 @@ app.put('/lsts/:id', async (c) => {
       lst.severity, lst.status, lst.category, 
       lst.location, lst.resolutionNote || null,
       lst.resolvedDate || null, lst.assignee || null,
+      lst.parentIssueId || null, lst.locationStatuses ? JSON.stringify(lst.locationStatuses) : null,
       id
     ).run();
     
