@@ -23,6 +23,7 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
   const noteSelection = useSelection<string>();
   const caseSelection = useSelection<string>();
   const [generating, setGenerating] = useState(false);
+  const [extractLST, setExtractLST] = useState(true);
   
   // Draft Persistence: Use localStorage to persist generated report
   const [generatedReport, setGeneratedReport] = useLocalStorage<string | null>('generatedReportDraft', null);
@@ -125,6 +126,7 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
         selectedNotes: noteSelection.selected,
         selectedCases: caseSelection.selected,
         selectedSite: selectedSite || '',
+        extractLST,
       };
 
       let fullContent = '';
@@ -449,20 +451,43 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
 
           {/* Generate Button */}
           <div className="space-y-3">
-            {/* LST Extraction Info Banner */}
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <h4 className="font-semibold text-blue-900 dark:text-blue-200 text-sm mb-1">
-                    Automatic LST Extraction Enabled
-                  </h4>
-                  <p className="text-xs text-blue-800 dark:text-blue-300">
-                    This report will automatically identify and extract Latent Safety Threats, then sync them to the <strong>LST Tracker</strong> tab. 
-                    New threats are added as "Identified" and recurring issues are marked as "Recurring" with updated timestamps.
-                  </p>
+            {/* LST Extraction Configuration */}
+            <div className={`p-4 rounded-xl border transition-all duration-300 ${
+              extractLST 
+                ? 'bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-blue-200 dark:border-blue-800' 
+                : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 opacity-80'
+            }`}>
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className={`p-2 rounded-lg ${extractLST ? 'bg-blue-100 dark:bg-blue-900/50' : 'bg-slate-200 dark:bg-slate-800'}`}>
+                    <Target className={`w-5 h-5 ${extractLST ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500'}`} />
+                  </div>
+                  <div>
+                    <h4 className={`font-bold text-sm ${extractLST ? 'text-blue-900 dark:text-blue-200' : 'text-slate-700 dark:text-slate-300'}`}>
+                      Safety Intelligence Engine
+                    </h4>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">
+                      Automatically identify LSTs and sync to tracker
+                    </p>
+                  </div>
                 </div>
+                
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    className="sr-only peer" 
+                    checked={extractLST}
+                    onChange={(e) => setExtractLST(e.target.checked)}
+                  />
+                  <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-[#A51417]"></div>
+                </label>
               </div>
+
+              {extractLST && (
+                <div className="mt-3 text-xs text-blue-800 dark:text-blue-300 bg-white/50 dark:bg-slate-950/50 p-2 rounded-lg border border-blue-100 dark:border-blue-900/50">
+                  <strong>Intelligence Active:</strong> Gemini 3.1 Flash Lite will scan this report for clinical gaps, equipment failures, and process errors.
+                </div>
+              )}
             </div>
 
             <button

@@ -294,7 +294,7 @@ app.get('/search', async (c) => {
 // Report Generation (Gemini AI Implementation & Streaming)
 app.post('/generate-report', rateLimit, async (c) => {
   try {
-    const { selectedReports, selectedNotes, selectedCases } = await c.req.json();
+    const { selectedReports, selectedNotes, selectedCases, extractLST } = await c.req.json();
     
     if (!selectedNotes || selectedNotes.length === 0) {
       return c.json({ error: 'At least one session note must be selected' }, 400);
@@ -424,8 +424,10 @@ app.post('/generate-report', rateLimit, async (c) => {
              .bind(reportId, `AI Created - ${new Date().toLocaleDateString()}`, fullReport, 'generated_report', JSON.stringify({ createdAt: new Date().toISOString() }))
              .run();
            
-           // AUTO-EXTRACT LSTS (AI POWERED)
-           await extractAndScoreLSTs(c.env.DB, fullReport, reportId, c.env.GEMINI_API_KEY);
+           // AUTO-EXTRACT LSTS (AI POWERED) - Conditioned by user toggle
+           if (extractLST !== false) {
+             await extractAndScoreLSTs(c.env.DB, fullReport, reportId, c.env.GEMINI_API_KEY);
+           }
            
            await logAudit(c.env.DB, 'generate', 'report', `Streaming report complete`, reportId);
          } catch (dbErr) {
