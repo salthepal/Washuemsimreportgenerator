@@ -2,6 +2,8 @@ import { Hono } from 'hono';
 import { streamText } from 'hono/streaming';
 import { cors } from 'hono/cors';
 import { logger as honoLogger } from 'hono/logger';
+import { secureHeaders } from 'hono/secure-headers';
+import { cache } from 'hono/cache';
 
 type Bindings = {
   DB: D1Database;
@@ -12,8 +14,18 @@ type Bindings = {
 
 const app = new Hono<{ Bindings: Bindings }>();
 
+// 1. Security Headers Middleware
+app.use('*', secureHeaders());
+
+// 2. Base Middlewares
 app.use('*', honoLogger());
 app.use('*', cors());
+
+// 3. Edge Caching Middleware (Only applies to GET requests automatically)
+app.use('*', cache({
+  cacheName: 'washusim-api-cache',
+  cacheControl: 'max-age=30', // Cache for 30 seconds to optimize D1 reads while keeping data relatively fresh
+}));
 
 app.get('/', (c) => {
   return c.json({
