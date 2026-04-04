@@ -276,31 +276,70 @@ app.post('/generate-report', rateLimit, async (c) => {
 
       let fullReport = '';
       const decoder = new TextDecoder();
+      let buffer = '';
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value);
-        // Gemini streaming returns JSON blobs in an array, we parse and stream the text
+        buffer += decoder.decode(value, { stream: true });
+        
+        // Gemini streaming JSON often comes as elements in an array: [{}, {}, ...]
+        // We need to parse individual JSON objects from the stream.
+        // It's safer to split by something identifiable or accumulate until a valid JSON object is found.
+        
+        let boundary = buffer.indexOf('}\n,');
+        if (boundary === -1) boundary = buffer.indexOf('}]'); // End of stream
+        
+        while (boundary !== -1) {
+          let part = buffer.substring(0, boundary + 1).trim();
+          // Remove leading array bracket or comma
+          if (part.startsWith('[')) part = part.substring(1);
+          if (part.startsWith(',')) part = part.substring(1);
+          
+          try {
+            const json = JSON.parse(part);
+            if (json.candidates?.[0]?.content?.parts?.[0]?.text) {
+              const text = json.candidates[0].content.parts[0].text;
+              fullReport += text;
+              await stream.write(text);
+            }
+          } catch (e) {
+            console.error('Partial JSON parse failed:', e, part);
+          }
+          
+          buffer = buffer.substring(boundary + 2);
+          boundary = buffer.indexOf('}\n,');
+          if (boundary === -1) boundary = buffer.indexOf('}]');
+        }
+      }
+
+      // Final attempt for anything remaining in buffer
+      if (buffer.trim()) {
         try {
-           const lines = chunk.split('\n').filter(l => l.trim() !== '');
-           for (const line of lines) {
-             const json = JSON.parse(line.replace(/^,/, ''));
+          let lastPart = buffer.trim();
+          if (lastPart.endsWith(']')) lastPart = lastPart.slice(0, -1);
+          if (lastPart.startsWith(',')) lastPart = lastPart.substring(1);
+          const json = JSON.parse(lastPart);
+          if (json.candidates?.[0]?.content?.parts?.[0]?.text) {
              const text = json.candidates[0].content.parts[0].text;
              fullReport += text;
              await stream.write(text);
-           }
-        } catch (e) { /* ignore chunking errors during JSON stream */ }
+          }
+        } catch (e) {}
       }
 
       // After stream completes, save the full report to D1 (fire and forget)
       const reportId = `report_${Date.now()}_${Math.random().toString(36).substring(7)}`;
       c.executionCtx.waitUntil((async () => {
-         await c.env.DB.prepare('INSERT INTO reports (id, title, content, type, metadata) VALUES (?, ?, ?, ?, ?)')
-           .bind(reportId, `AI Created - ${new Date().toLocaleDateString()}`, fullReport, 'generated_report', JSON.stringify({ createdAt: new Date().toISOString() }))
-           .run();
-         await logAudit(c.env.DB, 'generate', 'report', `Streaming report complete`, reportId);
+         try {
+           await c.env.DB.prepare('INSERT INTO reports (id, title, content, type, metadata) VALUES (?, ?, ?, ?, ?)')
+             .bind(reportId, `AI Created - ${new Date().toLocaleDateString()}`, fullReport, 'generated_report', JSON.stringify({ createdAt: new Date().toISOString() }))
+             .run();
+           await logAudit(c.env.DB, 'generate', 'report', `Streaming report complete`, reportId);
+         } catch (dbErr) {
+           console.error('Failed to save generated report:', dbErr);
+         }
       })());
     });
   } catch (error: any) {
