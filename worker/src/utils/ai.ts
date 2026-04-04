@@ -7,6 +7,15 @@ export interface LSTPayload {
   status: 'Identified' | 'In Progress' | 'Resolved' | 'Recurring';
 }
 
+async function logError(db: D1Database, action: string, error: any, context?: any) {
+  try {
+    const errorId = `error_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    await db.prepare('INSERT INTO error_logs (id, action, message, stack, context, timestamp) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(errorId, action, error?.message || String(error), error?.stack, context ? JSON.stringify(context) : null, new Date().toISOString())
+      .run();
+  } catch (e) { console.error('Double fault logging error:', e); }
+}
+
 export async function extractAndScoreLSTs(db: D1Database, reportContent: string, reportId: string, geminiKey: string) {
   try {
     const prompt = `
@@ -41,9 +50,20 @@ Format: [{"title": "...", "description": "...", "recommendation": "...", "severi
       }
     );
 
-    if (!geminiRes.ok) return;
+    if (!geminiRes.ok) {
+      const errText = await geminiRes.text();
+      await logError(db, 'AI_LST_FETCH', new Error(`Gemini API returned ${geminiRes.status}: ${errText}`), { reportId });
+      return;
+    }
     const data = await geminiRes.json() as any;
-    const parsedLSTs: LSTPayload[] = JSON.parse(data.candidates[0].content.parts[0].text);
+    
+    if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
+      await logError(db, 'AI_LST_PARSE', new Error('Empty Gemini response'), { data, reportId });
+      return;
+    }
+    
+    const rawText = data.candidates[0].content.parts[0].text;
+    const parsedLSTs: LSTPayload[] = JSON.parse(rawText);
 
     for (const lst of parsedLSTs) {
       const lstId = `lst_${Date.now()}_${Math.random().toString(36).substring(7)}`;
@@ -90,5 +110,6 @@ Format: [{"title": "...", "description": "...", "recommendation": "...", "severi
     }
   } catch (error) {
     console.error('AI LST Extraction Error:', error);
+    await logError(db, 'AI_LST_SYSTEM', error, { reportId });
   }
 }
