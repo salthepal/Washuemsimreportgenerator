@@ -307,7 +307,20 @@ app.post('/generate-report', rateLimit, async (c) => {
 
     // Get the user's preferred model
     const { results: modelRes } = await c.env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('ai_model_preference').all();
-    const modelPreference = modelRes[0] ? JSON.parse(modelRes[0].value as string) : 'gemini-flash-latest';
+    let modelPreference = 'gemini-flash-latest';
+    if (modelRes[0]) {
+      const val = modelRes[0].value as string;
+      try {
+        // Handle cases where it might be double-quoted or raw
+        if (val.startsWith('"')) {
+          modelPreference = JSON.parse(val);
+        } else {
+          modelPreference = val;
+        }
+      } catch (e) {
+        modelPreference = val;
+      }
+    }
 
     // Fetch the context
     const reportsRes = await c.env.DB.prepare(`SELECT * FROM reports WHERE id IN (${selectedReports.map(() => '?').join(',')})`).bind(...selectedReports).all();
@@ -560,7 +573,13 @@ app.get('/prompt-template', (c) => {
 app.get('/model-preference', async (c) => {
   try {
     const { results } = await c.env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('ai_model_preference').all();
-    return c.json({ model: results[0] ? JSON.parse(results[0].value as string) : 'gemini-flash-latest' });
+    if (!results[0]) return c.json({ model: 'gemini-flash-latest' });
+    const val = results[0].value as string;
+    let model = val;
+    if (val.startsWith('"')) {
+       try { model = JSON.parse(val); } catch(e) {}
+    }
+    return c.json({ model });
   } catch (error: any) {
     return c.json({ model: 'gemini-flash-latest' });
   }
@@ -570,7 +589,7 @@ app.post('/model-preference', async (c) => {
   try {
     const { model } = await c.req.json();
     await c.env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
-      .bind('ai_model_preference', JSON.stringify(model))
+      .bind('ai_model_preference', model)
       .run();
     
     await logAudit(c.env.DB, 'update', 'settings', `Changed AI model to ${model}`, 'settings');
@@ -580,20 +599,6 @@ app.post('/model-preference', async (c) => {
   }
 });
 
-app.post('/settings/ai-model', async (c) => {
-  // Keeping this for backward compatibility if any old components use it
-  try {
-    const { model } = await c.req.json();
-    await c.env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
-      .bind('ai_model_preference', JSON.stringify(model))
-      .run();
-      
-    await logAudit(c.env.DB, 'update', 'settings', `Changed AI model to ${model}`, 'settings');
-    return c.json({ success: true, model });
-  } catch (error: any) {
-    return c.json({ error: error.message }, 500);
-  }
-});
 
 // Session Notes
 app.get('/notes', async (c) => {
