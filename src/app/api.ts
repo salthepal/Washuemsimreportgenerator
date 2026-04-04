@@ -1,8 +1,8 @@
 /// <reference types="vite/client" />
 import type { Report, SessionNote, CaseFile, LST } from './types';
 
-// Base URL for the backend API (defaults to /api proxy, can be overridden for local dev)
-export const API_BASE = import.meta.env.VITE_API_BASE || '/api';
+// Base URL for the backend API (fallback to absolute URL since proxy isn't running on workers.dev)
+export const API_BASE = import.meta.env.VITE_API_BASE || 'https://washu-em-sim-intelligence.sphadnisuf.workers.dev';
 
 export const API_HEADERS = {
   'Content-Type': 'application/json',
