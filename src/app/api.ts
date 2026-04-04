@@ -1,9 +1,8 @@
+/// <reference types="vite/client" />
 import type { Report, SessionNote, CaseFile, LST } from './types';
 
-// Base URL for the backend API
-// Original Supabase URL (commented out): 
-// const API_BASE = 'https://zuvhkazgoonarugqlvwi.supabase.co/functions/v1/make-server-7fe18c53';
-export const API_BASE = 'https://washu-em-sim-intelligence.sphadnisuf.workers.dev';
+// Base URL for the backend API (defaults to /api proxy, can be overridden for local dev)
+export const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
 export const API_HEADERS = {
   'Content-Type': 'application/json',
