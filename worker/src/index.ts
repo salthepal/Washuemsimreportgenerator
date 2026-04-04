@@ -487,6 +487,18 @@ app.post('/reports/upload', async (c) => {
   }
 });
 
+app.delete('/reports/:id', async (c) => {
+  try {
+    const id = c.req.param('id');
+    await c.env.DB.prepare('DELETE FROM reports WHERE id = ?').bind(id).run();
+    await logAudit(c.env.DB, 'delete', 'report', `Deleted report ${id}`, id);
+    return c.json({ success: true });
+  } catch (error: any) {
+    await logError(c.env.DB, 'report_delete', error);
+    return c.json({ error: error.message }, 500);
+  }
+});
+
 // Prompt Template (Official WashU EM Simulation Version)
 const PROMPT_TEMPLATE = `Role: You are an expert Medical Simulation Specialist and Education Consultant for the Washington University Department of Emergency Medicine. Your goal is to generate professional, actionable Post-Session Reports that prioritize psychological safety and a "Just Culture" framework.
 
@@ -616,6 +628,18 @@ app.post('/notes/add', async (c) => {
     return c.json({ success: true, notes: { ...note, id } });
   } catch (error: any) {
     await logError(c.env.DB, 'note_upload', error);
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+app.delete('/notes/:id', async (c) => {
+  try {
+    const id = c.req.param('id');
+    await c.env.DB.prepare('DELETE FROM session_notes WHERE id = ?').bind(id).run();
+    await logAudit(c.env.DB, 'delete', 'session_notes', `Deleted note ${id}`, id);
+    return c.json({ success: true });
+  } catch (error: any) {
+    await logError(c.env.DB, 'note_delete', error);
     return c.json({ error: error.message }, 500);
   }
 });
