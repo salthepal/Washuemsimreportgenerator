@@ -496,7 +496,10 @@ app.get('/notes', async (c) => {
     const { results } = await c.env.DB.prepare('SELECT * FROM session_notes ORDER BY created_at DESC').all();
     return c.json({
       notes: results.map((n: any) => ({
-        ...n,
+        id: n.id,
+        sessionName: n.session_name,
+        notes: n.notes,
+        createdAt: n.created_at || new Date().toISOString(),
         participants: n.participants ? JSON.parse(n.participants) : [],
         tags: n.tags ? JSON.parse(n.tags) : [],
         metadata: n.metadata ? JSON.parse(n.metadata) : {}
