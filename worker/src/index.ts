@@ -4,6 +4,7 @@ import { cors } from 'hono/cors';
 import { logger as honoLogger } from 'hono/logger';
 import { secureHeaders } from 'hono/secure-headers';
 import { cache } from 'hono/cache';
+import { extractAndScoreLSTs } from './utils/ai';
 
 type Bindings = {
   DB: D1Database;
@@ -141,23 +142,60 @@ app.onError((err, c) => {
 
 // --- API Endpoints ---
 
-// LST Tracker
+// LST Extraction Tracker
 app.get('/lsts', async (c) => {
   try {
-    const { results } = await c.env.DB.prepare('SELECT * FROM lsts ORDER BY created_at DESC').all();
-    return c.json({ lsts: results });
+    const { results } = await c.env.DB.prepare('SELECT * FROM lsts ORDER BY CASE WHEN status = "Resolved" THEN 1 ELSE 0 END, CASE WHEN severity = "High" THEN 0 WHEN severity = "Medium" THEN 1 ELSE 2 END, last_seen_date DESC').all();
+    return c.json({ 
+      lsts: results.map((l: any) => ({
+        ...l,
+        identifiedDate: l.identified_date,
+        lastSeenDate: l.last_seen_date,
+        resolvedDate: l.resolved_date,
+        relatedReportId: l.related_report_id,
+        resolutionNote: l.resolution_note,
+        recurrenceCount: l.recurrence_count || 1
+      }))
+    });
   } catch (error: any) {
     return c.json({ error: error.message }, 500);
   }
 });
 
-app.post('/lsts', async (c) => {
+app.put('/lsts/:id', async (c) => {
+  try {
+    const id = c.req.param('id');
+    const lst = await c.req.json();
+    
+    await c.env.DB.prepare(`
+      UPDATE lsts SET 
+        title = ?, description = ?, recommendation = ?, 
+        severity = ?, status = ?, category = ?, 
+        location = ?, resolution_note = ?, 
+        resolved_date = ?, assignee = ?
+      WHERE id = ?
+    `)
+    .bind(
+      lst.title, lst.description, lst.recommendation, 
+      lst.severity, lst.status, lst.category, 
+      lst.location, lst.resolutionNote || null,
+      lst.resolvedDate || null, lst.assignee || null,
+      id
+    ).run();
+    
+    return c.json({ success: true });
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+app.post('/lsts/add', async (c) => {
   try {
     const lst = await c.req.json();
     const id = lst.id || `lst_${Date.now()}_${Math.random().toString(36).substring(7)}`;
     
-    await c.env.DB.prepare('INSERT INTO lsts (id, title, description, recommendation, severity, status, category, location, identified_date, last_seen_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(id, lst.title || 'Untitled', lst.description || '', lst.recommendation || '', lst.severity || 'Medium', lst.status || 'Identified', lst.category || '', lst.location || '', lst.identifiedDate || new Date().toISOString(), lst.lastSeenDate || new Date().toISOString())
+    await c.env.DB.prepare('INSERT INTO lsts (id, title, description, recommendation, severity, status, category, location, identified_date, last_seen_date, recurrence_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, lst.title || 'Untitled', lst.description || '', lst.recommendation || '', lst.severity || 'Medium', lst.status || 'Identified', lst.category || '', lst.location || '', lst.identifiedDate || new Date().toISOString(), lst.lastSeenDate || new Date().toISOString(), 1)
       .run();
       
     await logAudit(c.env.DB, 'create', 'lst', lst.title || 'Untitled LST', id);
@@ -175,10 +213,11 @@ app.post('/lsts/merge', async (c) => {
     }
 
     const newId = `lst_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const totalRecurrence = ids.length; // Approximate
     
     // Create new LST
-    await c.env.DB.prepare('INSERT INTO lsts (id, title, description, recommendation, severity, status, category, location, identified_date, last_seen_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(newId, mergedLST.title || 'Merged LST', mergedLST.description || '', mergedLST.recommendation || '', mergedLST.severity || 'Medium', mergedLST.status || 'Identified', mergedLST.category || '', mergedLST.location || '', mergedLST.identifiedDate || new Date().toISOString(), mergedLST.lastSeenDate || new Date().toISOString())
+    await c.env.DB.prepare('INSERT INTO lsts (id, title, description, recommendation, severity, status, category, location, identified_date, last_seen_date, recurrence_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(newId, mergedLST.title || 'Merged LST', mergedLST.description || '', mergedLST.recommendation || '', mergedLST.severity || 'Medium', mergedLST.status || 'Identified', mergedLST.category || '', mergedLST.location || '', mergedLST.identifiedDate || new Date().toISOString(), mergedLST.lastSeenDate || new Date().toISOString(), totalRecurrence)
       .run();
 
     // Delete old ones
@@ -192,6 +231,7 @@ app.post('/lsts/merge', async (c) => {
     return c.json({ error: error.message }, 500);
   }
 });
+
 
 // R2 Object Storage (File Handling)
 app.post('/upload-file', async (c) => {
@@ -380,8 +420,8 @@ app.post('/generate-report', rateLimit, async (c) => {
              .bind(reportId, `AI Created - ${new Date().toLocaleDateString()}`, fullReport, 'generated_report', JSON.stringify({ createdAt: new Date().toISOString() }))
              .run();
            
-           // AUTO-EXTRACT LSTS
-           await extractLSTs(c.env.DB, fullReport, reportId);
+           // AUTO-EXTRACT LSTS (AI POWERED)
+           await extractAndScoreLSTs(c.env.DB, fullReport, reportId, c.env.GEMINI_API_KEY);
            
            await logAudit(c.env.DB, 'generate', 'report', `Streaming report complete`, reportId);
          } catch (dbErr) {
