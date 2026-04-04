@@ -138,9 +138,9 @@ export function ViewAIPrompt() {
               Gemini AI Model Selection
             </h3>
             <p className="text-xs md:text-sm text-purple-700 dark:text-purple-300 mb-4">
-              Choose the primary Gemini model for professional report synthesis. High-fidelity models (Pro) offer more nuance, while Flash models are faster. 
+              Choose the primary Gemini model for professional report synthesis. Pro models offer maximum nuance, while Flash models are prioritized for speed. 
               <span className="block mt-1 font-semibold text-purple-900 dark:text-purple-100 italic">
-                Note: LST Extraction consistently uses Flash Lite 2.0 for sub-second background auditing.
+                Note: LST Extraction consistently uses Flash Lite for sub-second background auditing.
               </span>
             </p>
             <div className="space-y-3">
@@ -169,18 +169,18 @@ export function ViewAIPrompt() {
                   <input
                     type="radio"
                     name="model"
-                    value="gemini-1.5-flash-latest"
-                    checked={selectedModel === 'gemini-1.5-flash-latest'}
+                    value="gemini-flash-latest"
+                    checked={selectedModel === 'gemini-flash-latest'}
                     onChange={(e) => handleModelChange(e.target.value)}
                     disabled={savingModel}
                     className="w-4 h-4 text-purple-600 focus:ring-2 focus:ring-purple-500"
                   />
                   <div className="flex-1">
                     <div className="font-medium text-slate-900 dark:text-slate-100 text-sm">
-                      Gemini 1.5 Flash
+                      Gemini Flash
                     </div>
                     <div className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-                      Faster, more cost-effective
+                      Balanced speed and quality
                     </div>
                   </div>
                 </label>
@@ -189,15 +189,15 @@ export function ViewAIPrompt() {
                   <input
                     type="radio"
                     name="model"
-                    value="gemini-1.5-pro-latest"
-                    checked={selectedModel === 'gemini-1.5-pro-latest'}
+                    value="gemini-pro-latest"
+                    checked={selectedModel === 'gemini-pro-latest'}
                     onChange={(e) => handleModelChange(e.target.value)}
                     disabled={savingModel}
                     className="w-4 h-4 text-purple-600 focus:ring-2 focus:ring-purple-500"
                   />
                   <div className="flex-1">
                     <div className="font-medium text-slate-900 dark:text-slate-100 text-sm">
-                      Gemini 1.5 Pro
+                      Gemini Pro
                     </div>
                     <div className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
                       Most capable, detailed output
