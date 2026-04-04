@@ -169,18 +169,18 @@ export function ViewAIPrompt() {
                   <input
                     type="radio"
                     name="model"
-                    value="gemini-flash-latest"
-                    checked={selectedModel === 'gemini-flash-latest'}
+                    value="gemini-flash-lite-latest"
+                    checked={selectedModel === 'gemini-flash-lite-latest'}
                     onChange={(e) => handleModelChange(e.target.value)}
                     disabled={savingModel}
                     className="w-4 h-4 text-purple-600 focus:ring-2 focus:ring-purple-500"
                   />
                   <div className="flex-1">
                     <div className="font-medium text-slate-900 dark:text-slate-100 text-sm">
-                      Gemini Flash
+                      Gemini Flash Lite
                     </div>
                     <div className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-                      Balanced speed and quality
+                      Fastest, most efficient
                     </div>
                   </div>
                 </label>
