@@ -13,21 +13,21 @@ export async function fetchReports(): Promise<Report[]> {
   const res = await fetch(`${API_BASE}/reports`, { headers: API_HEADERS });
   if (!res.ok) throw new Error('Failed to fetch reports');
   const data = await res.json();
-  return data.reports || [];
+  return Array.isArray(data) ? data : (data.reports || []);
 }
 
 export async function fetchGeneratedReports(): Promise<Report[]> {
   const res = await fetch(`${API_BASE}/reports/generated`, { headers: API_HEADERS });
   if (!res.ok) throw new Error('Failed to fetch generated reports');
   const data = await res.json();
-  return data.reports || [];
+  return Array.isArray(data) ? data : (data.reports || []);
 }
 
 export async function fetchNotes(): Promise<SessionNote[]> {
   const res = await fetch(`${API_BASE}/notes`, { headers: API_HEADERS });
   if (!res.ok) throw new Error('Failed to fetch notes');
   const data = await res.json();
-  return data.notes || [];
+  return Array.isArray(data) ? data : (data.notes || []);
 }
 
 export async function fetchCaseFiles(): Promise<CaseFile[]> {
@@ -41,7 +41,7 @@ export async function fetchLSTs(): Promise<LST[]> {
   const res = await fetch(`${API_BASE}/lsts`, { headers: API_HEADERS });
   if (!res.ok) throw new Error('Failed to fetch LSTs');
   const data = await res.json();
-  return data.lsts || [];
+  return Array.isArray(data) ? data : (data.lsts || []);
 }
 
 export async function updateLst(id: string, payload: Partial<LST>): Promise<LST> {

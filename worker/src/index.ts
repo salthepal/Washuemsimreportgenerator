@@ -82,7 +82,7 @@ app.onError((err, c) => {
 app.get('/lsts', async (c) => {
   try {
     const { results } = await c.env.DB.prepare('SELECT * FROM lsts ORDER BY created_at DESC').all();
-    return c.json(results);
+    return c.json({ lsts: results });
   } catch (error: any) {
     return c.json({ error: error.message }, 500);
   }
@@ -304,6 +304,20 @@ app.get('/reports', async (c) => {
   }
 });
 
+app.get('/reports/generated', async (c) => {
+  try {
+    const { results } = await c.env.DB.prepare("SELECT * FROM reports WHERE type = 'generated_report' ORDER BY created_at DESC").all();
+    return c.json({ 
+      reports: results.map((r: any) => ({
+        ...r,
+        metadata: r.metadata ? JSON.parse(r.metadata) : {}
+      }))
+    });
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500);
+  }
+});
+
 app.post('/reports/upload', async (c) => {
   try {
     const reportData = await c.req.json();
@@ -421,12 +435,14 @@ app.post('/settings/ai-model', async (c) => {
 app.get('/notes', async (c) => {
   try {
     const { results } = await c.env.DB.prepare('SELECT * FROM session_notes ORDER BY created_at DESC').all();
-    return c.json(results.map((n: any) => ({
-      ...n,
-      participants: n.participants ? JSON.parse(n.participants) : [],
-      tags: n.tags ? JSON.parse(n.tags) : [],
-      metadata: n.metadata ? JSON.parse(n.metadata) : {}
-    })));
+    return c.json({
+      notes: results.map((n: any) => ({
+        ...n,
+        participants: n.participants ? JSON.parse(n.participants) : [],
+        tags: n.tags ? JSON.parse(n.tags) : [],
+        metadata: n.metadata ? JSON.parse(n.metadata) : {}
+      }))
+    });
   } catch (error: any) {
     return c.json({ error: error.message }, 500);
   }
