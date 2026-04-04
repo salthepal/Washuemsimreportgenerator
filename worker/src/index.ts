@@ -15,6 +15,14 @@ const app = new Hono<{ Bindings: Bindings }>();
 app.use('*', honoLogger());
 app.use('*', cors());
 
+app.get('/', (c) => {
+  return c.json({
+    message: 'WashU EM Sim Intelligence API is Running',
+    version: '3.1.2',
+    status: 'Operational'
+  });
+});
+
 // Error logging helper for Cloudflare
 async function logError(db: D1Database, action: string, error: any, context?: any) {
   try {
