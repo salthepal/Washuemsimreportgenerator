@@ -89,6 +89,49 @@ async function rateLimit(c: any, next: any) {
   return next();
 }
 
+// LST Extraction Helper
+async function extractLSTs(db: D1Database, reportContent: string, reportId: string) {
+  try {
+    // Regex to find things in ## Latent Safety Threats section
+    // Actually, it is more reliable to ask Gemini to output a hidden JSON block at the end
+    // But for the existing reports, we use a simple parser for Markdown bold labels
+    const sections = reportContent.split('##');
+    const lstSection = sections.find(s => s.toLowerCase().includes('latent safety threat'));
+    
+    if (!lstSection) return;
+
+    // Split by individual LST headers (###)
+    const findings = lstSection.split('###').slice(1);
+    
+    for (const finding of findings) {
+      const lines = finding.split('\n');
+      const title = lines[0].trim();
+      const content = finding;
+      
+      // Extract Recommendation if possible
+      const recMatch = finding.match(/\*\*Recommendations:\*\*(.*)/i);
+      const recommendation = recMatch ? recMatch[1].trim() : '';
+      
+      const lstId = `lst_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      
+      // Check for duplicates (very basic check)
+      const existing = await db.prepare('SELECT id FROM lsts WHERE title = ?').bind(title).all();
+      if (existing.results?.length > 0) {
+        // Update last seen date for recurring issue
+        await db.prepare('UPDATE lsts SET last_seen_date = ?, status = ? WHERE title = ?')
+          .bind(new Date().toISOString(), 'Recurring', title)
+          .run();
+      } else {
+        await db.prepare('INSERT INTO lsts (id, title, description, recommendation, severity, status, category, identified_date, last_seen_date, related_report_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+          .bind(lstId, title, content.substring(0, 500), recommendation, 'Medium', 'Identified', 'Process', new Date().toISOString(), new Date().toISOString(), reportId)
+          .run();
+      }
+    }
+  } catch (err) {
+    console.error('LST Extraction Failed:', err);
+  }
+}
+
 // Global error handler
 app.onError((err, c) => {
   console.error('Server error:', err);
@@ -336,6 +379,10 @@ app.post('/generate-report', rateLimit, async (c) => {
            await c.env.DB.prepare('INSERT INTO reports (id, title, content, type, metadata) VALUES (?, ?, ?, ?, ?)')
              .bind(reportId, `AI Created - ${new Date().toLocaleDateString()}`, fullReport, 'generated_report', JSON.stringify({ createdAt: new Date().toISOString() }))
              .run();
+           
+           // AUTO-EXTRACT LSTS
+           await extractLSTs(c.env.DB, fullReport, reportId);
+           
            await logAudit(c.env.DB, 'generate', 'report', `Streaming report complete`, reportId);
          } catch (dbErr) {
            console.error('Failed to save generated report:', dbErr);
