@@ -42,23 +42,27 @@ export async function processDocxFile(file: File): Promise<ProcessedDocument> {
 /**
  * Formats date for display
  */
-export function formatDate(dateString: string): string {
+export function formatDate(dateString: string | null | undefined): string {
+  if (!dateString) return '---';
   try {
-    const parsedDate = new Date(dateString.replace(' ', 'T'));
+    const formatted = dateString.includes(' ') ? dateString.replace(' ', 'T') : dateString;
+    const parsedDate = new Date(formatted);
     return isNaN(parsedDate.getTime()) ? dateString : parsedDate.toLocaleDateString();
   } catch {
-    return dateString;
+    return String(dateString);
   }
 }
 
 /**
  * Formats date and time for display
  */
-export function formatDateTime(dateString: string): string {
+export function formatDateTime(dateString: string | null | undefined): string {
+  if (!dateString) return '---';
   try {
-    const parsedDate = new Date(dateString.replace(' ', 'T'));
+    const formatted = dateString.includes(' ') ? dateString.replace(' ', 'T') : dateString;
+    const parsedDate = new Date(formatted);
     return isNaN(parsedDate.getTime()) ? dateString : parsedDate.toLocaleString();
   } catch {
-    return dateString;
+    return String(dateString);
   }
 }

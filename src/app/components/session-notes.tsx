@@ -357,9 +357,7 @@ export function SessionNotes({ sessionNotes, onRefresh }: SessionNotesProps) {
                         )}
                         <span className="flex items-center gap-1">
                           <Calendar className="w-3 h-3 md:w-4 md:h-4 flex-shrink-0" />
-                          {note.metadata?.sessionDate 
-                            ? new Date(note.metadata.sessionDate).toLocaleDateString()
-                            : new Date(note.createdAt).toLocaleDateString()}
+                          {formatDate(note.metadata?.sessionDate || note.createdAt)}
                         </span>
                         <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
                           {noteWordCount} words

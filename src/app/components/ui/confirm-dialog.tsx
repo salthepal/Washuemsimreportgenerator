@@ -16,6 +16,7 @@ interface ConfirmDialogProps {
   title: string;
   description: string;
   onConfirm: () => void;
+  onCancel?: () => void;
   confirmText?: string;
   cancelText?: string;
   variant?: 'default' | 'destructive';
@@ -27,6 +28,7 @@ export function ConfirmDialog({
   title,
   description,
   onConfirm,
+  onCancel,
   confirmText = 'Confirm',
   cancelText = 'Cancel',
   variant = 'default',
@@ -39,7 +41,7 @@ export function ConfirmDialog({
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>{cancelText}</AlertDialogCancel>
+          <AlertDialogCancel onClick={onCancel}>{cancelText}</AlertDialogCancel>
           <AlertDialogAction
             onClick={onConfirm}
             className={variant === 'destructive' ? 'bg-red-600 hover:bg-red-700' : ''}

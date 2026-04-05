@@ -4,6 +4,7 @@ import {
   TrendingUp, Users, Calendar, PlayCircle, Archive, AlertCircle,
   Download, MapPin, Pencil, X, Save, Trash2, GitMerge, Plus
 } from 'lucide-react';
+import { formatDate } from '../utils/document';
 import { LST } from '../types';
 import { toast } from 'sonner';
 
@@ -583,12 +584,12 @@ export function LSTTracker({ selectedSite }: LSTTrackerProps) {
                     )}
                     <span className="flex items-center gap-1">
                       <Calendar className="w-2.5 h-2.5" />
-                      {new Date(lst.identifiedDate).toLocaleDateString()}
+                      {formatDate(lst.identifiedDate)}
                     </span>
                     {lst.resolvedDate && (
                       <span className="flex items-center gap-1 text-[#007A33] dark:text-green-400 font-semibold">
                         <CheckCircle2 className="w-2.5 h-2.5" />
-                        Resolved {new Date(lst.resolvedDate).toLocaleDateString()}
+                        Resolved {formatDate(lst.resolvedDate)}
                       </span>
                     )}
                   </div>

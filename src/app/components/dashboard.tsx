@@ -48,27 +48,39 @@ export function Dashboard({ reports, sessionNotes, generatedReports, lsts, isLoa
 
   // ── Gaps Found vs Gaps Resolved over time ──
   const gapTimelineData = useMemo(() => {
-    const monthMap: Record<string, { found: number; resolved: number }> = {};
+    // Grouping by a sortable key (YYYY-MM)
+    const monthMap: Record<string, { found: number; resolved: number; display: string }> = {};
 
     filteredLsts.forEach(lst => {
-      const foundMonth = new Date(lst.identifiedDate).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-      if (!monthMap[foundMonth]) monthMap[foundMonth] = { found: 0, resolved: 0 };
-      monthMap[foundMonth].found += 1;
+      if (!lst.identifiedDate) return;
+      const d = new Date(lst.identifiedDate);
+      if (isNaN(d.getTime())) return;
+      
+      const sortKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const display = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+      
+      if (!monthMap[sortKey]) monthMap[sortKey] = { found: 0, resolved: 0, display };
+      monthMap[sortKey].found += 1;
 
       if (lst.resolvedDate) {
-        const resMonth = new Date(lst.resolvedDate).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-        if (!monthMap[resMonth]) monthMap[resMonth] = { found: 0, resolved: 0 };
-        monthMap[resMonth].resolved += 1;
+        const rd = new Date(lst.resolvedDate);
+        if (!isNaN(rd.getTime())) {
+          const rSortKey = `${rd.getFullYear()}-${String(rd.getMonth() + 1).padStart(2, '0')}`;
+          const rDisplay = rd.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+          if (!monthMap[rSortKey]) monthMap[rSortKey] = { found: 0, resolved: 0, display: rDisplay };
+          monthMap[rSortKey].resolved += 1;
+        }
       }
     });
 
     return Object.entries(monthMap)
-      .sort((a, b) => {
-        const da = new Date(a[0]);
-        const db = new Date(b[0]);
-        return da.getTime() - db.getTime();
-      })
-      .map(([month, data], idx) => ({ id: `gap-${idx}`, month, ...data }))
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([key, data], idx) => ({ 
+        id: `gap-${idx}`, 
+        month: data.display, 
+        found: data.found, 
+        resolved: data.resolved 
+      }))
       .slice(-8);
   }, [filteredLsts]);
 
@@ -96,7 +108,11 @@ export function Dashboard({ reports, sessionNotes, generatedReports, lsts, isLoa
         severity: l.severity
       })),
     ];
-    return all.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 8);
+    return all.sort((a, b) => {
+      const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return db - da;
+    }).slice(0, 8);
   }, [reports, sessionNotes, generatedReports, filteredLsts]);
 
   const getActivityIcon = (type: string, severity?: string) => {

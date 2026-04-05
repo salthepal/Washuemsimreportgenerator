@@ -1,3 +1,7 @@
+/**
+ * WashU EM Sim Intelligence Worker - v3.1.2
+ * Automatic deployment test triggered via GitHub Actions
+ */
 import { Hono } from 'hono';
 import { streamText } from 'hono/streaming';
 import { cors } from 'hono/cors';
@@ -152,6 +156,7 @@ app.get('/lsts', async (c) => {
         identifiedDate: l.identified_date,
         lastSeenDate: l.last_seen_date,
         resolvedDate: l.resolved_date,
+        createdAt: l.created_at,
         relatedReportId: l.related_report_id,
         resolutionNote: l.resolution_note,
         recurrenceCount: l.recurrence_count || 1,
@@ -461,6 +466,8 @@ app.get('/reports', async (c) => {
     return c.json({ 
       reports: results.map((r: any) => ({
         ...r,
+        createdAt: r.created_at,
+        date: r.created_at, // Use created_at as the primary date for the library
         metadata: r.metadata ? JSON.parse(r.metadata) : {}
       }))
     });
@@ -475,6 +482,8 @@ app.get('/reports/generated', async (c) => {
     return c.json({ 
       reports: results.map((r: any) => ({
         ...r,
+        createdAt: r.created_at,
+        date: r.created_at, // Use created_at as the primary date for the library
         metadata: r.metadata ? JSON.parse(r.metadata) : {}
       }))
     });
@@ -658,6 +667,7 @@ app.get('/case-files', async (c) => {
       return c.json(results.map((cf: any) => ({
         ...cf,
         type: 'case_file',
+        createdAt: cf.created_at || cf.date, // Fallback to date if created_at is missing
         htmlContent: cf.html_content || '',
         metadata: {
           uploaderName: cf.uploader_name || '',
@@ -680,7 +690,7 @@ app.post('/case-files/upload', async (c) => {
     const id = data.id || `case_file_${Date.now()}_${Math.random().toString(36).substring(7)}`;
     
     // Ensure table exists (idempotent for safety)
-    await c.env.DB.prepare('CREATE TABLE IF NOT EXISTS case_files (id TEXT PRIMARY KEY, title TEXT, content TEXT, html_content TEXT, date TEXT, uploader_name TEXT, case_type TEXT)').run();
+    await c.env.DB.prepare('CREATE TABLE IF NOT EXISTS case_files (id TEXT PRIMARY KEY, title TEXT, content TEXT, html_content TEXT, date TEXT, uploader_name TEXT, case_type TEXT, created_at DATETIME DEFAULT (strftime("%Y-%m-%dT%H:%M:%f", "now", "utc")))').run();
     
     await c.env.DB.prepare('INSERT INTO case_files (id, title, content, html_content, date, uploader_name, case_type) VALUES (?, ?, ?, ?, ?, ?, ?)')
       .bind(id, data.title || 'Untitled Case', data.content || '', data.htmlContent || '', data.date || new Date().toISOString(), data.metadata?.uploaderName || '', data.metadata?.caseType || '')

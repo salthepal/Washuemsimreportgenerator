@@ -7,6 +7,7 @@ import { BulkExportModal } from './bulk-export-modal';
 import { useDebounce } from '../hooks/useDebounce';
 import { Skeleton } from './ui/skeleton';
 import { toast } from 'sonner';
+import { formatDate } from '../utils/document';
 
 interface ViewRepositoryProps {
   reports: Report[];
@@ -420,7 +421,7 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
                     <div>
                       <h4 className="font-semibold text-slate-900 dark:text-slate-100">{report.title}</h4>
                       <div className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                        Generated on {new Date(report.createdAt).toLocaleDateString()}
+                        Generated on {formatDate(report.createdAt)}
                       </div>
                       {report.tags && report.tags.length > 0 && (
                         <div className="flex gap-1 mt-2">
@@ -530,10 +531,10 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
                     <div>
                       <h4 className="font-semibold text-slate-900 dark:text-slate-100">{report.title}</h4>
                       <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400 mt-1">
-                        <span className="flex items-center gap-1">
+                        <div className="flex items-center gap-1">
                           <Calendar className="w-4 h-4" />
-                          {new Date(report.date).toLocaleDateString()}
-                        </span>
+                          {formatDate(report.date || report.createdAt)}
+                        </div>
                         <span>{report.content.length} characters</span>
                       </div>
                       {report.tags && report.tags.length > 0 && (
@@ -636,12 +637,15 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
                     <Users className="w-5 h-5 text-green-600 dark:text-green-400 mt-1 flex-shrink-0" />
                     <div>
                       <h4 className="font-semibold text-slate-900 dark:text-slate-100">{note.sessionName}</h4>
-                      <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400 mt-1">
+                      <div className="text-xs md:text-sm text-slate-500 dark:text-slate-400 flex items-center gap-3">
                         <span className="flex items-center gap-1">
-                          <Calendar className="w-4 h-4" />
-                          {new Date(note.createdAt).toLocaleDateString()}
+                          <Calendar className="w-3 h-3 md:w-4 md:h-4" />
+                          {formatDate(note.createdAt)}
                         </span>
-                        <span>{note.participants.length} participants</span>
+                        <span className="flex items-center gap-1">
+                          <Users className="w-3 h-3 md:w-4 md:h-4" />
+                          {note.participants?.length || 0} participants
+                        </span>
                       </div>
                       {note.tags && note.tags.length > 0 && (
                         <div className="flex gap-1 mt-2">
