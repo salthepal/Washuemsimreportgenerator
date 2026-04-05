@@ -5,7 +5,7 @@
   <p><b>Simulation-driven Safety & Learning Intelligence System</b></p>
   <p><i>Washington University School of Medicine - Department of Emergency Medicine</i></p>
 
-  [![Version](https://img.shields.io/badge/version-3.1.0-A51417?style=for-the-badge)](https://github.com/salthepal/WashUSimIntelligence)
+  [![Version](https://img.shields.io/badge/version-3.2.0-A51417?style=for-the-badge)](https://github.com/salthepal/WashUSimIntelligence)
   [![Stack](https://img.shields.io/badge/platform-Cloudflare_Native-007A33?style=for-the-badge)](https://cloudflare.com)
   [![Intelligence](https://img.shields.io/badge/AI-Gemini_3_Flash-blue?style=for-the-badge)](https://ai.google.dev)
 </div>
@@ -19,8 +19,9 @@
 ### 🍱 Main Capabilities
 
 *   **AI-Powered Synthesis**: Real-time generation of simulation reports using advanced LLM prompts tailored to clinical safety and "Just Culture" frameworks.
-*   **LST Tracking**: Centralized management of **Latent Safety Threats** identified during sessions, categorized by severity, status, and department location.
-*   **Knowledge Repository**: High-performance searchable library of clinical scenarios, session notes, and historical reports using native Full-Text Search.
+*   **LST Audit Tracking**: Centralized management of **Latent Safety Threats** with automated revision history, ensuring enterprise-grade auditability.
+*   **Universal Search**: High-performance searchable library of clinical scenarios, session notes, and historical reports using FTS5 Full-Text Search.
+*   **Atomic Hydration**: Consolidated API loading that populates all core safety datasets in a single PASS, optimized for departmental decision-making.
 *   **Offline Resilience**: Specialized persistence layers ensuring simulation specialists can maintain high-fidelity notes in hospital environments with intermittent Wi-Fi.
 
 ---
@@ -66,5 +67,5 @@ npx wrangler deploy
 
 <p align="center">
   <b>Built for Clinical Safety, Powered by Intelligence.</b><br />
-  © 2026 Washington University Simulation Intelligence Team
+  © 2026 Washington University School of Medicine. Emergency Medicine Simulation.
 </p>

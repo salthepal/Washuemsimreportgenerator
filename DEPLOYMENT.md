@@ -4,25 +4,25 @@ This document provides instructions for deploying the **WashU EM Sim Intelligenc
 
 ## 🏛️ Architecture Overview
 The platform has been migrated from legacy Supabase infrastructure to a high-concurrency Cloudflare architecture:
-- **Frontend**: React SPA deployed via GitHub Pages.
+- **Frontend**: React SPA deployed via Cloudflare Pages.
 - **Backend API**: Cloudflare Workers (Hono).
-- **Database**: Cloudflare D1 (Relational SQL).
+- **Database**: Cloudflare D1 (Relational SQL with FTS5).
 - **Object Storage**: Cloudflare R2 (Session documents/media).
-- **Security**: Cloudflare KV (Rate limiting) and Secret Management.
+- **History/Audit**: Automated D1 Triggers (Safety Audit Logs).
+- **Security**: Cloudflare KV and Secrets.
 
 ---
 
-## 🌐 1. Frontend Deployment (GitHub Pages)
+## 🌐 1. Frontend Deployment (Cloudflare Pages)
 
 ### Configuration
-The frontend is built using Vite and configured for relative path routing.
-- **Base Path**: `/washusimintelligence/`
-- **Routing**: `HashRouter` (to support direct URL access on static hosting).
+The frontend is built using Vite and deployed directly to the Cloudflare network from the `main` branch.
+- **Build Command**: `npm run build`
+- **Output Directory**: `dist`
+- **Native Routing**: Automatically handled by Cloudflare Pages.
 
-### Automated Deployment (GitHub Actions)
-The project includes a `.github/workflows/deploy.yml` that triggers on every push to `main`.
-1.  **Build**: `npm run build`
-2.  **Deploy**: Uploads the `dist/` directory to the `github-pages` environment.
+### Automated Deployment (GitHub integration)
+Connecting the GitHub repository to Cloudflare Pages handles all production builds and edge deployments automatically on push.
 
 ---
 
@@ -40,7 +40,7 @@ The project includes a `.github/workflows/deploy.yml` that triggers on every pus
 2.  **Initialize Schema**:
     ```bash
     cd worker
-    npx wrangler d1 execute washusim-db --file=./schema.sql
+    npx wrangler d1 execute washu_sim_db --file=./schema.sql --remote
     ```
 
 ### Storage Setup (R2)
@@ -86,4 +86,4 @@ The frontend connects to the backend via the `API_URL` defined in `src/app/utils
 ---
 
 **Built for Clinical Safety, Powered by Intelligence.**
-© 2026 Washington University Simulation Intelligence Team
+© 2026 Washington University School of Medicine.

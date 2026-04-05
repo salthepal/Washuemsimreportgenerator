@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import {
   AlertTriangle, Search, Filter, CheckCircle2, ShieldCheck, XCircle,
   TrendingUp, Users, Calendar, PlayCircle, Archive, AlertCircle,
-  Download, MapPin, Pencil, X, Save, Trash2, GitMerge, Plus
+  Download, MapPin, Pencil, X, Save, Trash2, GitMerge, Plus, History
 } from 'lucide-react';
 import { formatDate } from '../utils/document';
 import { LST } from '../types';
@@ -13,6 +13,7 @@ interface LSTTrackerProps {
 }
 
 import { EditModalState, INITIAL_EDIT, LstEditModal } from './lst-edit-modal';
+import { LstHistoryModal } from './lst-history-modal';
 import { useLSTs, useUpdateLST, useAddLST, useDeleteLST, useMergeLSTs } from '../hooks/useQueries';
 
 export function LSTTracker({ selectedSite }: LSTTrackerProps) {
@@ -43,6 +44,12 @@ export function LSTTracker({ selectedSite }: LSTTrackerProps) {
     category: 'Process' as LST['category'],
     status: 'Identified' as LST['status'],
     location: selectedSite === 'All Sites' ? '' : selectedSite,
+  });
+
+  const [historyModal, setHistoryModal] = useState<{ open: boolean; id: string; title: string }>({
+    open: false,
+    id: '',
+    title: '',
   });
 
   const addLstMutation = useAddLST();
@@ -308,6 +315,15 @@ export function LSTTracker({ selectedSite }: LSTTrackerProps) {
       {/* ── Edit Modal Overlay ── */}
       <LstEditModal editModal={editModal} setEditModal={setEditModal} saving={saving} onSave={handleSaveEdit} />
 
+      {/* ── History Modal Overlay ── */}
+      {historyModal.open && (
+        <LstHistoryModal 
+          id={historyModal.id} 
+          title={historyModal.title} 
+          onClose={() => setHistoryModal({ open: false, id: '', title: '' })} 
+        />
+      )}
+
       {/* ── Header ── */}
       <div className="border-b-2 border-slate-200 dark:border-slate-700 pb-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -554,7 +570,6 @@ export function LSTTracker({ selectedSite }: LSTTrackerProps) {
                       <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed line-clamp-2">{lst.description}</p>
                     </div>
 
-                    {/* Edit Button */}
                     <button
                       onClick={() => openEditModal(lst)}
                       className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg transition-colors text-xs font-semibold flex-shrink-0"
@@ -562,6 +577,15 @@ export function LSTTracker({ selectedSite }: LSTTrackerProps) {
                     >
                       <Pencil className="w-3 h-3" />
                       Edit
+                    </button>
+                    {/* History Button */}
+                    <button
+                      onClick={() => setHistoryModal({ open: true, id: lst.id, title: lst.title })}
+                      className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/40 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 rounded-lg transition-colors text-xs font-semibold flex-shrink-0"
+                      title="View Audit History"
+                    >
+                      <History className="w-3 h-3" />
+                      History
                     </button>
                   </div>
 

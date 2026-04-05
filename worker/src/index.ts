@@ -40,6 +40,47 @@ app.get('/', (c) => {
   });
 });
 
+// --- HYDRATE ENDPOINT (Optimization #5) ---
+// Fetches all major app state in a single request to reduce network RTT
+app.get('/hydrate', async (c) => {
+  try {
+    const [reports, lsts, notes, cases] = await Promise.all([
+      c.env.DB.prepare('SELECT * FROM reports ORDER BY created_at DESC').all(),
+      c.env.DB.prepare('SELECT * FROM lsts ORDER BY status ASC, severity ASC, last_seen_date DESC').all(),
+      c.env.DB.prepare('SELECT * FROM session_notes ORDER BY created_at DESC').all(),
+      c.env.DB.prepare('SELECT * FROM case_files ORDER BY date DESC').all()
+    ]);
+
+    return c.json({
+      reports: reports.results.map((r: any) => ({
+        ...r,
+        createdAt: r.created_at,
+        metadata: r.metadata ? JSON.parse(r.metadata) : {}
+      })),
+      lsts: lsts.results.map((l: any) => ({
+        ...l,
+        identifiedDate: l.identified_date,
+        lastSeenDate: l.last_seen_date,
+        resolvedDate: l.resolved_date,
+        locationStatuses: l.location_statuses ? JSON.parse(l.location_statuses) : {}
+      })),
+      notes: notes.results.map((n: any) => ({
+        ...n,
+        createdAt: n.created_at,
+        participants: n.participants ? JSON.parse(n.participants) : [],
+        tags: n.tags ? JSON.parse(n.tags) : [],
+        metadata: n.metadata ? JSON.parse(n.metadata) : {}
+      })),
+      cases: cases.results.map((cf: any) => ({
+        ...cf,
+        createdAt: cf.created_at || cf.date
+      }))
+    });
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500);
+  }
+});
+
 // Error logging helper for Cloudflare
 async function logError(db: D1Database, action: string, error: any, context?: any) {
   try {
@@ -214,28 +255,16 @@ app.post('/lsts/add', async (c) => {
   }
 });
 
-app.post('/lsts/merge', async (c) => {
+// ... LST history handled below
+
+// --- LST HISTORY ENDPOINT (Optimization #4) ---
+app.get('/lsts/:id/history', async (c) => {
   try {
-    const { ids, mergedLST } = await c.req.json();
-    if (!ids || !Array.isArray(ids) || ids.length < 2) {
-      return c.json({ error: 'At least two LSTs are required for merging' }, 400);
-    }
-
-    const newId = `lst_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-    const totalRecurrence = ids.length; // Approximate
-    
-    // Create new LST
-    await c.env.DB.prepare('INSERT INTO lsts (id, title, description, recommendation, severity, status, category, location, identified_date, last_seen_date, recurrence_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(newId, mergedLST.title || 'Merged LST', mergedLST.description || '', mergedLST.recommendation || '', mergedLST.severity || 'Medium', mergedLST.status || 'Identified', mergedLST.category || '', mergedLST.location || '', mergedLST.identifiedDate || new Date().toISOString(), mergedLST.lastSeenDate || new Date().toISOString(), totalRecurrence)
-      .run();
-
-    // Delete old ones
-    for (const id of ids) {
-      await c.env.DB.prepare('DELETE FROM lsts WHERE id = ?').bind(id).run();
-    }
-
-    await logAudit(c.env.DB, 'merge', 'lst', `Merged ${ids.length} LSTs into ${mergedLST.title}`, newId);
-    return c.json({ success: true, id: newId });
+    const id = c.req.param('id');
+    const { results } = await c.env.DB.prepare('SELECT * FROM lst_history WHERE lst_id = ? ORDER BY created_at DESC')
+      .bind(id)
+      .all();
+    return c.json(results);
   } catch (error: any) {
     return c.json({ error: error.message }, 500);
   }
@@ -281,18 +310,42 @@ app.get('/files/:path{.+}', async (c) => {
   return new Response(object.body, { headers });
 });
 
-// Full-Text Search
+// Full-Text Search (Optimization #1)
 app.get('/search', async (c) => {
   const query = c.req.query('q');
   if (!query) return c.json([]);
 
   try {
-    const { results } = await c.env.DB.prepare('SELECT * FROM reports_fts WHERE reports_fts MATCH ? ORDER BY rank')
-      .bind(query)
+    // Search using FTS5 MATCH operator
+    const searchQuery = query.includes('*') || query.includes('"') ? query : `${query}*`;
+    const { results } = await c.env.DB.prepare(`
+      SELECT 
+        s.id, 
+        s.type, 
+        highlight(search_index, 2, '[[HL]]', '[[/HL]]') as title_highlight,
+        snippet(search_index, 3, '[[HL]]', '[[/HL]]', '...', 32) as snippet,
+        s.title,
+        r.metadata
+      FROM search_index s
+      LEFT JOIN reports r ON s.id = r.id
+      WHERE search_index MATCH ? 
+      ORDER BY rank
+      LIMIT 50
+    `)
+      .bind(searchQuery)
+      .all();
+    
+    return c.json(results.map((res: any) => ({
+      ...res,
+      metadata: res.metadata ? JSON.parse(res.metadata) : {}
+    })));
+  } catch (error: any) {
+    console.error('FTS Search Error:', error);
+    // Silent fallback to basic LIKE if FTS fails (e.g. index not yet populated)
+    const { results } = await c.env.DB.prepare('SELECT id, title, content, type FROM reports WHERE title LIKE ? OR content LIKE ? LIMIT 20')
+      .bind(`%${query}%`, `%${query}%`)
       .all();
     return c.json(results);
-  } catch (error: any) {
-    return c.json({ error: error.message }, 500);
   }
 });
 

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { FileText, Calendar, Users, Sparkles, ChevronDown, ChevronUp, Eye, Trash2, Search, Filter, Download, X, GitCompare } from 'lucide-react';
+import { FileText, Calendar, Users, Sparkles, ChevronDown, ChevronUp, Eye, Trash2, Search, Filter, Download, X, GitCompare, CheckCircle2 } from 'lucide-react';
 import { Report, SessionNote, API_BASE, API_HEADERS } from '../App';
 import { ReportViewer } from './report-viewer';
 import { ComparisonView } from './comparison-view';
@@ -17,6 +17,23 @@ interface ViewRepositoryProps {
   isLoading?: boolean;
   selectedSite?: string;
 }
+
+// Helper to render highlights from backend [[HL]] tags
+const HighlightText = ({ text }: { text: string }) => {
+  if (!text) return null;
+  const parts = text.split(/(\[\[HL\]\].*?\[\[\/HL\]\])/);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (part.startsWith('[[HL]]')) {
+          const content = part.replace('[[HL]]', '').replace('[[/HL]]', '');
+          return <mark key={i} className="bg-yellow-200 dark:bg-yellow-800/60 text-slate-900 rounded-sm px-0.5">{content}</mark>;
+        }
+        return part;
+      })}
+    </>
+  );
+};
 
 export function ViewRepository({ reports, sessionNotes, generatedReports, onRefresh, isLoading, selectedSite }: ViewRepositoryProps) {
   const [expandedReport, setExpandedReport] = useState<string | null>(null);
@@ -286,32 +303,98 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
 
       {/* Bulk Actions */}
       {selectedForBulk.length > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center justify-between">
-          <span className="text-blue-900 font-medium">
+        <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 flex items-center justify-between animate-in slide-in-from-top-2">
+          <span className="text-blue-900 dark:text-blue-300 font-medium flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4" />
             {selectedForBulk.length} items selected
           </span>
           <div className="flex gap-2">
             <button
               onClick={() => setShowBulkExport(true)}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-2"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-2 text-sm shadow-sm"
             >
               <Download className="w-4 h-4" />
-              Export Selected
+              Export
             </button>
             <button
               onClick={handleBulkDelete}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center gap-2"
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center gap-2 text-sm shadow-sm"
             >
               <Trash2 className="w-4 h-4" />
-              Delete Selected
+              Delete
             </button>
             <button
               onClick={() => setSelectedForBulk([])}
-              className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg transition-colors"
+              className="px-3 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition-colors text-sm"
             >
               Cancel
             </button>
           </div>
+        </div>
+      )}
+
+      {/* --- REFINED SEARCH MATCHES (Optimization #1 UI) --- */}
+      {searchResults && (
+        <div className="space-y-4 animate-in fade-in duration-300">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+              <Search className="w-5 h-5 text-blue-500" />
+              Search Matches for "{debouncedSearch}"
+              <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 text-xs px-2 py-0.5 rounded-full font-bold">
+                {searchResults.length}
+              </span>
+            </h3>
+            <button 
+              onClick={() => setSearchQuery('')}
+              className="text-xs text-slate-500 hover:text-blue-500 font-medium"
+            >
+              Clear Search
+            </button>
+          </div>
+          
+          <div className="grid grid-cols-1 gap-3">
+            {searchResults.length === 0 ? (
+              <div className="text-center py-8 bg-slate-50 dark:bg-slate-900/30 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
+                <p className="text-sm text-slate-500">No matches found in clinical documents.</p>
+              </div>
+            ) : (
+              (searchResults as any[]).map((result: any) => (
+                <div 
+                  key={result.id} 
+                  className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 hover:shadow-md transition-all group cursor-pointer"
+                  onClick={() => {
+                    const fullDoc = [...reports, ...sessionNotes, ...generatedReports].find(d => d.id === result.id);
+                    if (fullDoc) {
+                      if ('title' in fullDoc) setViewingReport(fullDoc as Report);
+                      else setExpandedNote(fullDoc.id);
+                    }
+                  }}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-4">
+                      <div className={`p-2 rounded-lg ${
+                        result.type === 'session_note' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'
+                      }`}>
+                        {result.type === 'session_note' ? <Users className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
+                      </div>
+                      <div className="space-y-1">
+                        <h4 className="font-bold text-slate-900 dark:text-slate-100 group-hover:text-blue-600 transition-colors">
+                          <HighlightText text={result.title_highlight || result.title} />
+                        </h4>
+                        <p className="text-xs text-slate-600 dark:text-slate-400 italic line-clamp-2 leading-relaxed">
+                          <HighlightText text={result.snippet} />
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 bg-slate-50 dark:bg-slate-900 px-2 py-1 rounded">
+                      {result.type.replace('_', ' ')}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          <div className="border-b border-slate-200 dark:border-slate-700 my-8"></div>
         </div>
       )}
 

@@ -8,6 +8,17 @@ export const API_HEADERS = {
   'Content-Type': 'application/json',
 };
 
+export async function fetchHydration(): Promise<{
+  reports: Report[],
+  lsts: LST[],
+  notes: SessionNote[],
+  cases: CaseFile[]
+}> {
+  const res = await fetch(`${API_BASE}/hydrate`, { headers: API_HEADERS });
+  if (!res.ok) throw new Error('Hydration failed');
+  return res.json();
+}
+
 export async function fetchReports(): Promise<Report[]> {
   const res = await fetch(`${API_BASE}/reports`, { headers: API_HEADERS });
   if (!res.ok) throw new Error('Failed to fetch reports');
@@ -41,6 +52,12 @@ export async function fetchLSTs(): Promise<LST[]> {
   if (!res.ok) throw new Error('Failed to fetch LSTs');
   const data = await res.json();
   return Array.isArray(data) ? data : (data.lsts || []);
+}
+
+export async function fetchLstHistory(id: string): Promise<any[]> {
+  const res = await fetch(`${API_BASE}/lsts/${id}/history`, { headers: API_HEADERS });
+  if (!res.ok) throw new Error('Failed to fetch LST history');
+  return res.json();
 }
 
 export async function updateLst(id: string, payload: Partial<LST>): Promise<LST> {

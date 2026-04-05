@@ -1,17 +1,18 @@
 import { useState, useEffect, lazy, Suspense, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useReports, useNotes, useCaseFiles, useGeneratedReports, useLSTs } from './hooks/useQueries';
+import { useHydration, useReports, useNotes, useCaseFiles, useGeneratedReports, useLSTs } from './hooks/useQueries';
 import Joyride, { Step } from 'react-joyride';
-import { UploadReports } from './components/upload-reports';
-import { SessionNotes } from './components/session-notes';
-import { CaseFiles, CaseFile } from './components/case-files';
-import { GenerateReport } from './components/generate-report';
-import { ViewRepository } from './components/view-repository';
-import { LSTTracker } from './components/lst-tracker';
-import { QuickActionsBar } from './components/quick-actions-bar';
-import { BackupRestore } from './components/backup-restore';
-import { AuditLog } from './components/audit-log';
-import { ErrorLog } from './components/error-log';
+
+// --- LAZY LOADED COMPONENTS (Optimization #3) ---
+const UploadReports = lazy(() => import('./components/upload-reports').then(m => ({ default: m.UploadReports })));
+const SessionNotes = lazy(() => import('./components/session-notes').then(m => ({ default: m.SessionNotes })));
+const CaseFiles = lazy(() => import('./components/case-files').then(m => ({ default: m.CaseFiles })));
+const GenerateReport = lazy(() => import('./components/generate-report').then(m => ({ default: m.GenerateReport })));
+const ViewRepository = lazy(() => import('./components/view-repository').then(m => ({ default: m.ViewRepository })));
+const LSTTracker = lazy(() => import('./components/lst-tracker').then(m => ({ default: m.LSTTracker })));
+const BackupRestore = lazy(() => import('./components/backup-restore').then(m => ({ default: m.BackupRestore })));
+const AuditLog = lazy(() => import('./components/audit-log').then(m => ({ default: m.AuditLog })));
+const ErrorLog = lazy(() => import('./components/error-log').then(m => ({ default: m.ErrorLog })));
 import { ViewAIPrompt } from './components/view-ai-prompt';
 import { ErrorBoundary } from './components/error-boundary';
 import { Toaster } from './components/ui/sonner';
@@ -46,13 +47,31 @@ export { API_BASE, API_HEADERS };
 
 export default function App() {
   const queryClient = useQueryClient();
-  const { data: reports = [], isLoading: loadingReports } = useReports();
-  const { data: sessionNotes = [], isLoading: loadingNotes } = useNotes();
-  const { data: caseFiles = [], isLoading: loadingCaseFiles } = useCaseFiles();
-  const { data: generatedReports = [], isLoading: loadingGenReports } = useGeneratedReports();
-  const { data: lsts = [], isLoading: loadingLsts } = useLSTs();
   
-  const loading = loadingReports || loadingNotes || loadingCaseFiles || loadingGenReports || loadingLsts;
+  // --- HYDRATION (Optimization #5) ---
+  const { data: hydration, isLoading: loadingHydration } = useHydration();
+
+  // Populate individual caches from hydration result
+  useEffect(() => {
+    if (hydration) {
+      queryClient.setQueryData(['reports'], hydration.reports);
+      queryClient.setQueryData(['notes'], hydration.notes);
+      queryClient.setQueryData(['lsts'], hydration.lsts);
+      queryClient.setQueryData(['caseFiles'], hydration.cases);
+      
+      // Filter generated reports
+      const genReports = hydration.reports.filter((r: any) => r.type === 'generated_report');
+      queryClient.setQueryData(['generatedReports'], genReports);
+    }
+  }, [hydration, queryClient]);
+
+  const { data: reports = [] } = useReports();
+  const { data: sessionNotes = [] } = useNotes();
+  const { data: caseFiles = [] } = useCaseFiles();
+  const { data: generatedReports = [] } = useGeneratedReports();
+  const { data: lsts = [] } = useLSTs();
+  
+  const loading = loadingHydration;
   
   const [tourRunning, setTourRunning] = useState(false);
   const [darkMode, setDarkMode] = useDarkMode();
@@ -225,49 +244,61 @@ export default function App() {
                 } />
 
                 <Route path="/upload" element={
-                  <div className="p-2 md:p-6">
-                    <UploadReports reports={reports} onRefresh={fetchData} />
-                  </div>
+                  <Suspense fallback={<div className="p-6"><Skeleton className="h-64" /></div>}>
+                    <div className="p-2 md:p-6">
+                      <UploadReports reports={reports} onRefresh={fetchData} />
+                    </div>
+                  </Suspense>
                 } />
 
                 <Route path="/cases" element={
-                  <div className="p-2 md:p-6">
-                    <CaseFiles caseFiles={caseFiles} onRefresh={fetchData} />
-                  </div>
+                  <Suspense fallback={<div className="p-6"><Skeleton className="h-64" /></div>}>
+                    <div className="p-2 md:p-6">
+                      <CaseFiles caseFiles={caseFiles} onRefresh={fetchData} />
+                    </div>
+                  </Suspense>
                 } />
 
                 <Route path="/notes" element={
-                  <div className="p-2 md:p-6">
-                    <SessionNotes sessionNotes={sessionNotes} onRefresh={fetchData} />
-                  </div>
+                  <Suspense fallback={<div className="p-6"><Skeleton className="h-64" /></div>}>
+                    <div className="p-2 md:p-6">
+                      <SessionNotes sessionNotes={sessionNotes} onRefresh={fetchData} />
+                    </div>
+                  </Suspense>
                 } />
 
                 <Route path="/generate" element={
-                  <div className="p-2 md:p-6">
-                    <GenerateReport
-                      selectedSite={selectedSite}
-                      onRefresh={fetchData}
-                    />
-                  </div>
+                  <Suspense fallback={<div className="p-6"><Skeleton className="h-96" /></div>}>
+                    <div className="p-2 md:p-6">
+                      <GenerateReport
+                        selectedSite={selectedSite}
+                        onRefresh={fetchData}
+                      />
+                    </div>
+                  </Suspense>
                 } />
 
                 <Route path="/lst-tracker" element={
-                  <div className="p-2 md:p-6">
-                    <LSTTracker selectedSite={selectedSite} />
-                  </div>
+                  <Suspense fallback={<div className="p-6"><Skeleton className="h-96" /></div>}>
+                    <div className="p-2 md:p-6">
+                      <LSTTracker selectedSite={selectedSite} />
+                    </div>
+                  </Suspense>
                 } />
 
                 <Route path="/repository" element={
-                  <div className="p-2 md:p-6">
-                    <ViewRepository
-                      reports={reports}
-                      sessionNotes={sessionNotes}
-                      generatedReports={generatedReports}
-                      onRefresh={fetchData}
-                      isLoading={loading}
-                      selectedSite={selectedSite}
-                    />
-                  </div>
+                  <Suspense fallback={<div className="p-6"><Skeleton className="h-96" /></div>}>
+                    <div className="p-2 md:p-6">
+                      <ViewRepository
+                        reports={reports}
+                        sessionNotes={sessionNotes}
+                        generatedReports={generatedReports}
+                        onRefresh={fetchData}
+                        isLoading={loading}
+                        selectedSite={selectedSite}
+                      />
+                    </div>
+                  </Suspense>
                 } />
 
                 <Route path="/settings" element={
@@ -281,9 +312,15 @@ export default function App() {
                       </div>
 
                       <ViewAIPrompt />
-                      <BackupRestore />
-                      <AuditLog />
-                      <ErrorLog />
+                      <Suspense fallback={<Skeleton className="h-32" />}>
+                        <BackupRestore />
+                      </Suspense>
+                      <Suspense fallback={<Skeleton className="h-32" />}>
+                        <AuditLog />
+                      </Suspense>
+                      <Suspense fallback={<Skeleton className="h-32" />}>
+                        <ErrorLog />
+                      </Suspense>
                       
                       <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-4 md:p-6 border border-slate-200 dark:border-slate-700">
                         <h3 className="text-base md:text-lg font-bold text-slate-900 dark:text-slate-100 mb-3">Keyboard Shortcuts</h3>

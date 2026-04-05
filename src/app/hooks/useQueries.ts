@@ -1,6 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchReports, fetchGeneratedReports, fetchNotes, fetchCaseFiles, fetchLSTs, updateLst, addLst, deleteLst, mergeLsts, fetchErrorLog, clearErrorLog } from '../api';
+import { fetchReports, fetchGeneratedReports, fetchNotes, fetchCaseFiles, fetchLSTs, updateLst, addLst, deleteLst, mergeLsts, fetchErrorLog, clearErrorLog, fetchHydration, fetchLstHistory } from '../api';
 import { LST } from '../types';
+
+export function useHydration() {
+  return useQuery({ queryKey: ['hydration'], queryFn: fetchHydration });
+}
 
 export function useReports() {
   return useQuery({ queryKey: ['reports'], queryFn: fetchReports });
@@ -20,6 +24,10 @@ export function useCaseFiles() {
 
 export function useLSTs() {
   return useQuery({ queryKey: ['lsts'], queryFn: fetchLSTs });
+}
+
+export function useLSTHistory(id: string) {
+  return useQuery({ queryKey: ['lst_history', id], queryFn: () => fetchLstHistory(id), enabled: !!id });
 }
 
 export function useUpdateLST() {
