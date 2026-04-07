@@ -9,6 +9,7 @@ import { ActionButton } from './ui/action-button';
 import { sanitizeJSON } from '../utils/sanitize';
 import { validateMinLength } from '../utils/validation';
 import { formatDate } from '../utils/document';
+import { Turnstile } from './ui/turnstile';
 
 interface SessionNotesProps {
   sessionNotes: SessionNote[];
@@ -28,6 +29,7 @@ export function SessionNotes({ sessionNotes, onRefresh }: SessionNotesProps) {
   const [autoSaving, setAutoSaving] = useState(false);
   const [previewDocument, setPreviewDocument] = useState<SessionNote | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const { confirm, dialog } = useConfirmDialog();
 
   // Calculate word and character counts
@@ -128,7 +130,10 @@ export function SessionNotes({ sessionNotes, onRefresh }: SessionNotesProps) {
 
       const response = await fetch(`${API_BASE}/notes/add`, {
         method: 'POST',
-        headers: API_HEADERS,
+        headers: {
+          ...API_HEADERS,
+          'X-Turnstile-Token': turnstileToken || '',
+        },
         body: JSON.stringify(payload),
       });
 
@@ -296,6 +301,8 @@ export function SessionNotes({ sessionNotes, onRefresh }: SessionNotesProps) {
               </p>
             )}
           </div>
+
+          <Turnstile onVerify={setTurnstileToken} />
 
           <div className="flex gap-3">
             <ActionButton

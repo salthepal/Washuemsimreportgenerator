@@ -3,6 +3,9 @@ main = "src/index.ts"
 compatibility_date = "2024-04-03"
 workers_dev = true
 
+[triggers]
+crons = ["0 0 * * *"]
+
 [observability]
 enabled = false
 head_sampling_rate = 1

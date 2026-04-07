@@ -15,6 +15,7 @@ type Bindings = {
   BUCKET: R2Bucket;
   RATELIMIT: KVNamespace;
   GEMINI_API_KEY: string;
+  TURNSTILE_SECRET_KEY: string;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
@@ -113,6 +114,53 @@ async function logAudit(db: D1Database, action: string, type: string, target: st
       .run();
   } catch (error) {
     console.log(`Error logging audit: ${error}`);
+  }
+}
+
+// Turnstile Verification Middleware
+async function verifyTurnstile(c: any, next: any) {
+  const headerToken = c.req.header('X-Turnstile-Token');
+  let token = headerToken;
+
+  if (!token) {
+    try {
+      const body = await c.req.raw.clone().json();
+      token = body.turnstileToken;
+    } catch (e) {
+      // Body might not be JSON or might be missing turnstileToken
+    }
+  }
+
+  const secret = c.env.TURNSTILE_SECRET_KEY;
+
+  if (!secret) {
+    console.warn('[AUTH] TURNSTILE_SECRET_KEY not set. Skipping verification.');
+    return next();
+  }
+
+  if (!token) {
+    return c.json({ error: 'Security verification failed: Missing token' }, 403);
+  }
+
+  try {
+    const formData = new FormData();
+    formData.append('secret', secret);
+    formData.append('response', token);
+
+    const result = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      body: formData,
+      method: 'POST',
+    });
+
+    const outcome: any = await result.json();
+    if (!outcome.success) {
+      return c.json({ error: 'Security verification failed: Invalid token' }, 403);
+    }
+
+    await next();
+  } catch (err: any) {
+    console.error('Turnstile verification error:', err);
+    return c.json({ error: 'Verification service unreachable' }, 503);
   }
 }
 
@@ -272,7 +320,7 @@ app.get('/lsts/:id/history', async (c) => {
 
 
 // R2 Object Storage (File Handling)
-app.post('/upload-file', async (c) => {
+app.post('/upload-file', verifyTurnstile, async (c) => {
   try {
     const formData = await c.req.formData();
     const fileItem = formData.get('file');
@@ -350,7 +398,7 @@ app.get('/search', async (c) => {
 });
 
 // Report Generation (Gemini AI Implementation & Streaming)
-app.post('/generate-report', rateLimit, async (c) => {
+app.post('/generate-report', verifyTurnstile, rateLimit, async (c) => {
   try {
     const { selectedReports, selectedNotes, selectedCases, extractLST } = await c.req.json();
     
@@ -545,7 +593,7 @@ app.get('/reports/generated', async (c) => {
   }
 });
 
-app.post('/reports/upload', async (c) => {
+app.post('/reports/upload', verifyTurnstile, async (c) => {
   try {
     const reportData = await c.req.json();
     const id = reportData.id || `report_${Date.now()}_${Math.random().toString(36).substring(7)}`;
@@ -682,7 +730,7 @@ app.get('/notes', async (c) => {
   }
 });
 
-app.post('/notes/add', async (c) => {
+app.post('/notes/add', verifyTurnstile, async (c) => {
   try {
     const note = await c.req.json();
     const id = note.id || `notes_${Date.now()}_${Math.random().toString(36).substring(7)}`;
@@ -737,7 +785,7 @@ app.get('/case-files', async (c) => {
   }
 });
 
-app.post('/case-files/upload', async (c) => {
+app.post('/case-files/upload', verifyTurnstile, async (c) => {
   try {
     const data = await c.req.json();
     const id = data.id || `case_file_${Date.now()}_${Math.random().toString(36).substring(7)}`;
@@ -848,5 +896,43 @@ app.post('/settings/ai-model', async (c) => {
   }
 });
 
-export default app;
+// ─────────────────────────────────────────────────────
+// Cron: Automated R2 Backup
+// ─────────────────────────────────────────────────────
+
+async function scheduledBackup(env: Bindings) {
+  try {
+    const [reports, lsts, notes, cases] = await env.DB.batch([
+      env.DB.prepare('SELECT * FROM reports'),
+      env.DB.prepare('SELECT * FROM lsts'),
+      env.DB.prepare('SELECT * FROM session_notes'),
+      env.DB.prepare('SELECT * FROM case_files'),
+    ]);
+
+    const backup = {
+      exportedAt: new Date().toISOString(),
+      version: '3.1.2-auto',
+      reports: reports.results,
+      lsts: lsts.results,
+      sessionNotes: notes.results,
+      caseFiles: cases.results,
+    };
+
+    const key = `backups/auto_${new Date().toISOString().split('T')[0]}.json`;
+    await env.BUCKET.put(key, JSON.stringify(backup), {
+      httpMetadata: { contentType: 'application/json' },
+    });
+
+    console.log(`[CRON] Automated backup saved to R2: ${key}`);
+  } catch (error) {
+    console.error('[CRON] Backup failed:', error);
+  }
+}
+
+export default {
+  fetch: app.fetch,
+  scheduled: async (event: ScheduledEvent, env: Bindings, ctx: ExecutionContext) => {
+    ctx.waitUntil(scheduledBackup(env));
+  },
+};
 

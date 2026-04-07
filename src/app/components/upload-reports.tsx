@@ -10,6 +10,7 @@ import { ActionButton } from './ui/action-button';
 import { processDocxFile, formatDate } from '../utils/document';
 import { validateDocxFile, FILE_VALIDATIONS } from '../utils/validation';
 import { sanitizeJSON } from '../utils/sanitize';
+import { Turnstile } from './ui/turnstile';
 
 interface UploadReportsProps {
   reports: Report[];
@@ -29,6 +30,7 @@ export function UploadReports({ reports, onRefresh }: UploadReportsProps) {
   const [dragActive, setDragActive] = useState(false);
   const [previewDocument, setPreviewDocument] = useState<Report | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const { confirm, dialog } = useConfirmDialog();
 
   const handleDrag = (e: React.DragEvent) => {
@@ -154,7 +156,10 @@ export function UploadReports({ reports, onRefresh }: UploadReportsProps) {
       // Upload with metadata
       const response = await fetch(`${API_BASE}/reports/upload`, {
         method: 'POST',
-        headers: API_HEADERS,
+        headers: {
+          ...API_HEADERS,
+          'X-Turnstile-Token': turnstileToken || '',
+        },
         body: JSON.stringify(payload),
       });
 
@@ -333,6 +338,8 @@ export function UploadReports({ reports, onRefresh }: UploadReportsProps) {
               type="date"
               optional
             />
+
+            <Turnstile onVerify={setTurnstileToken} />
 
             <div className="flex gap-3">
               <ActionButton
