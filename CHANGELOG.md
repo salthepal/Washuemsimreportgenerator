@@ -5,6 +5,29 @@ All notable changes to the WashU EM Sim Intelligence Platform will be documented
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.0] - 2026-04-07
+
+### 🧠 Hybrid Intelligent Search & Vector Intelligence
+A milestone update introducing conceptual discovery through Vector Search, transforming the simulation library from a keyword repository into an intelligent safety knowledge base.
+
+### ✨ Added
+- **Hybrid Search Engine**: Merged **FTS5 Full-Text Search** and **Cloudflare Vectorize** into a unified "Intelligent Search" experience that combines exact keyword matches with semantic similarity.
+- **Automated AI Indexing**: Seamless background vectorization of all generated and uploaded reports using **Cloudflare Workers AI** (`bge-small-en-v1.5`).
+- **Semantic Similarity Scoring**: New UI indicators showing the conceptual match percentage for search results.
+- **Administrative Re-indexing**: High-concurrency administrative tool to batch process existing document libraries into the AI vector store.
+- **Hybrid Result Visualization**: Differentiated search results with color-coded "Keyword" and "Conceptual" markers for clear source attribution.
+
+### 🛡️ Changed
+- **Search UI**: Simplified the Document Repository by removing the manual AI toggle in favor of an always-on, unified search bar.
+- **API Architecture**: Deprecated `/search/semantic` in favor of a single, high-performance `/search` endpoint that executes parallel keyword and vector queries.
+- **Worker Durability**: Optimized the Gemini report generation stream and re-indexing logic with robust batching and error-casting for improved stability.
+
+### 🐛 Fixed
+- **Deployment Resilience**: Resolved TypeScript `unknown` type errors in `worker/src/index.ts` and `upload-reports.tsx` that previously blocked production CI/CD.
+- **Lockfile Synchronization**: Reconciled `package-lock.json` and `package.json` mismatches to resolve Cloudflare Pages `EUSAGE` deployment failures.
+- **AI Response Parsing**: Updated the Workers AI output handler to support diverse JSON response formats from the embedding model.
+- **GEMINI Search Highlights**: Restored and improved title and snippet highlighting for keyword matches within the unified search results.
+
 ## [3.2.0] - 2026-04-05
 
 ### 🛡️ Platform Hardening & Institutional Branding

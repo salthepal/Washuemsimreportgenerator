@@ -13,8 +13,8 @@ WashU Sim Intelligence is specialized for clinical simulation programs, prioriti
 ### Key Capabilities
 
 *   **⚡ AI-Powered Synthesis**: Generate simulation reports using prompts tailored to clinical safety and "Just Culture" frameworks.
+*   **🧠 Hybrid Intelligent Search**: A high-performance merge of **FTS5 Full-Text Search** and **Cloudflare Vectorize** semantic similarity for conceptual discovery.
 *   **🏥 LST Audit Tracking**: Centralized management of **Latent Safety Threats** with automated revision history.
-*   **🔍 Universal Search**: High-performance searchable library of clinical scenarios and historical reports using FTS5 Full-Text Search.
 *   **💧 Atomic Hydration**: Optimized API loading that populates all core safety datasets in a single network request.
 *   **📶 Offline Resilience**: Persistence layers ensuring simulation specialists can maintain documentation in hospital environments with intermittent medical Wi-Fi.
 
@@ -26,9 +26,12 @@ Built on a globally distributed Cloudflare-native stack for maximum reliability:
 
 - **Frontend**: React SPA (Vite + TypeScript) optimized for clinical bedside tablet use.
 - **Backend API**: Cloudflare Workers (Hono) running at the edge.
-- **Intelligence**: Real-time asynchronous streaming via **Google Gemini Flash**.
+- **Intelligence**: 
+  - **Generative AI**: Real-time asynchronous streaming via **Google Gemini Flash**.
+  - **Vector Intelligence**: **Cloudflare Vectorize** with **Workers AI** (`bge-small-en-v1.5`) for semantic indexing.
 - **Data Primitives**: 
   - **Relational SQL**: Cloudflare D1
+  - **Vector Store**: Cloudflare Vectorize
   - **Object Storage**: Cloudflare R2
   - **Metadata Cache**: Cloudflare KV
 

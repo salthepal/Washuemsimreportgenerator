@@ -49,10 +49,11 @@ Connecting the GitHub repository to Cloudflare Pages handles all production buil
     npx wrangler r2 bucket create washusim-docs
     ```
 
-### Analytics/Cache Setup (KV)
-1.  **Create Namespace**:
+### Intelligence Setup (AI & Vectorize)
+1.  **Enable Workers AI**: No separate setup usually needed for standard accounts.
+2.  **Create Vector Index**:
     ```bash
-    npx wrangler kv:namespace create washusim-kv
+    npx wrangler vectorize create sim_search --dimensions=384 --metric=cosine
     ```
 
 ### Deployment
@@ -61,6 +62,9 @@ Update the `wrangler.toml` file in the `worker/` directory with your resource ID
 cd worker
 npm run deploy
 ```
+
+4. **Initialize Vector Index**:
+   After deployment, visit **Settings > Admin** in the app and click **Re-index Library** to populate the semantic store with existing reports.
 
 ---
 
