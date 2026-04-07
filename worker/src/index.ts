@@ -212,13 +212,20 @@ async function rateLimit(c: any, next: any) {
 
 async function indexDocumentVector(env: Bindings, id: string, title: string, content: string, type: string) {
   try {
+    if (!env.AI || !env.VECTORIZE) {
+      console.error('[VECTOR ERROR] AI or VECTORIZE binding missing from environment');
+      return;
+    }
+
     const textToEmbed = `${title}\n\n${content}`.substring(0, 1000); // Limit to 1000 chars for embedding efficiency
-    const { data } = await env.AI.run('@cf/baai/bge-small-en-v1.5', {
+    const aiOutput = await env.AI.run('@cf/baai/bge-small-en-v1.5', {
       text: [textToEmbed]
     });
-    const values = data[0];
+    
+    // Workers AI might return direct data or { data: [] } depending on version/types
+    const values = Array.isArray(aiOutput) ? aiOutput[0] : aiOutput.data?.[0];
 
-    if (!values) throw new Error('Failed to generate embedding');
+    if (!values) throw new Error('Failed to generate embedding: No data in AI output');
 
     await env.VECTORIZE.upsert([
       {
@@ -1036,19 +1043,28 @@ async function scheduledBackup(env: Bindings) {
 // Admin: Re-index all documents for semantic search
 app.post('/admin/reindex', verifyAdmin, async (c) => {
   try {
+    if (!c.env.AI || !c.env.VECTORIZE) {
+      return c.json({ error: 'AI and Vectorize bindings are not configured on this worker environment. Check wrangler.toml and deploy again.' }, 503);
+    }
+
     // 1. Fetch all reports
     const { results: reports } = await c.env.DB.prepare('SELECT id, title, content FROM reports').all();
     
-    // 2. Index them in chunks to avoid timeout or AI rate limits
+    // 2. Chunks of 5 for re-indexing (balance speed and AI rate limits)
     let count = 0;
-    for (const report of reports) {
-      await indexDocumentVector(c.env, report.id as string, report.title as string, report.content as string, 'report');
-      count++;
+    const chunkSize = 5;
+    for (let i = 0; i < reports.length; i += chunkSize) {
+      const chunk = reports.slice(i, i + chunkSize);
+      await Promise.all(chunk.map(report => 
+         indexDocumentVector(c.env, report.id as string, report.title as string, report.content as string, 'report')
+      ));
+      count += chunk.length;
     }
 
     await logAudit(c.env.DB, 'reindex', 'admin', `Manually re-indexed ${count} documents`, 'system');
     return c.json({ success: true, indexed: count });
   } catch (error: any) {
+    console.error('Re-index administrative failure:', error);
     return c.json({ error: error.message }, 500);
   }
 });
