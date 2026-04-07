@@ -17,6 +17,7 @@ type Bindings = {
   GEMINI_API_KEY: string;
   TURNSTILE_SECRET_KEY: string;
   ADMIN_TOKEN: string;
+  AI_SEARCH_TOKEN: string;
   AI: any;
   VECTORIZE: VectorizeIndex;
 };
@@ -411,6 +412,66 @@ app.get('/files/:path{.+}', async (c) => {
   headers.set('etag', object.httpEtag);
 
   return new Response(object.body, { headers });
+});
+
+// AI Search (RAG) — Powered by Cloudflare AI Search (AutoRAG)
+// Uses Workers AI binding to query the 'washu-sim-ssearch' instance
+app.post('/ask', rateLimit, async (c) => {
+  try {
+    const { query, stream: doStream } = await c.req.json();
+    if (!query) return c.json({ error: 'Query is required' }, 400);
+
+    if (!c.env.AI) {
+      return c.json({ error: 'AI binding not configured' }, 503);
+    }
+
+    if (doStream) {
+      // Streaming response — for the live "typing" effect in the UI
+      return streamText(c, async (stream) => {
+        try {
+          const result = await c.env.AI.autorag('washu-sim-ssearch').aiSearch({
+            query,
+            rewrite_query: true,
+            max_num_results: 5,
+            ranking_options: { score_threshold: 0.2 },
+            reranking: { enabled: true, model: '@cf/baai/bge-reranker-base' },
+            stream: true,
+          });
+          
+          // Forward the stream chunks to the client
+          for await (const chunk of result as AsyncIterable<any>) {
+            const text = chunk?.response ?? chunk?.text ?? '';
+            if (text) await stream.write(text);
+          }
+        } catch (err: any) {
+          await stream.write(`\n\n[AI Search Error: ${err.message}]`);
+        }
+      });
+    } else {
+      // Non-streaming — returns full answer + sources
+      const result = await c.env.AI.autorag('washu-sim-ssearch').aiSearch({
+        query,
+        rewrite_query: true,
+        max_num_results: 5,
+        ranking_options: { score_threshold: 0.2 },
+        reranking: { enabled: true, model: '@cf/baai/bge-reranker-base' },
+        stream: false,
+      });
+
+      return c.json({
+        answer: result.response,
+        sources: (result.data || []).map((d: any) => ({
+          filename: d.filename,
+          score: d.score,
+          excerpt: d.content?.[0]?.text?.substring(0, 300) ?? '',
+        })),
+        search_query: result.search_query,
+      });
+    }
+  } catch (error: any) {
+    console.error('[ASK] AI Search error:', error);
+    return c.json({ error: error.message }, 500);
+  }
 });
 
 // Hybrid Search (Optimization #1 & #2: FTS5 + Vectorize)

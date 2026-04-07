@@ -1,8 +1,8 @@
 import { useMemo, useState, useEffect } from 'react';
 import { Report, SessionNote, LST } from '../App';
-import { ShieldAlert, CheckCircle2, FileText, Users, Sparkles, Calendar, Search, Brain, X } from 'lucide-react';
+import { ShieldAlert, CheckCircle2, FileText, Users, Sparkles, Calendar, Search, Brain, X, Send, ExternalLink } from 'lucide-react';
 import { Skeleton } from './ui/skeleton';
-import { API_BASE, getApiHeaders } from '../api';
+import { API_BASE, getApiHeaders, askAI } from '../api';
 import { useDebounce } from 'use-debounce';
 
 interface DashboardProps {
@@ -39,6 +39,12 @@ export function Dashboard({ reports, sessionNotes, generatedReports, lsts, isLoa
   const [debouncedSearch] = useDebounce(searchQuery, 400);
   const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null);
   const [searching, setSearching] = useState(false);
+
+  // Ask AI state
+  const [askQuery, setAskQuery] = useState('');
+  const [askAnswer, setAskAnswer] = useState<{ answer: string; sources: { filename: string; score: number; excerpt: string }[] } | null>(null);
+  const [askLoading, setAskLoading] = useState(false);
+  const [askError, setAskError] = useState<string | null>(null);
 
   const filteredLsts = useMemo(() => {
     if (!selectedSite || selectedSite === 'All Sites') return lsts;
@@ -84,6 +90,21 @@ export function Dashboard({ reports, sessionNotes, generatedReports, lsts, isLoa
       .catch(() => setSearchResults([]))
       .finally(() => setSearching(false));
   }, [debouncedSearch]);
+
+  const handleAsk = async () => {
+    if (!askQuery.trim() || askLoading) return;
+    setAskLoading(true);
+    setAskAnswer(null);
+    setAskError(null);
+    try {
+      const result = await askAI(askQuery.trim());
+      setAskAnswer({ answer: result.answer, sources: result.sources });
+    } catch (err: any) {
+      setAskError(err.message || 'AI Search failed');
+    } finally {
+      setAskLoading(false);
+    }
+  };
 
   const getActivityIcon = (type: string, severity?: string) => {
     switch (type) {
@@ -248,6 +269,94 @@ export function Dashboard({ reports, sessionNotes, generatedReports, lsts, isLoa
           </div>
           <div className="text-4xl font-black text-green-900 dark:text-green-200">{resolvedLsts}</div>
           <div className="text-xs font-semibold text-green-700 dark:text-green-400 mt-1">Resolved LSTs</div>
+        </div>
+      </div>
+
+      {/* ── Ask AI (RAG) ── */}
+      <div className="bg-gradient-to-br from-purple-50 via-white to-indigo-50 dark:from-purple-950/30 dark:via-slate-800 dark:to-indigo-950/30 border border-purple-200 dark:border-purple-800 rounded-xl overflow-hidden shadow-sm">
+        <div className="flex items-center gap-2 px-5 py-4 border-b border-purple-100 dark:border-purple-800/50">
+          <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+          <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Ask AI</h3>
+          <span className="ml-auto text-xs text-purple-500 font-medium">Powered by Cloudflare AI Search</span>
+        </div>
+        <div className="p-5 space-y-4">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Ask a clinical question — e.g. 'What LSTs relate to airway management?'"
+              value={askQuery}
+              onChange={e => setAskQuery(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleAsk()}
+              className="flex-1 bg-white dark:bg-slate-700 border border-purple-200 dark:border-purple-700 rounded-lg px-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 outline-none focus:border-purple-400 transition-colors"
+            />
+            <button
+              onClick={handleAsk}
+              disabled={!askQuery.trim() || askLoading}
+              className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors"
+            >
+              {askLoading ? <Brain className="w-4 h-4 animate-pulse" /> : <Send className="w-4 h-4" />}
+              {askLoading ? 'Thinking...' : 'Ask'}
+            </button>
+          </div>
+
+          {askError && (
+            <div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg px-4 py-3">
+              {askError}
+            </div>
+          )}
+
+          {askLoading && (
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-5/6" />
+              <Skeleton className="h-4 w-4/6" />
+            </div>
+          )}
+
+          {askAnswer && (
+            <div className="space-y-4">
+              {/* AI Answer */}
+              <div className="bg-white dark:bg-slate-700/50 rounded-lg p-4 border border-purple-100 dark:border-purple-800/50">
+                <div className="flex items-center gap-2 mb-2">
+                  <Sparkles className="w-3.5 h-3.5 text-purple-500" />
+                  <span className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest">AI Answer</span>
+                </div>
+                <p className="text-sm text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap">{askAnswer.answer}</p>
+              </div>
+
+              {/* Source Citations */}
+              {askAnswer.sources.length > 0 && (
+                <div>
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Sources ({askAnswer.sources.length})</p>
+                  <div className="space-y-2">
+                    {askAnswer.sources.map((src, i) => (
+                      <div key={i} className="flex items-start gap-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg px-3 py-2.5 border border-slate-100 dark:border-slate-700">
+                        <ExternalLink className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate">
+                            {src.filename.split('/').pop()?.replace(/\.md$/, '') || src.filename}
+                          </p>
+                          {src.excerpt && (
+                            <p className="text-xs text-slate-500 mt-0.5 line-clamp-2 italic">{src.excerpt}</p>
+                          )}
+                        </div>
+                        <span className="text-[10px] font-bold text-purple-500 bg-purple-100 dark:bg-purple-900/40 px-1.5 py-0.5 rounded shrink-0">
+                          {Math.round(src.score * 100)}%
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={() => { setAskAnswer(null); setAskQuery(''); }}
+                className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                Clear answer
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

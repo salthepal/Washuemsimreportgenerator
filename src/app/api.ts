@@ -229,7 +229,28 @@ export async function reindexAll() {
   });
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || `Reindexing failed (Status: ${response.status})`);
+    throw new Error((errorData as any).error || `Reindexing failed (Status: ${response.status})`);
   }
   return response.json();
-};
+}
+
+/**
+ * Ask a natural language question against the clinical library using Cloudflare AI Search (RAG).
+ * Returns a full AI-generated answer with cited source documents.
+ */
+export async function askAI(query: string): Promise<{
+  answer: string;
+  sources: { filename: string; score: number; excerpt: string }[];
+  search_query: string;
+}> {
+  const response = await fetch(`${API_BASE}/ask`, {
+    method: 'POST',
+    headers: getApiHeaders(),
+    body: JSON.stringify({ query, stream: false }),
+  });
+  if (!response.ok) {
+    const err: any = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'AI Search failed');
+  }
+  return response.json();
+}
