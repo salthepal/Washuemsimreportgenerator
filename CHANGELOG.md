@@ -5,6 +5,61 @@ All notable changes to the WashU EM Sim Intelligence Platform will be documented
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.0.0 (2026-04-07)
+
+
+### Features
+
+* add functional overview summary to dashboard UI ([29eaf3c](https://github.com/salthepal/WashUSimIntelligence/commit/29eaf3c5b16c960ff54671f9f06a124f0b38cd2a))
+* add LST merge, deletion, and manual creation features ([e7dc3bc](https://github.com/salthepal/WashUSimIntelligence/commit/e7dc3bc340284aba6d88f69b498813007d308b79))
+* add security headers and edge caching middleware to worker ([c807664](https://github.com/salthepal/WashUSimIntelligence/commit/c807664710a8b8be4160893f3a13f7465e41fdea))
+* add system error logging and UI log viewer ([da62469](https://github.com/salthepal/WashUSimIntelligence/commit/da624696a26ff13da51e759083d2568446309827))
+* add user toggle for automatic LST extraction ([931007d](https://github.com/salthepal/WashUSimIntelligence/commit/931007daf66950884c3ba4246669d7f5eaca8151))
+* configure custom domain salphadnis.org and api.salphadnis.org ([41dc6ab](https://github.com/salthepal/WashUSimIntelligence/commit/41dc6abd91d2f9431dcce99ada793e831e2d971e))
+* implement automatic Latent Safety Threat (LST) extraction from generated reports ([65598c6](https://github.com/salthepal/WashUSimIntelligence/commit/65598c637a2cb2149c1a1fd3d7032f81aaef1c0f))
+* implement multi-site Master LST tracking and per-location status management ([4362f02](https://github.com/salthepal/WashUSimIntelligence/commit/4362f027c974e484ecce924ef20d2e844c00176f))
+* improve report generation robustness and update AI model aliases ([2f664cb](https://github.com/salthepal/WashUSimIntelligence/commit/2f664cb526297b96ea27fe22bbb69afcf4964069))
+* migrate backend to Cloudflare (Worker, D1, R2) and optimize API layer ([a7a166d](https://github.com/salthepal/WashUSimIntelligence/commit/a7a166dd6c40705d999dd0fa501cbaa1f6d37f6a))
+* re-enable /api proxy for Cloudflare Pages integration ([182a547](https://github.com/salthepal/WashUSimIntelligence/commit/182a5474cc61daf69b82d9b1acc09da1b7e5afc6))
+* **security:** restore Turnstile protection and automated cron backups ([6259d1d](https://github.com/salthepal/WashUSimIntelligence/commit/6259d1dc36d26064634f942c5ab3957f5b54a45b))
+* **security:** update Turnstile Site Key with official credentials ([5afee39](https://github.com/salthepal/WashUSimIntelligence/commit/5afee39b7750c8476edcb48a41ecc5811a10a5ca))
+* upgrade LST tracker with AI-powered extraction, severity scoring, and recurrence tracking ([8827959](https://github.com/salthepal/WashUSimIntelligence/commit/8827959e3d2be6fce274330a1ad42ea978fb47be))
+* use Cloudflare Pages Functions proxy to connect frontend with backend Worker API ([9f9c183](https://github.com/salthepal/WashUSimIntelligence/commit/9f9c18304e9074e88d9fddc1656777788736259c))
+
+
+### Bug Fixes
+
+* correct duplicate model selection label to Flash Lite ([1066aeb](https://github.com/salthepal/WashUSimIntelligence/commit/1066aebe8108efd8599095b04d49ca56e8e27a8d))
+* correctly parse array response for case files library ([297604c](https://github.com/salthepal/WashUSimIntelligence/commit/297604cec67c859cc541a7c08ca95a8b6d293f03))
+* decouple report generation model from LST extraction model ([765c3d0](https://github.com/salthepal/WashUSimIntelligence/commit/765c3d0ecabe3e616f3a5b22980d397a1e7dfc96))
+* harden settings string parsing to prevent generation crashes ([b9174fe](https://github.com/salthepal/WashUSimIntelligence/commit/b9174fe7a02a9ec9a875ec4cbe7ce452273027f9))
+* implement missing case-files API endpoints and migrate to relational table ([498dbd3](https://github.com/salthepal/WashUSimIntelligence/commit/498dbd35762212962fd31fbd4c699274d4612fb1))
+* implement missing report and note deletion endpoints ([86c8b07](https://github.com/salthepal/WashUSimIntelligence/commit/86c8b0781baf6afeb81b4e21a84142fe6fc6af96))
+* map backend session notes properties to match frontend expected camelCase names ([f337338](https://github.com/salthepal/WashUSimIntelligence/commit/f33733867930597949b0ec56f7af0843c1ed7d59))
+* resolve AI LST extraction model NOT_FOUND error ([ef02e2d](https://github.com/salthepal/WashUSimIntelligence/commit/ef02e2d956d2f493ff8d7ec77341b3927e635d1f))
+* resolve all D1_TYPE_ERROR undefined bindings across API routes ([a3bccb2](https://github.com/salthepal/WashUSimIntelligence/commit/a3bccb2032db0a6fd87075d7e54d83fc606959fe))
+* resolve brace imbalance and final TypeScript type errors in session notes get endpoint and helpers ([bc3e66a](https://github.com/salthepal/WashUSimIntelligence/commit/bc3e66a9187c0bc7b8de01d75cab0cdf7f842513))
+* resolve build error caused by invalid escaped quotes in dashboard and update dependencies ([fda0c94](https://github.com/salthepal/WashUSimIntelligence/commit/fda0c9418209ca726a50c1f1db4ebde14a715276))
+* resolve D1_TYPE_ERROR bindings for prior reports and case files ([af02d0e](https://github.com/salthepal/WashUSimIntelligence/commit/af02d0eebd52f8927d870a433a6e0b9219375585))
+* resolve invalid date JS parsing bug & make file upload form fields optional ([1959d62](https://github.com/salthepal/WashUSimIntelligence/commit/1959d626774076a23fb6e5361e538e9847789cc5))
+* resolve merge conflicts in package.json ([e1efd5b](https://github.com/salthepal/WashUSimIntelligence/commit/e1efd5b5666aa6455ed1189a838aec706a75ea71))
+* resolve note and LST population issue by fixing API data structure mismatches ([6991e8c](https://github.com/salthepal/WashUSimIntelligence/commit/6991e8cd760acb923e091983a15d07c6f4bf93d3))
+* resolve typescript type conversion error in file upload ([b9ff0bf](https://github.com/salthepal/WashUSimIntelligence/commit/b9ff0bf64bed554020069107e7155d9e326b68a6))
+* resolve white screen on cloudflare pages by using relative base path and add backend identifier route ([c953e25](https://github.com/salthepal/WashUSimIntelligence/commit/c953e2592df8ae2654321897dbc74a94db020a28))
+* resolve worker type definition errors ([74e2f32](https://github.com/salthepal/WashUSimIntelligence/commit/74e2f32c2f68cf5f7ca7906b0fdbd63d776f94fe))
+* restore model sovereignty and finalize LST extraction reliability ([d76b2d4](https://github.com/salthepal/WashUSimIntelligence/commit/d76b2d4966f91ab1a8b18e9a898a1bf11ccf85be))
+* revert to absolute backend URL since frontend is deployed on workers.dev instead of pages.dev ([fb837b1](https://github.com/salthepal/WashUSimIntelligence/commit/fb837b147f0da0d99116bc2e3cdb2c465291e8bd))
+* robust Gemini streaming JSON parser and DB insertion error handling ([4c19f36](https://github.com/salthepal/WashUSimIntelligence/commit/4c19f365f4cdf39cae86178aff53b95260daebb1))
+* **security:** add Turnstile verification to Case Files and Report Generation ([c96a827](https://github.com/salthepal/WashUSimIntelligence/commit/c96a827870fd3f04acd29015e4c98407b1db00e7))
+* **security:** resolve Turnstile headers and prevent pre-verification submission ([a4eedb6](https://github.com/salthepal/WashUSimIntelligence/commit/a4eedb6bb33c05c12668fa5ada57eeb07dced8cf))
+* strip base64 images from case files to prevent SQLITE_TOOBIG limit ([c6e15cf](https://github.com/salthepal/WashUSimIntelligence/commit/c6e15cf72cd9770a793a3e2f6e44e935862b4ce3))
+* synchronize package-lock.json for cloudflare pages build ([5307147](https://github.com/salthepal/WashUSimIntelligence/commit/5307147d725b0ea494f1a113d41f0a6fe6ef37c1))
+
+
+### Reverts
+
+* undo frontend migration to salphadnis.org ([b7f7498](https://github.com/salthepal/WashUSimIntelligence/commit/b7f74981bcf764f5d205adaea415c7691c392628))
+
 ## [3.2.0] - 2026-04-05
 
 ### 🛡️ Platform Hardening & Institutional Branding
