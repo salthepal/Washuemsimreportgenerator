@@ -601,7 +601,8 @@ app.post('/generate-report', verifyTurnstile, rateLimit, async (c) => {
       );
 
       if (!geminiRes.ok) {
-        throw new Error(`Gemini API error: ${geminiRes.status}`);
+        const errorData: any = await geminiRes.json().catch(() => ({}));
+        throw new Error(errorData.error?.message || `Gemini API error: ${geminiRes.status}`);
       }
 
       const reader = geminiRes.body?.getReader();
