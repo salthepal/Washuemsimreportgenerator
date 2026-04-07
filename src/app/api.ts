@@ -214,3 +214,20 @@ export async function* streamGenerateReport(payload: any, token?: string): Async
   }
 }
 
+export const semanticSearch = async (query: string): Promise<any[]> => {
+  const response = await fetch(`${API_BASE}/search/semantic?q=${encodeURIComponent(query)}`, {
+    headers: getApiHeaders()
+  });
+  if (!response.ok) return [];
+  return response.json();
+};
+
+export const reindexAll = async (): Promise<{ success: boolean; indexed: number }> => {
+  const response = await fetch(`${API_BASE}/admin/reindex`, {
+    method: 'POST',
+    headers: getApiHeaders()
+  });
+  if (!response.ok) throw new Error('Reindexing failed');
+  return response.json();
+};
+

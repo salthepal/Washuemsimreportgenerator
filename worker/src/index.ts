@@ -17,6 +17,8 @@ type Bindings = {
   GEMINI_API_KEY: string;
   TURNSTILE_SECRET_KEY: string;
   ADMIN_TOKEN: string;
+  AI: any;
+  VECTORIZE: VectorizeIndex;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
@@ -206,6 +208,29 @@ async function rateLimit(c: any, next: any) {
 
   await c.env.RATELIMIT.put(key, (count + 1).toString(), { expirationTtl: window });
   return next();
+}
+
+async function indexDocumentVector(env: Bindings, id: string, title: string, content: string, type: string) {
+  try {
+    const textToEmbed = `${title}\n\n${content}`.substring(0, 1000); // Limit to 1000 chars for embedding efficiency
+    const { data } = await env.AI.run('@cf/baai/bge-small-en-v1.5', {
+      text: [textToEmbed]
+    });
+    const values = data[0];
+
+    if (!values) throw new Error('Failed to generate embedding');
+
+    await env.VECTORIZE.upsert([
+      {
+        id: id,
+        values: values,
+        metadata: { title, type, timestamp: new Date().toISOString() }
+      }
+    ]);
+    console.log(`[VECTOR] Indexed ${id} (${type})`);
+  } catch (err) {
+    console.error(`[VECTOR ERROR] Failed to index ${id}:`, err);
+  }
 }
 
 // LST Extraction Helper
@@ -422,6 +447,57 @@ app.get('/search', async (c) => {
   }
 });
 
+// Semantic Semantic Search (Optimization #2)
+app.get('/search/semantic', async (c) => {
+  const query = c.req.query('q');
+  if (!query) return c.json([]);
+
+  try {
+    // 1. Generate embedding for query
+    const { data } = await c.env.AI.run('@cf/baai/bge-small-en-v1.5', {
+      text: [query]
+    });
+    
+    if (!data?.[0]) return c.json([]);
+
+    // 2. Search Vectorize
+    const matches = await c.env.VECTORIZE.query(data[0], {
+      topK: 10,
+      returnMetadata: 'all'
+    });
+
+    if (matches.matches.length === 0) return c.json([]);
+
+    // 3. Hydrate from DB
+    const ids = matches.matches.map(m => m.id);
+    const placeholders = ids.map(() => '?').join(',');
+    const { results } = await c.env.DB.prepare(`
+      SELECT 
+        id, 
+        title, 
+        content as snippet,
+        'report' as type
+      FROM reports 
+      WHERE id IN (${placeholders})
+    `)
+      .bind(...ids)
+      .all();
+
+    // Preserve the similarity ranking
+    const sorted = ids.map(id => results.find((r: any) => r.id === id)).filter(Boolean);
+    
+    return c.json(sorted.map((res: any) => ({
+      ...res,
+      id: res.id,
+      score: matches.matches.find(m => m.id === res.id)?.score
+    })));
+
+  } catch (error: any) {
+    console.error('Semantic Search Error:', error);
+    return c.json({ error: error.message }, 500);
+  }
+});
+
 // Report Generation (Gemini AI Implementation & Streaming)
 app.post('/generate-report', verifyTurnstile, rateLimit, async (c) => {
   try {
@@ -573,6 +649,7 @@ app.post('/generate-report', verifyTurnstile, rateLimit, async (c) => {
              await extractAndScoreLSTs(c.env.DB, fullReport, reportId, c.env.GEMINI_API_KEY);
            }
            
+           c.executionCtx.waitUntil(indexDocumentVector(c.env, reportId, `AI Created - ${new Date().toLocaleDateString()}`, fullReport, 'report'));
            await logAudit(c.env.DB, 'generate', 'report', `Streaming report complete`, reportId);
          } catch (dbErr) {
            console.error('Failed to save generated report:', dbErr);
@@ -628,6 +705,8 @@ app.post('/reports/upload', verifyTurnstile, async (c) => {
       .run();
       
     await logAudit(c.env.DB, 'upload', reportData.type || 'report', reportData.title || 'Untitled Report', id);
+    // Index for semantic search
+    c.executionCtx.waitUntil(indexDocumentVector(c.env, id, reportData.title || 'Untitled Report', reportData.content || '', 'report'));
     return c.json({ success: true, report: reportData });
   } catch (error: any) {
     await logError(c.env.DB, 'report_upload', error);
@@ -954,10 +1033,32 @@ async function scheduledBackup(env: Bindings) {
   }
 }
 
+// Admin: Re-index all documents for semantic search
+app.post('/admin/reindex', verifyAdmin, async (c) => {
+  try {
+    // 1. Fetch all reports
+    const { results: reports } = await c.env.DB.prepare('SELECT id, title, content FROM reports').all();
+    
+    // 2. Index them in chunks to avoid timeout or AI rate limits
+    let count = 0;
+    for (const report of reports) {
+      await indexDocumentVector(c.env, report.id as string, report.title as string, report.content as string, 'report');
+      count++;
+    }
+
+    await logAudit(c.env.DB, 'reindex', 'admin', `Manually re-indexed ${count} documents`, 'system');
+    return c.json({ success: true, indexed: count });
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+// Final check: Version identifier for deployment confirmation
+app.get('/health', (c) => c.json({ status: 'ok', version: '3.2.0-vector' }));
+
 export default {
   fetch: app.fetch,
   scheduled: async (event: ScheduledEvent, env: Bindings, ctx: ExecutionContext) => {
     ctx.waitUntil(scheduledBackup(env));
   },
 };
-

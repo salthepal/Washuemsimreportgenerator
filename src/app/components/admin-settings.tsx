@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Lock, Eye, EyeOff, Save, ShieldCheck } from 'lucide-react';
+import { Lock, Eye, EyeOff, Save, ShieldCheck, Sparkles, RefreshCcw } from 'lucide-react';
+import { reindexAll } from '../api';
 import { Button } from './ui/button';
 import { toast } from 'sonner';
 
@@ -27,6 +28,24 @@ export function AdminSettings() {
       toast.success('Admin Token saved locally');
       // Reload to update global API_HEADERS
       window.location.reload();
+    }
+  };
+
+  const handleReindex = async () => {
+    if (!token) {
+      toast.error('Admin token required for re-indexing');
+      return;
+    }
+    
+    const confirmReindex = confirm('This will re-calculate AI embeddings for all clinical documents. Depending on library size, this may take a moment. Continue?');
+    if (!confirmReindex) return;
+
+    const toastId = toast.loading('Re-indexing clinical library (AI Vectorization)...');
+    try {
+      const result = await reindexAll();
+      toast.success(`Successfully re-indexed ${result.indexed} documents`, { id: toastId });
+    } catch (err: any) {
+      toast.error(`Re-indexing failed: ${err.message}`, { id: toastId });
     }
   };
 
@@ -88,6 +107,29 @@ export function AdminSettings() {
           >
             <Save className="w-4 h-4 mr-2" />
             {isSaved ? 'Update Token' : 'Save & Authorize'}
+          </Button>
+        </div>
+      </div>
+
+      <div className="mt-6 border-t border-slate-200 dark:border-slate-800 pt-5">
+        <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2">
+           <Sparkles className="w-3 h-3 text-purple-500" />
+           AI Semantic Engine
+        </h4>
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-purple-50/50 dark:bg-purple-950/20 border border-purple-100 dark:border-purple-900 rounded-xl p-4">
+          <div className="flex-1">
+            <p className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-1">Populate Search Vectors</p>
+            <p className="text-xs text-slate-600 dark:text-slate-400">
+              Refresh the semantic index for all clinical documents. Use this after bulk updates or if AI search returns stale results.
+            </p>
+          </div>
+          <Button 
+            onClick={handleReindex}
+            disabled={!isSaved}
+            className="bg-purple-600 hover:bg-purple-700 text-white shadow-md transition-all active:scale-95"
+          >
+            <RefreshCcw className="w-4 h-4 mr-2" />
+            Re-index Library
           </Button>
         </div>
       </div>

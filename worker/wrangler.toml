@@ -37,6 +37,13 @@ id = "c33f40661cf9465bb2e9ef4e88396f01"
 binding = "BUCKET"
 bucket_name = "washu-sim-intel-storage-2026"
 
+[ai]
+binding = "AI"
+
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "sim_search"
+
 # Commands to remember:
 # npx wrangler d1 create washu_sim_db
 # npx wrangler d1 execute washu_sim_db --file=./schema.sql

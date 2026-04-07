@@ -49,19 +49,27 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
   const [selectedForBulk, setSelectedForBulk] = useState<string[]>([]);
   const [showBulkExport, setShowBulkExport] = useState(false);
   const [comparingReports, setComparingReports] = useState<Report[]>([]);
+  const [useSemantic, setUseSemantic] = useState(false);
+  const [semanticResults, setSemanticResults] = useState<any[] | null>(null);
 
-  // Server-side Full-Text Search
   useEffect(() => {
     const performSearch = async () => {
       if (debouncedSearch && debouncedSearch.length > 2) {
         setSearching(true);
         try {
-          const response = await fetch(`${API_BASE}/search?q=${encodeURIComponent(debouncedSearch)}`, {
+          const endpoint = useSemantic ? `/search/semantic` : `/search`;
+          const response = await fetch(`${API_BASE}${endpoint}?q=${encodeURIComponent(debouncedSearch)}`, {
             headers: API_HEADERS,
           });
           if (response.ok) {
             const data = await response.json();
-            setSearchResults(data);
+            if (useSemantic) {
+              setSemanticResults(data);
+              setSearchResults(null);
+            } else {
+              setSearchResults(data);
+              setSemanticResults(null);
+            }
           }
         } catch (error) {
           console.error('Search error:', error);
@@ -70,10 +78,11 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
         }
       } else {
         setSearchResults(null);
+        setSemanticResults(null);
       }
     };
     performSearch();
-  }, [debouncedSearch]);
+  }, [debouncedSearch, useSemantic]);
 
   const toggleReport = (id: string) => {
     setExpandedReport(expandedReport === id ? null : id);
@@ -267,6 +276,17 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
             <option value="month">Past Month</option>
             <option value="year">Past Year</option>
           </select>
+          <button
+            onClick={() => setUseSemantic(!useSemantic)}
+            className={`px-4 py-2 rounded-lg border-2 transition-all flex items-center gap-2 font-bold whitespace-nowrap ${
+              useSemantic 
+                ? 'bg-purple-600 border-purple-400 text-white shadow-[0_0_15px_rgba(147,51,234,0.4)]' 
+                : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400'
+            }`}
+          >
+            <Sparkles className={`w-4 h-4 ${useSemantic ? 'animate-pulse' : ''}`} />
+            {useSemantic ? 'AI Search Active' : 'Enable AI Search'}
+          </button>
         </div>
 
         {/* Tag Filters */}
@@ -339,7 +359,7 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
               <Search className="w-5 h-5 text-blue-500" />
-              Search Matches for "{debouncedSearch}"
+              Keyword Matches for "{debouncedSearch}"
               <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 text-xs px-2 py-0.5 rounded-full font-bold">
                 {searchResults.length}
               </span>
@@ -388,6 +408,76 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
                     </div>
                     <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 bg-slate-50 dark:bg-slate-900 px-2 py-1 rounded">
                       {result.type.replace('_', ' ')}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          <div className="border-b border-slate-200 dark:border-slate-700 my-8"></div>
+        </div>
+      )}
+
+      {/* --- SEMANTIC SEARCH MATCHES (Vectorize) --- */}
+      {semanticResults && (
+        <div className="space-y-4 animate-in fade-in duration-500">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-purple-600 animate-pulse" />
+              Semantic "AI" Matches for "{debouncedSearch}"
+              <span className="bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 text-xs px-2 py-0.5 rounded-full font-bold">
+                {semanticResults.length}
+              </span>
+            </h3>
+            <span className="text-[10px] bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded font-bold text-slate-500 uppercase tracking-widest">
+              Powered by Cloudflare Vectorize
+            </span>
+          </div>
+          
+          <div className="grid grid-cols-1 gap-3">
+            {semanticResults.length === 0 ? (
+              <div className="text-center py-12 bg-purple-50/50 dark:bg-purple-900/10 rounded-xl border border-dashed border-purple-200 dark:border-purple-800">
+                <Sparkles className="w-8 h-8 text-purple-300 mx-auto mb-3" />
+                <p className="text-sm text-slate-500">No semantically similar documents found.</p>
+                <p className="text-[10px] text-slate-400 mt-1 uppercase">Try adjusting your query or re-indexing library</p>
+              </div>
+            ) : (
+              semanticResults.map((result: any) => (
+                <div 
+                  key={result.id} 
+                  className="bg-white dark:bg-slate-800 border-2 border-purple-100 dark:border-purple-900/30 rounded-xl p-4 hover:border-purple-400 transition-all group cursor-pointer relative overflow-hidden"
+                  onClick={() => {
+                    const fullDoc = [...reports, ...sessionNotes, ...generatedReports].find(d => d.id === result.id);
+                    if (fullDoc) {
+                      if ('title' in fullDoc) setViewingReport(fullDoc as Report);
+                      else setExpandedNote(fullDoc.id);
+                    }
+                  }}
+                >
+                  <div className="absolute top-0 right-0 h-1 bg-purple-500" style={{ width: `${(result.score || 0) * 100}%` }}></div>
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-4">
+                      <div className="p-2 bg-purple-100 text-purple-600 rounded-lg">
+                        <Sparkles className="w-5 h-5" />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                           <h4 className="font-bold text-slate-900 dark:text-slate-100 group-hover:text-purple-600 transition-colors">
+                            {result.title}
+                          </h4>
+                          <span className="text-[10px] font-black text-purple-500">
+                            {Math.round((result.score || 0) * 100)}% match
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-600 dark:text-slate-400 italic line-clamp-2 leading-relaxed">
+                          {result.snippet?.substring(0, 200)}...
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <div className="text-[10px] font-bold uppercase tracking-widest text-purple-400 bg-purple-50 dark:bg-purple-900/50 px-2 py-1 rounded">
+                        {result.type}
+                      </div>
                     </div>
                   </div>
                 </div>
