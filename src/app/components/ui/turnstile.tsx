@@ -10,7 +10,7 @@ export function Turnstile({ onVerify, siteKey }: TurnstileProps) {
   const widgetIdRef = useRef<string | null>(null);
 
   // Default sitekey for WashU EM Sim Intelligence (Cloudflare managed)
-  const defaultSiteKey = '0x4AAAAAAAx_6_o_p_q_r_s_t_u'; // Placeholder - replace with actual if known
+  const defaultSiteKey = '0x4AAAAAAC1gQskkjSorxR2e';
 
   useEffect(() => {
     const scriptId = 'cloudflare-turnstile-script';
