@@ -415,92 +415,113 @@ app.get('/files/:path{.+}', async (c) => {
   return new Response(object.body, { headers });
 });
 
-// Full-Text Search (Optimization #1)
+// Hybrid Search (Optimization #1 & #2: FTS5 + Vectorize)
 app.get('/search', async (c) => {
   const query = c.req.query('q');
   if (!query) return c.json([]);
 
   try {
-    // Search using FTS5 MATCH operator
-    const searchQuery = query.includes('*') || query.includes('"') ? query : `${query}*`;
-    const { results } = await c.env.DB.prepare(`
-      SELECT 
-        s.id, 
-        s.type, 
-        highlight(search_index, 2, '[[HL]]', '[[/HL]]') as title_highlight,
-        snippet(search_index, 3, '[[HL]]', '[[/HL]]', '...', 32) as snippet,
-        s.title,
-        r.metadata
-      FROM search_index s
-      LEFT JOIN reports r ON s.id = r.id
-      WHERE search_index MATCH ? 
-      ORDER BY rank
-      LIMIT 50
-    `)
-      .bind(searchQuery)
-      .all();
+    // 1. Kick off FTS5 keyword search (Fast)
+    const ftsPromise = (async () => {
+      try {
+        const searchQuery = query.includes('*') || query.includes('"') ? query : `${query}*`;
+        const { results } = await c.env.DB.prepare(`
+          SELECT 
+            s.id, 
+            s.type, 
+            highlight(search_index, 2, '[[HL]]', '[[/HL]]') as title_highlight,
+            snippet(search_index, 3, '[[HL]]', '[[/HL]]', '...', 32) as snippet,
+            s.title,
+            r.metadata
+          FROM search_index s
+          LEFT JOIN reports r ON s.id = r.id
+          WHERE search_index MATCH ? 
+          ORDER BY rank
+          LIMIT 20
+        `)
+          .bind(searchQuery)
+          .all();
+        return results.map((res: any) => ({
+          ...res,
+          metadata: res.metadata ? JSON.parse(res.metadata) : {},
+          matchType: 'keyword' as const,
+          score: 1.0 // Exact matches get the highest score
+        }));
+      } catch (e) {
+        console.error('FTS Search Error:', e);
+        return [];
+      }
+    })();
+
+    // 2. Kick off Semantic Search if AI bindings available
+    const semanticPromise = (async () => {
+      try {
+        if (!c.env.AI || !c.env.VECTORIZE) return [];
+        
+        // Generate embedding for query
+        const aiOutput = await c.env.AI.run('@cf/baai/bge-small-en-v1.5', {
+          text: [query]
+        });
+        const queryVector = Array.isArray(aiOutput) ? aiOutput[0] : aiOutput.data?.[0];
+        
+        if (!queryVector) return [];
+
+        // Search Vectorize
+        const matches = await c.env.VECTORIZE.query(queryVector, {
+          topK: 15,
+          returnMetadata: 'all'
+        });
+
+        if (matches.matches.length === 0) return [];
+
+        // Hydrate from DB
+        const ids = matches.matches.map(m => m.id);
+        const placeholders = ids.map(() => '?').join(',');
+        const { results } = await c.env.DB.prepare(`
+          SELECT 
+            id, 
+            title, 
+            content as snippet,
+            'report' as type
+          FROM reports 
+          WHERE id IN (${placeholders})
+        `)
+          .bind(...ids)
+          .all();
+
+        return results.map((res: any) => ({
+          ...res,
+          matchType: 'semantic' as const,
+          score: matches.matches.find(m => m.id === res.id)?.score || 0.5
+        }));
+      } catch (e) {
+        console.error('Semantic Search Error:', e);
+        return [];
+      }
+    })();
+
+    // 3. Await both and merge
+    const [ftsResults, semanticResults] = await Promise.all([ftsPromise, semanticPromise]);
     
-    return c.json(results.map((res: any) => ({
-      ...res,
-      metadata: res.metadata ? JSON.parse(res.metadata) : {}
-    })));
+    // 4. De-duplicate (Prioritize Keywords)
+    const combinedMap = new Map<string, any>();
+    
+    // Add semantic first
+    semanticResults.forEach((res: any) => combinedMap.set(res.id, res));
+    // Overwrite/Add keywords (since they might have highlights and top scores)
+    ftsResults.forEach((res: any) => combinedMap.set(res.id, {
+       ...res,
+       // If it was already in semantic, we keep the semantic score if it was higher or just mark it as keyword
+       isHybrid: combinedMap.has(res.id)
+    }));
+
+    const finalResults = Array.from(combinedMap.values())
+      .sort((a, b) => b.score - a.score);
+
+    return c.json(finalResults);
+
   } catch (error: any) {
-    console.error('FTS Search Error:', error);
-    // Silent fallback to basic LIKE if FTS fails (e.g. index not yet populated)
-    const { results } = await c.env.DB.prepare('SELECT id, title, content, type FROM reports WHERE title LIKE ? OR content LIKE ? LIMIT 20')
-      .bind(`%${query}%`, `%${query}%`)
-      .all();
-    return c.json(results);
-  }
-});
-
-// Semantic Semantic Search (Optimization #2)
-app.get('/search/semantic', async (c) => {
-  const query = c.req.query('q');
-  if (!query) return c.json([]);
-
-  try {
-    // 1. Generate embedding for query
-    const { data } = await c.env.AI.run('@cf/baai/bge-small-en-v1.5', {
-      text: [query]
-    });
-    
-    if (!data?.[0]) return c.json([]);
-
-    // 2. Search Vectorize
-    const matches = await c.env.VECTORIZE.query(data[0], {
-      topK: 10,
-      returnMetadata: 'all'
-    });
-
-    if (matches.matches.length === 0) return c.json([]);
-
-    // 3. Hydrate from DB
-    const ids = matches.matches.map(m => m.id);
-    const placeholders = ids.map(() => '?').join(',');
-    const { results } = await c.env.DB.prepare(`
-      SELECT 
-        id, 
-        title, 
-        content as snippet,
-        'report' as type
-      FROM reports 
-      WHERE id IN (${placeholders})
-    `)
-      .bind(...ids)
-      .all();
-
-    // Preserve the similarity ranking
-    const sorted = ids.map(id => results.find((r: any) => r.id === id)).filter(Boolean);
-    
-    return c.json(sorted.map((res: any) => ({
-      ...res,
-      id: res.id,
-      score: matches.matches.find(m => m.id === res.id)?.score
-    })));
-
-  } catch (error: any) {
-    console.error('Semantic Search Error:', error);
+    console.error('Hybrid Search Failure:', error);
     return c.json({ error: error.message }, 500);
   }
 });

@@ -49,27 +49,19 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
   const [selectedForBulk, setSelectedForBulk] = useState<string[]>([]);
   const [showBulkExport, setShowBulkExport] = useState(false);
   const [comparingReports, setComparingReports] = useState<Report[]>([]);
-  const [useSemantic, setUseSemantic] = useState(false);
-  const [semanticResults, setSemanticResults] = useState<any[] | null>(null);
+  const [hybridResults, setHybridResults] = useState<any[] | null>(null);
 
   useEffect(() => {
     const performSearch = async () => {
       if (debouncedSearch && debouncedSearch.length > 2) {
         setSearching(true);
         try {
-          const endpoint = useSemantic ? `/search/semantic` : `/search`;
-          const response = await fetch(`${API_BASE}${endpoint}?q=${encodeURIComponent(debouncedSearch)}`, {
+          const response = await fetch(`${API_BASE}/search?q=${encodeURIComponent(debouncedSearch)}`, {
             headers: API_HEADERS,
           });
           if (response.ok) {
             const data = await response.json();
-            if (useSemantic) {
-              setSemanticResults(data);
-              setSearchResults(null);
-            } else {
-              setSearchResults(data);
-              setSemanticResults(null);
-            }
+            setHybridResults(data);
           }
         } catch (error) {
           console.error('Search error:', error);
@@ -77,12 +69,11 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
           setSearching(false);
         }
       } else {
-        setSearchResults(null);
-        setSemanticResults(null);
+        setHybridResults(null);
       }
     };
     performSearch();
-  }, [debouncedSearch, useSemantic]);
+  }, [debouncedSearch]);
 
   const toggleReport = (id: string) => {
     setExpandedReport(expandedReport === id ? null : id);
@@ -276,17 +267,6 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
             <option value="month">Past Month</option>
             <option value="year">Past Year</option>
           </select>
-          <button
-            onClick={() => setUseSemantic(!useSemantic)}
-            className={`px-4 py-2 rounded-lg border-2 transition-all flex items-center gap-2 font-bold whitespace-nowrap ${
-              useSemantic 
-                ? 'bg-purple-600 border-purple-400 text-white shadow-[0_0_15px_rgba(147,51,234,0.4)]' 
-                : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400'
-            }`}
-          >
-            <Sparkles className={`w-4 h-4 ${useSemantic ? 'animate-pulse' : ''}`} />
-            {useSemantic ? 'AI Search Active' : 'Enable AI Search'}
-          </button>
         </div>
 
         {/* Tag Filters */}
@@ -353,15 +333,15 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
         </div>
       )}
 
-      {/* --- REFINED SEARCH MATCHES (Optimization #1 UI) --- */}
-      {searchResults && (
+      {/* --- HYBRID SEARCH MATCHES (Keyword + Semantic) --- */}
+      {hybridResults && (
         <div className="space-y-4 animate-in fade-in duration-300">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-              <Search className="w-5 h-5 text-blue-500" />
-              Keyword Matches for "{debouncedSearch}"
+              <Sparkles className="w-5 h-5 text-blue-500" />
+              Intelligent Matches for "{debouncedSearch}"
               <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 text-xs px-2 py-0.5 rounded-full font-bold">
-                {searchResults.length}
+                {hybridResults.length}
               </span>
             </h3>
             <button 
@@ -373,15 +353,20 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
           </div>
           
           <div className="grid grid-cols-1 gap-3">
-            {searchResults.length === 0 ? (
-              <div className="text-center py-8 bg-slate-50 dark:bg-slate-900/30 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
-                <p className="text-sm text-slate-500">No matches found in clinical documents.</p>
+            {hybridResults.length === 0 ? (
+              <div className="text-center py-12 bg-slate-50 dark:bg-slate-900/30 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
+                <Search className="w-8 h-8 text-slate-300 mx-auto mb-3" />
+                <p className="text-sm text-slate-500">No keyword or conceptual matches found.</p>
               </div>
             ) : (
-              (searchResults as any[]).map((result: any) => (
+              hybridResults.map((result: any) => (
                 <div 
                   key={result.id} 
-                  className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 hover:shadow-md transition-all group cursor-pointer"
+                  className={`bg-white dark:bg-slate-800 border-2 rounded-xl p-4 transition-all group cursor-pointer relative overflow-hidden ${
+                    result.matchType === 'keyword' 
+                      ? 'border-slate-200 dark:border-slate-700' 
+                      : 'border-purple-100 dark:border-purple-900/30'
+                  }`}
                   onClick={() => {
                     const fullDoc = [...reports, ...sessionNotes, ...generatedReports].find(d => d.id === result.id);
                     if (fullDoc) {
@@ -390,94 +375,41 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
                     }
                   }}
                 >
+                   {result.matchType === 'semantic' && (
+                     <div className="absolute top-0 right-0 h-1 bg-purple-500" style={{ width: `${(result.score || 0) * 100}%` }}></div>
+                   )}
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-4">
                       <div className={`p-2 rounded-lg ${
-                        result.type === 'session_note' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'
+                        result.matchType === 'keyword' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'
                       }`}>
-                        {result.type === 'session_note' ? <Users className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
+                        {result.matchType === 'keyword' ? <Search className="w-5 h-5" /> : <Sparkles className="w-5 h-5" />}
                       </div>
                       <div className="space-y-1">
-                        <h4 className="font-bold text-slate-900 dark:text-slate-100 group-hover:text-blue-600 transition-colors">
-                          <HighlightText text={result.title_highlight || result.title} />
-                        </h4>
+                        <div className="flex items-center gap-2">
+                          <h4 className={`font-bold text-slate-900 dark:text-slate-100 transition-colors ${
+                              result.matchType === 'keyword' ? 'group-hover:text-blue-600' : 'group-hover:text-purple-600'
+                          }`}>
+                            {result.title_highlight ? <HighlightText text={result.title_highlight} /> : result.title}
+                          </h4>
+                          {result.matchType === 'semantic' && (
+                            <span className="text-[10px] font-black text-purple-500 uppercase tracking-tighter">
+                               Conceptual Match ({Math.round(result.score * 100)}%)
+                            </span>
+                          )}
+                          {result.isHybrid && (
+                            <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-black uppercase">
+                              Strong Match
+                            </span>
+                          )}
+                        </div>
                         <p className="text-xs text-slate-600 dark:text-slate-400 italic line-clamp-2 leading-relaxed">
-                          <HighlightText text={result.snippet} />
+                          {result.snippet ? <HighlightText text={result.snippet} /> : (result.content?.substring(0, 200) + '...')}
                         </p>
                       </div>
                     </div>
                     <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 bg-slate-50 dark:bg-slate-900 px-2 py-1 rounded">
-                      {result.type.replace('_', ' ')}
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-          <div className="border-b border-slate-200 dark:border-slate-700 my-8"></div>
-        </div>
-      )}
-
-      {/* --- SEMANTIC SEARCH MATCHES (Vectorize) --- */}
-      {semanticResults && (
-        <div className="space-y-4 animate-in fade-in duration-500">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-purple-600 animate-pulse" />
-              Semantic "AI" Matches for "{debouncedSearch}"
-              <span className="bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 text-xs px-2 py-0.5 rounded-full font-bold">
-                {semanticResults.length}
-              </span>
-            </h3>
-            <span className="text-[10px] bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded font-bold text-slate-500 uppercase tracking-widest">
-              Powered by Cloudflare Vectorize
-            </span>
-          </div>
-          
-          <div className="grid grid-cols-1 gap-3">
-            {semanticResults.length === 0 ? (
-              <div className="text-center py-12 bg-purple-50/50 dark:bg-purple-900/10 rounded-xl border border-dashed border-purple-200 dark:border-purple-800">
-                <Sparkles className="w-8 h-8 text-purple-300 mx-auto mb-3" />
-                <p className="text-sm text-slate-500">No semantically similar documents found.</p>
-                <p className="text-[10px] text-slate-400 mt-1 uppercase">Try adjusting your query or re-indexing library</p>
-              </div>
-            ) : (
-              semanticResults.map((result: any) => (
-                <div 
-                  key={result.id} 
-                  className="bg-white dark:bg-slate-800 border-2 border-purple-100 dark:border-purple-900/30 rounded-xl p-4 hover:border-purple-400 transition-all group cursor-pointer relative overflow-hidden"
-                  onClick={() => {
-                    const fullDoc = [...reports, ...sessionNotes, ...generatedReports].find(d => d.id === result.id);
-                    if (fullDoc) {
-                      if ('title' in fullDoc) setViewingReport(fullDoc as Report);
-                      else setExpandedNote(fullDoc.id);
-                    }
-                  }}
-                >
-                  <div className="absolute top-0 right-0 h-1 bg-purple-500" style={{ width: `${(result.score || 0) * 100}%` }}></div>
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-4">
-                      <div className="p-2 bg-purple-100 text-purple-600 rounded-lg">
-                        <Sparkles className="w-5 h-5" />
-                      </div>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                           <h4 className="font-bold text-slate-900 dark:text-slate-100 group-hover:text-purple-600 transition-colors">
-                            {result.title}
-                          </h4>
-                          <span className="text-[10px] font-black text-purple-500">
-                            {Math.round((result.score || 0) * 100)}% match
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-600 dark:text-slate-400 italic line-clamp-2 leading-relaxed">
-                          {result.snippet?.substring(0, 200)}...
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-1">
-                      <div className="text-[10px] font-bold uppercase tracking-widest text-purple-400 bg-purple-50 dark:bg-purple-900/50 px-2 py-1 rounded">
-                        {result.type}
-                      </div>
+                      {result.type?.replace('_', ' ')}
                     </div>
                   </div>
                 </div>
