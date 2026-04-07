@@ -111,22 +111,5 @@
     "tailwindcss": "4.1.12",
     "typescript": "^6.0.2",
     "vite": "^6.4.2"
-  },
-  "peerDependencies": {
-    "react": "18.3.1",
-    "react-dom": "18.3.1"
-  },
-  "peerDependenciesMeta": {
-    "react": {
-      "optional": true
-    },
-    "react-dom": {
-      "optional": true
-    }
-  },
-  "pnpm": {
-    "overrides": {
-      "vite": "6.4.1"
-    }
   }
 }
