@@ -26,7 +26,7 @@ export async function processDocxFile(file: File): Promise<ProcessedDocument> {
   
   // Extract title from first heading in HTML
   const tempDiv = document.createElement('div');
-  tempDiv.innerHTML = htmlResult.value;
+  tempDiv.innerHTML = sanitizeHTML(htmlResult.value);
   const firstHeading = tempDiv.querySelector('h1, h2, h3');
   const title = sanitizeText(
     firstHeading?.textContent?.trim() || file.name.replace('.docx', '')

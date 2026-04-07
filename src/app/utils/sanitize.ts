@@ -23,57 +23,23 @@ export function sanitizeText(text: string): string {
     .trim();
 }
 
+import DOMPurify from 'dompurify';
+
 /**
  * Sanitizes HTML content while preserving basic formatting
  */
 export function sanitizeHTML(html: string): string {
   if (!html) return '';
   
-  let sanitized = html.normalize('NFC');
-  
-  // Loop to handle nested/overlapping patterns until no more matches found
-  // This prevents bypasses like <<script>script> becoming <script>
-  let previousLength = -1;
-  while (sanitized.length !== previousLength) {
-    previousLength = sanitized.length;
-    
-    // Remove script tags and their content
-    sanitized = sanitized.replaceAll(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-    sanitized = sanitized.replaceAll(/<script[\s\S]*?<\/script>/gi, '');
-    sanitized = sanitized.replaceAll(/<script[^>]*>/gi, '');
-    
-    // Remove style tags and their content
-    sanitized = sanitized.replaceAll(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
-    sanitized = sanitized.replaceAll(/<style[\s\S]*?<\/style>/gi, '');
-    sanitized = sanitized.replaceAll(/<style[^>]*>/gi, '');
-    
-    // Remove iframe tags
-    sanitized = sanitized.replaceAll(/<iframe[\s\S]*?<\/iframe>/gi, '');
-    sanitized = sanitized.replaceAll(/<iframe[^>]*>/gi, '');
-    
-    // Remove object and embed tags
-    sanitized = sanitized.replaceAll(/<object[\s\S]*?<\/object>/gi, '');
-    sanitized = sanitized.replaceAll(/<embed[\s\S]*?<\/embed>/gi, '');
-    
-    // Remove all img tags (prevents base64 bloat causing SQLITE_TOOBIG in D1)
-    sanitized = sanitized.replaceAll(/<img[^>]*>/gi, '');
-    
-    // Remove event handlers with various formats
-    sanitized = sanitized.replaceAll(/on\w+\s*=\s*"[^"]*"/gi, '');
-    sanitized = sanitized.replaceAll(/on\w+\s*=\s*'[^']*'/gi, '');
-    sanitized = sanitized.replaceAll(/on\w+\s*=\s*[^\s>]*/gi, '');
-    
-    // Remove javascript: protocol
-    sanitized = sanitized.replaceAll(/javascript:/gi, '');
-    sanitized = sanitized.replaceAll(/vbscript:/gi, '');
-    sanitized = sanitized.replaceAll(/data:text\/html/gi, '');
-  }
-  
-  // Normalize quotes in HTML
-  sanitized = sanitized.replaceAll(/[\u2018\u2019]/g, "'");
-  sanitized = sanitized.replaceAll(/[\u201C\u201D]/g, '"');
-  
-  return sanitized;
+  return DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: [
+      'p', 'br', 'b', 'i', 'em', 'strong', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 
+      'ul', 'ol', 'li', 'span', 'div', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+      'blockquote', 'pre', 'code'
+    ],
+    ALLOWED_ATTR: ['class', 'id', 'style'],
+    FORCE_BODY: true
+  });
 }
 
 /**
