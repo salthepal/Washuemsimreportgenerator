@@ -1172,7 +1172,7 @@ app.post('/admin/reindex', verifyAdmin, async (c) => {
 });
 
 // Final check: Version identifier for deployment confirmation
-app.get('/health', (c) => c.json({ status: 'ok', version: '3.2.0-vector' }));
+app.get('/health', (c) => c.json({ status: 'ok', version: '3.5.0' }));
 
 export default {
   fetch: (request: Request, env: Bindings, ctx: ExecutionContext) => {
