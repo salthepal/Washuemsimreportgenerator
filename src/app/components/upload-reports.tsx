@@ -183,9 +183,9 @@ export function UploadReports({ reports, onRefresh }: UploadReportsProps) {
         console.error('Upload failed:', responseData);
         toast.error(`Failed to upload: ${responseData.error || 'Unknown error'}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error processing DOCX:', error);
-      toast.error(`Failed to process DOCX file: ${error.message}`);
+      toast.error(`Failed to process DOCX file: ${error.message || 'Unknown error'}`);
     } finally {
       setUploading(false);
       setUploadProgress(0);
