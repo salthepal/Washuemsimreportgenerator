@@ -344,7 +344,7 @@ export function UploadReports({ reports, onRefresh }: UploadReportsProps) {
             <div className="flex gap-3">
               <ActionButton
                 onClick={handleUpload}
-                disabled={uploading}
+                disabled={uploading || !turnstileToken}
                 loading={uploading}
                 variant="primary"
                 fullWidth

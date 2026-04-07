@@ -307,7 +307,7 @@ export function SessionNotes({ sessionNotes, onRefresh }: SessionNotesProps) {
           <div className="flex gap-3">
             <ActionButton
               type="submit"
-              disabled={adding}
+              disabled={adding || !turnstileToken}
               loading={adding}
               variant="success"
               fullWidth

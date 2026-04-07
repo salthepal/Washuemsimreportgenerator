@@ -393,7 +393,7 @@ export function CaseFiles({ caseFiles, onRefresh }: CaseFilesProps) {
             <div className="flex gap-3">
               <ActionButton
                 onClick={handleUpload}
-                disabled={uploading}
+                disabled={uploading || !turnstileToken}
                 loading={uploading}
                 variant="success"
                 fullWidth
