@@ -28,7 +28,7 @@ app.use('*', secureHeaders());
 app.use('*', honoLogger());
 app.use('*', cors({
   origin: '*',
-  allowHeaders: ['Content-Type', 'X-Turnstile-Token', 'Authorization'],
+  allowHeaders: ['Content-Type', 'X-Turnstile-Token', 'Authorization', 'X-Admin-Token'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 }));
 
@@ -699,7 +699,7 @@ No Em Dashes: Do not use em dashes; utilize commas, colons, or parentheses inste
 
 Generate the Post-Session Report now using strict Markdown formatting.`;
 
-app.get('/prompt-template', (c) => {
+app.get('/prompt-template', verifyAdmin, (c) => {
   return c.json({ template: PROMPT_TEMPLATE });
 });
 

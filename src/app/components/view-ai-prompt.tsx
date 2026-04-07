@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { FileText, Copy, CheckCircle, AlertCircle, Eye, Code } from 'lucide-react';
-import { API_BASE, API_HEADERS } from '../App';
+import { API_BASE, getApiHeaders } from '../api';
 import { toast } from 'sonner';
 
 export function ViewAIPrompt() {
@@ -20,7 +20,7 @@ export function ViewAIPrompt() {
     setLoading(true);
     try {
       const response = await fetch(`${API_BASE}/prompt-template`, {
-        headers: API_HEADERS,
+        headers: getApiHeaders(),
       });
 
       if (response.ok) {
@@ -31,7 +31,7 @@ export function ViewAIPrompt() {
         console.error('Failed to fetch prompt template:', response.status, errorText);
         toast.error(`Failed to fetch prompt template: ${response.status}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching prompt template:', error);
       toast.error(`Error: ${error.message}`);
     } finally {
@@ -42,7 +42,7 @@ export function ViewAIPrompt() {
   const fetchModelPreference = async () => {
     try {
       const response = await fetch(`${API_BASE}/model-preference`, {
-        headers: API_HEADERS,
+        headers: getApiHeaders(),
       });
 
       if (response.ok) {
@@ -66,7 +66,7 @@ export function ViewAIPrompt() {
     try {
       const response = await fetch(`${API_BASE}/model-preference`, {
         method: 'POST',
-        headers: API_HEADERS,
+        headers: getApiHeaders(),
         body: JSON.stringify({ model: newModel }),
       });
 
