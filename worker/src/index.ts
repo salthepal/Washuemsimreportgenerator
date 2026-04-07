@@ -16,6 +16,7 @@ type Bindings = {
   RATELIMIT: KVNamespace;
   GEMINI_API_KEY: string;
   TURNSTILE_SECRET_KEY: string;
+  ADMIN_TOKEN: string;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
@@ -45,9 +46,8 @@ app.get('/', (c) => {
   });
 });
 
-// --- HYDRATE ENDPOINT (Optimization #5) ---
-// Fetches all major app state in a single request to reduce network RTT
-app.get('/hydrate', async (c) => {
+// --- HYDRATE ENDPOINT ---
+app.get('/hydrate', verifyAdmin, async (c) => {
   try {
     const [reports, lsts, notes, cases] = await Promise.all([
       c.env.DB.prepare('SELECT * FROM reports ORDER BY created_at DESC').all(),
@@ -138,8 +138,8 @@ async function verifyTurnstile(c: any, next: any) {
   const secret = c.env.TURNSTILE_SECRET_KEY;
 
   if (!secret) {
-    console.warn('[AUTH] TURNSTILE_SECRET_KEY not set. Skipping verification.');
-    return next();
+    console.error('[AUTH ERROR] TURNSTILE_SECRET_KEY is missing from environment. Rejecting for security.');
+    return c.json({ error: 'Server configuration error' }, 500);
   }
 
   if (!token) {
@@ -166,6 +166,26 @@ async function verifyTurnstile(c: any, next: any) {
     console.error('Turnstile verification error:', err);
     return c.json({ error: 'Verification service unreachable' }, 503);
   }
+}
+
+// Admin Authorization Middleware
+async function verifyAdmin(c: any, next: any) {
+  const adminSecret = c.env.ADMIN_TOKEN;
+  const providedToken = c.req.header('X-Admin-Token');
+
+  if (!adminSecret) {
+    console.error('[AUTH ERROR] ADMIN_TOKEN is missing from environment. Rejecting access.');
+    return c.json({ error: 'Administrative access not configured' }, 500);
+  }
+
+  if (!providedToken || providedToken !== adminSecret) {
+    await logError(c.env.DB, 'unauthorized_admin_access', new Error('Invalid or missing Admin Token'), {
+      ip: c.req.header('cf-connecting-ip')
+    });
+    return c.json({ error: 'Unauthorized: Admin Token required' }, 401);
+  }
+
+  await next();
 }
 
 // Rate Limiting Middleware
@@ -262,7 +282,7 @@ app.get('/lsts', async (c) => {
   }
 });
 
-app.put('/lsts/:id', async (c) => {
+app.put('/lsts/:id', verifyAdmin, async (c) => {
   try {
     const id = c.req.param('id');
     const lst = await c.req.json();
@@ -291,7 +311,7 @@ app.put('/lsts/:id', async (c) => {
   }
 });
 
-app.post('/lsts/add', async (c) => {
+app.post('/lsts/add', verifyTurnstile, async (c) => {
   try {
     const lst = await c.req.json();
     const id = lst.id || `lst_${Date.now()}_${Math.random().toString(36).substring(7)}`;
@@ -614,7 +634,7 @@ app.post('/reports/upload', verifyTurnstile, async (c) => {
   }
 });
 
-app.delete('/reports/:id', async (c) => {
+app.delete('/reports/:id', verifyAdmin, async (c) => {
   try {
     const id = c.req.param('id');
     await c.env.DB.prepare('DELETE FROM reports WHERE id = ?').bind(id).run();
@@ -699,7 +719,7 @@ app.get('/model-preference', async (c) => {
   }
 });
 
-app.post('/model-preference', async (c) => {
+app.post('/model-preference', verifyAdmin, async (c) => {
   try {
     const { model } = await c.req.json();
     await c.env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
@@ -751,7 +771,7 @@ app.post('/notes/add', verifyTurnstile, async (c) => {
   }
 });
 
-app.delete('/notes/:id', async (c) => {
+app.delete('/notes/:id', verifyAdmin, async (c) => {
   try {
     const id = c.req.param('id');
     await c.env.DB.prepare('DELETE FROM session_notes WHERE id = ?').bind(id).run();
@@ -809,7 +829,7 @@ app.post('/case-files/upload', verifyTurnstile, async (c) => {
   }
 });
 
-app.delete('/case-files/:id', async (c) => {
+app.delete('/case-files/:id', verifyAdmin, async (c) => {
   try {
     const id = c.req.param('id');
     await c.env.DB.prepare('DELETE FROM case_files WHERE id = ?').bind(id).run();
@@ -830,7 +850,7 @@ app.delete('/case-files/:id', async (c) => {
 });
 
 // Error Logs
-app.get('/error-log', async (c) => {
+app.get('/error-log', verifyAdmin, async (c) => {
   try {
     const { results } = await c.env.DB.prepare('SELECT * FROM error_logs ORDER BY timestamp DESC LIMIT 100').all();
     return c.json(results.map((r: any) => ({
@@ -842,7 +862,7 @@ app.get('/error-log', async (c) => {
   }
 });
 
-app.delete('/error-log', async (c) => {
+app.delete('/error-log', verifyAdmin, async (c) => {
   try {
     await c.env.DB.prepare('DELETE FROM error_logs').run();
     await logAudit(c.env.DB, 'clear', 'system', 'Error Log Cleared', 'error-log');
@@ -853,7 +873,7 @@ app.delete('/error-log', async (c) => {
 });
 
 // Backup & Restore
-app.get('/backup', async (c) => {
+app.get('/backup', verifyAdmin, async (c) => {
   try {
     const reports = await c.env.DB.prepare('SELECT * FROM reports').all();
     const lsts = await c.env.DB.prepare('SELECT * FROM lsts').all();
@@ -886,7 +906,7 @@ app.get('/model-preference', async (c) => {
   }
 });
 
-app.post('/settings/ai-model', async (c) => {
+app.post('/settings/ai-model', verifyAdmin, async (c) => {
   try {
     const { model } = await c.req.json();
     await c.env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')

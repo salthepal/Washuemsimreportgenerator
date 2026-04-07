@@ -26,6 +26,7 @@ import { apiCache } from './utils/cache';
 import { TOUR_STEPS, KEYBOARD_SHORTCUTS } from './constants/tour';
 import { toast } from 'sonner';
 import { AppSidebar } from './components/app-sidebar';
+import { AdminSettings } from './components/admin-settings';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import type { LST, Report, SessionNote } from './types';
 
@@ -310,7 +311,8 @@ export default function App() {
                           Manage backups, audit logs, and system configuration
                         </p>
                       </div>
-
+ 
+                      <AdminSettings />
                       <ViewAIPrompt />
                       <Suspense fallback={<Skeleton className="h-32" />}>
                         <BackupRestore />
