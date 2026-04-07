@@ -27,9 +27,10 @@ app.use('*', secureHeaders());
 // 2. Base Middlewares
 app.use('*', honoLogger());
 app.use('*', cors({
-  origin: '*',
+  origin: (origin) => origin,
   allowHeaders: ['Content-Type', 'X-Turnstile-Token', 'Authorization', 'X-Admin-Token'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true,
 }));
 
 // 3. Edge Caching Middleware (Only applies to GET requests automatically)

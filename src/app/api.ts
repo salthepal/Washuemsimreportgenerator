@@ -2,9 +2,11 @@
 import type { Report, SessionNote, CaseFile, LST } from './types';
 
 // Base URL for the backend API (defaults to /api proxy, can be overridden for local dev)
-export const API_BASE = window.location.hostname === 'localhost' 
-  ? 'http://localhost:8787' 
-  : 'https://washu-em-sim-intelligence.sphadnisuf.workers.dev';
+export const API_BASE = import.meta.env.VITE_API_BASE || (
+  window.location.hostname === 'localhost' 
+    ? 'http://localhost:8787' 
+    : 'https://washu-em-sim-intelligence.sphadnisuf.workers.dev'
+);
 
 export const getApiHeaders = () => {
   const headers: Record<string, string> = {
