@@ -27,7 +27,8 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "version:sync": "node utils/sync-version.js"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",

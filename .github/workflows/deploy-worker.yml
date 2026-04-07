@@ -25,10 +25,16 @@ jobs:
       - name: Install dependencies
         run: npm install
         working-directory: worker
+      
+      - name: Get Version
+        id: version
+        run: echo "VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+        working-directory: worker
 
       - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: "${{ secrets.CLOUDFLARE_API_TOKEN }}"
           workingDirectory: 'worker'
-          command: deploy
+          command: deploy --name washu-em-sim-intelligence
+          # Optional: Metadata can be added to logging or external trackers

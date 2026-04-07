@@ -1,5 +1,5 @@
 /**
- * WashU EM Sim Intelligence Worker - v3.1.2
+ * WashU EM Sim Intelligence Worker - v3.2.0
  * Automatic deployment test triggered via GitHub Actions
  */
 import { Hono } from 'hono';
