@@ -211,21 +211,19 @@ async function rateLimit(c: any, next: any) {
 }
 
 async function indexDocumentVector(env: Bindings, id: string, title: string, content: string, type: string) {
-  try {
-    if (!env.AI || !env.VECTORIZE) {
-      console.error('[VECTOR ERROR] AI or VECTORIZE binding missing from environment');
-      return;
-    }
+  if (!env.AI || !env.VECTORIZE) {
+     throw new Error('Infrastructure bindings missing (AI/VECTORIZE)');
+  }
 
-    const textToEmbed = `${title}\n\n${content}`.substring(0, 1000); // Limit to 1000 chars for embedding efficiency
+  try {
+    const textToEmbed = `${title}\n\n${content}`.substring(0, 1000); 
     const aiOutput = await env.AI.run('@cf/baai/bge-small-en-v1.5', {
       text: [textToEmbed]
     });
     
     // Workers AI might return direct data or { data: [] } depending on version/types
     const values = Array.isArray(aiOutput) ? aiOutput[0] : aiOutput.data?.[0];
-
-    if (!values) throw new Error('Failed to generate embedding: No data in AI output');
+    if (!values) throw new Error(`AI generated no embeddings for ${id}`);
 
     await env.VECTORIZE.upsert([
       {
@@ -234,9 +232,9 @@ async function indexDocumentVector(env: Bindings, id: string, title: string, con
         metadata: { title, type, timestamp: new Date().toISOString() }
       }
     ]);
-    console.log(`[VECTOR] Indexed ${id} (${type})`);
-  } catch (err) {
-    console.error(`[VECTOR ERROR] Failed to index ${id}:`, err);
+  } catch (err: any) {
+    console.error(`[VECTOR ERROR] ${id}:`, err);
+    throw err; // RE-THROW so the loop can identify a failure
   }
 }
 

@@ -222,12 +222,14 @@ export const semanticSearch = async (query: string): Promise<any[]> => {
   return response.json();
 };
 
-export const reindexAll = async (): Promise<{ success: boolean; indexed: number }> => {
+export async function reindexAll() {
   const response = await fetch(`${API_BASE}/admin/reindex`, {
     method: 'POST',
-    headers: getApiHeaders()
+    headers: API_HEADERS,
   });
-  if (!response.ok) throw new Error('Reindexing failed');
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `Reindexing failed (Status: ${response.status})`);
+  }
   return response.json();
 };
-
