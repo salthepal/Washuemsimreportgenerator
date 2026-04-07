@@ -1,8 +1,8 @@
 # WashU Sim Intelligence
 
-**WashU Sim Intelligence** is a simulation-driven Safety & Learning Intelligence System developed for the **Washington University School of Medicine, Department of Emergency Medicine**.
+**WashU Sim Intelligence** (v3.5.0) is a simulation-driven Safety & Learning Intelligence System developed for the **Washington University School of Medicine, Department of Emergency Medicine**.
 
-The platform streamlines the transition from high-fidelity clinical simulations to actionable safety insights by automating report generation and tracking system-level vulnerabilities.
+The platform streamlines the transition from high-fidelity clinical simulations to actionable safety insights by automating report generation, providing instant RAG-powered clinical search, and tracking system-level vulnerabilities.
 
 ---
 
@@ -12,11 +12,12 @@ WashU Sim Intelligence is specialized for clinical simulation programs, prioriti
 
 ### Key Capabilities
 
-*   **⚡ AI-Powered Synthesis**: Generate simulation reports using prompts tailored to clinical safety and "Just Culture" frameworks.
-*   **🧠 Hybrid Intelligent Search**: A high-performance merge of **FTS5 Full-Text Search** and **Cloudflare Vectorize** semantic similarity for conceptual discovery.
-*   **🏥 LST Audit Tracking**: Centralized management of **Latent Safety Threats** with automated revision history.
-*   **💧 Atomic Hydration**: Optimized API loading that populates all core safety datasets in a single network request.
-*   **📶 Offline Resilience**: Persistence layers ensuring simulation specialists can maintain documentation in hospital environments with intermittent medical Wi-Fi.
+*   **🤖 Ask AI (Clinical RAG)**: A natural-language assistant powered by **Cloudflare AI Search**. Ask complex questions across the entire simulation library (e.g., "What LSTs involve pediatric airway management?") and receive cited answers.
+*   **🔍 Hybrid Intelligence Search**: Unified search combining **FTS5 Full-Text Search** for precise keywords and **Cloudflare Vectorize** for deep semantic similarity.
+*   **⚡ AI-Powered Synthesis**: Generate professional simulation reports using models tailored to clinical safety and "Just Culture" frameworks.
+*   **🏥 LST Audit Tracking**: Centralized site-specific management of **Latent Safety Threats** (LSTs) with automated AI scoring and revision history.
+*   **📦 Continuous Indexing**: Auto-mirrors all reports to **Cloudflare R2** as markdown, ensuring the AI Search index is always synchronized with the clinical library.
+*   **💧 Atomic Hydration**: High-speed edge API that populates all core safety datasets in a single network request.
 
 ---
 
@@ -24,16 +25,16 @@ WashU Sim Intelligence is specialized for clinical simulation programs, prioriti
 
 Built on a globally distributed Cloudflare-native stack for maximum reliability:
 
-- **Frontend**: React SPA (Vite + TypeScript) optimized for clinical bedside tablet use.
+- **Frontend**: React (Vite + TypeScript + Tailwind) with a streamlined, tablet-optimized dashboard.
 - **Backend API**: Cloudflare Workers (Hono) running at the edge.
 - **Intelligence**: 
-  - **Generative AI**: Real-time asynchronous streaming via **Google Gemini Flash**.
-  - **Vector Intelligence**: **Cloudflare Vectorize** with **Workers AI** (`bge-small-en-v1.5`) for semantic indexing.
+  - **Conversational AI**: **Cloudflare AI Search** (AutoRAG) for library Q&A.
+  - **Generative AI**: Asynchronous streaming via **Google Gemini Flash**.
+  - **Vector Intelligence**: **Cloudflare Vectorize** with **Workers AI** for semantic indexing.
 - **Data Primitives**: 
   - **Relational SQL**: Cloudflare D1
-  - **Vector Store**: Cloudflare Vectorize
-  - **Object Storage**: Cloudflare R2
-  - **Metadata Cache**: Cloudflare KV
+  - **Object Storage**: Cloudflare R2 (Clinical docs & Markdown mirrors)
+  - **Metadata Cache**: Cloudflare KV (Rate limiting & Auth)
 
 ---
 
@@ -42,8 +43,10 @@ Built on a globally distributed Cloudflare-native stack for maximum reliability:
 ### Prerequisites
 
 - **Node.js**: v20 or higher.
-- **Cloudflare Account**: With access to D1, R2, and KV.
-- **Google AI Studio Key**: For the Gemini API.
+- **Cloudflare Account**: With access to D1, R2, Vectorize, and AI Search.
+- **Secrets**: 
+  - `GEMINI_API_KEY`: For report generation.
+  - `AI_SEARCH_TOKEN`: For the RAG assistant.
 
 ### Local Development
 
@@ -70,7 +73,7 @@ Built on a globally distributed Cloudflare-native stack for maximum reliability:
 
 ## 🚀 Deployment
 
-The system is designed for continuous delivery using GitHub Actions:
+The system uses GitHub Actions for continuous delivery:
 
 - **Frontend**: Automatically deployed via **Cloudflare Pages**.
 - **Backend**: Update resource IDs in `wrangler.toml` and run `npm run deploy` in the `worker/` directory.
@@ -79,9 +82,9 @@ The system is designed for continuous delivery using GitHub Actions:
 
 ## 🔒 Security & Governance
 
-- **Just Culture**: Reports are structured to prioritize systemic improvements over individual performance.
-- **Compliance**: Leveraging HIPAA-compliant storage primitives for clinical data sovereignty.
-- **Spam Protection**: Integrated with **Cloudflare Turnstile** for all public-facing generation endpoints.
+- **Just Culture**: Reports prioritize growth and systemic fixes over individual blame.
+- **Data Sovereignty**: Leverages regional storage primitives to maintain clinical data control.
+- **Spam Protection**: All generation endpoints protected by **Cloudflare Turnstile**.
 
 ---
 
