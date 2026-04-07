@@ -9,6 +9,7 @@ import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useDebounce } from 'use-debounce';
 import jsPDF from 'jspdf';
 import { useReports, useNotes, useCaseFiles } from '../hooks/useQueries';
+import { Turnstile } from './ui/turnstile';
 
 interface GenerateReportProps {
   selectedSite?: string;
@@ -24,6 +25,7 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
   const caseSelection = useSelection<string>();
   const [generating, setGenerating] = useState(false);
   const [extractLST, setExtractLST] = useState(true);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   
   // Draft Persistence: Use localStorage to persist generated report
   const [generatedReport, setGeneratedReport] = useLocalStorage<string | null>('generatedReportDraft', null);
@@ -130,7 +132,7 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
       };
 
       let fullContent = '';
-      const stream = streamGenerateReport(payload);
+      const stream = streamGenerateReport(payload, turnstileToken || '');
       
       for await (const chunk of stream) {
         fullContent += chunk;
@@ -490,9 +492,11 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
               )}
             </div>
 
+            <Turnstile onVerify={setTurnstileToken} />
+
             <button
               onClick={handleGenerate}
-              disabled={generating || reportSelection.selected.length === 0 || noteSelection.selected.length === 0}
+              disabled={generating || reportSelection.selected.length === 0 || noteSelection.selected.length === 0 || !turnstileToken}
               className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white font-semibold py-4 px-6 rounded-lg transition-colors flex items-center justify-center gap-3 text-lg"
             >
               <Sparkles className="w-6 h-6" />

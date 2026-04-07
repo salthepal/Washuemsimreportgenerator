@@ -9,6 +9,7 @@ import { ActionButton } from './ui/action-button';
 import { processDocxFile, formatDate } from '../utils/document';
 import { validateDocxFile } from '../utils/validation';
 import { sanitizeJSON } from '../utils/sanitize';
+import { Turnstile } from './ui/turnstile';
 
 export interface CaseFile {
   id: string;
@@ -45,6 +46,7 @@ export function CaseFiles({ caseFiles, onRefresh }: CaseFilesProps) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [autoSaving, setAutoSaving] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const { confirm, dialog } = useConfirmDialog();
 
   // Auto-save to localStorage
@@ -202,7 +204,10 @@ export function CaseFiles({ caseFiles, onRefresh }: CaseFilesProps) {
       // Upload with metadata
       const response = await fetch(`${API_BASE}/case-files/upload`, {
         method: 'POST',
-        headers: API_HEADERS,
+        headers: {
+          ...API_HEADERS,
+          'X-Turnstile-Token': turnstileToken || '',
+        },
         body: JSON.stringify(payload),
       });
 
@@ -227,9 +232,9 @@ export function CaseFiles({ caseFiles, onRefresh }: CaseFilesProps) {
         console.error('Upload failed:', responseData);
         toast.error(`Failed to upload: ${responseData.error || 'Unknown error'}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error processing DOCX:', error);
-      toast.error(`Failed to process DOCX file: ${error.message}`);
+      toast.error(`Failed to process DOCX file: ${error.message || 'Unknown error'}`);
     } finally {
       setUploading(false);
       setUploadProgress(0);
@@ -382,6 +387,8 @@ export function CaseFiles({ caseFiles, onRefresh }: CaseFilesProps) {
               onChange={setCaseType}
               optional
             />
+
+            <Turnstile onVerify={setTurnstileToken} />
 
             <div className="flex gap-3">
               <ActionButton

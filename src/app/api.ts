@@ -177,10 +177,13 @@ export async function searchReports(query: string): Promise<Report[]> {
   return response.json();
 }
 
-export async function* streamGenerateReport(payload: any): AsyncGenerator<string> {
+export async function* streamGenerateReport(payload: any, token?: string): AsyncGenerator<string> {
   const response = await fetch(`${API_BASE}/generate-report`, {
     method: 'POST',
-    headers: API_HEADERS,
+    headers: {
+      ...API_HEADERS,
+      'X-Turnstile-Token': token || '',
+    },
     body: JSON.stringify(payload),
   });
 
