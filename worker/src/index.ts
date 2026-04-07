@@ -1093,7 +1093,9 @@ app.post('/admin/reindex', verifyAdmin, async (c) => {
 app.get('/health', (c) => c.json({ status: 'ok', version: '3.2.0-vector' }));
 
 export default {
-  fetch: app.fetch,
+  fetch: (request: Request, env: Bindings, ctx: ExecutionContext) => {
+    return app.fetch(request, env, ctx);
+  },
   scheduled: async (event: ScheduledEvent, env: Bindings, ctx: ExecutionContext) => {
     ctx.waitUntil(scheduledBackup(env));
   },
