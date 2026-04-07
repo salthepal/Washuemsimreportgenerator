@@ -667,16 +667,25 @@ app.post('/generate-report', verifyTurnstile, rateLimit, async (c) => {
       const reportId = `report_${Date.now()}_${Math.random().toString(36).substring(7)}`;
       c.executionCtx.waitUntil((async () => {
          try {
+           const reportTitle = `AI Created - ${new Date().toLocaleDateString()}`;
            await c.env.DB.prepare('INSERT INTO reports (id, title, content, type, metadata) VALUES (?, ?, ?, ?, ?)')
-             .bind(reportId, `AI Created - ${new Date().toLocaleDateString()}`, fullReport, 'generated_report', JSON.stringify({ createdAt: new Date().toISOString() }))
+             .bind(reportId, reportTitle, fullReport, 'generated_report', JSON.stringify({ createdAt: new Date().toISOString() }))
              .run();
+           
+           // Write to R2 as markdown so Cloudflare AI Search can index it
+           const r2Key = `reports/generated/${reportId}.md`;
+           const markdownContent = `# ${reportTitle}\n\nGenerated: ${new Date().toISOString()}\n\n${fullReport}`;
+           await c.env.BUCKET.put(r2Key, markdownContent, {
+             httpMetadata: { contentType: 'text/markdown' },
+             customMetadata: { reportId, type: 'generated_report', title: reportTitle }
+           });
            
            // AUTO-EXTRACT LSTS (AI POWERED) - Conditioned by user toggle
            if (extractLST !== false) {
              await extractAndScoreLSTs(c.env.DB, fullReport, reportId, c.env.GEMINI_API_KEY);
            }
            
-           c.executionCtx.waitUntil(indexDocumentVector(c.env, reportId, `AI Created - ${new Date().toLocaleDateString()}`, fullReport, 'report'));
+           c.executionCtx.waitUntil(indexDocumentVector(c.env, reportId, reportTitle, fullReport, 'report'));
            await logAudit(c.env.DB, 'generate', 'report', `Streaming report complete`, reportId);
          } catch (dbErr) {
            console.error('Failed to save generated report:', dbErr);
@@ -726,14 +735,26 @@ app.post('/reports/upload', verifyTurnstile, async (c) => {
   try {
     const reportData = await c.req.json();
     const id = reportData.id || `report_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const title = reportData.title || 'Untitled Report';
+    const content = reportData.content || '';
     
     await c.env.DB.prepare('INSERT INTO reports (id, title, content, type, metadata) VALUES (?, ?, ?, ?, ?)')
-      .bind(id, reportData.title || 'Untitled Report', reportData.content || '', reportData.type || 'prior_report', JSON.stringify(reportData.metadata || {}))
+      .bind(id, title, content, reportData.type || 'prior_report', JSON.stringify(reportData.metadata || {}))
       .run();
+
+    // Write to R2 as markdown so Cloudflare AI Search can index it
+    const r2Key = `reports/uploaded/${id}.md`;
+    const markdownContent = `# ${title}\n\nUploaded: ${new Date().toISOString()}\nType: ${reportData.type || 'prior_report'}\n\n${content}`;
+    c.executionCtx.waitUntil(
+      c.env.BUCKET.put(r2Key, markdownContent, {
+        httpMetadata: { contentType: 'text/markdown' },
+        customMetadata: { reportId: id, type: reportData.type || 'prior_report', title }
+      })
+    );
       
-    await logAudit(c.env.DB, 'upload', reportData.type || 'report', reportData.title || 'Untitled Report', id);
-    // Index for semantic search
-    c.executionCtx.waitUntil(indexDocumentVector(c.env, id, reportData.title || 'Untitled Report', reportData.content || '', 'report'));
+    await logAudit(c.env.DB, 'upload', reportData.type || 'report', title, id);
+    // Index for semantic search (Vectorize)
+    c.executionCtx.waitUntil(indexDocumentVector(c.env, id, title, content, 'report'));
     return c.json({ success: true, report: reportData });
   } catch (error: any) {
     await logError(c.env.DB, 'report_upload', error);
