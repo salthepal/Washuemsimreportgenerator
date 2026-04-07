@@ -1,9 +1,10 @@
-# Contributing to WashU EM Sim Intelligence Platform
+# Contributing to WashU Sim Intelligence
 
 Thank you for your interest in contributing to the **WashU Emergency Medicine Simulation & Safety Intelligence Platform**. This project is a Cloudflare-native platform for high-fidelity clinical simulation tracking.
 
 ## 🎯 Our Mission
-To provide a Zero-Latency, high-concurrency intelligence layer for Washington University Department of Emergency Medicine, prioritizing psychological safety (Just Culture) and actionable latent safety threat (LST) synthesis.
+
+To provide a high-concurrency intelligence layer for simulation programs, focusing on psychological safety (**Just Culture**) and actionable latent safety threat (LST) synthesis.
 
 ## 🚀 Development Environment
 
@@ -11,6 +12,7 @@ To provide a Zero-Latency, high-concurrency intelligence layer for Washington Un
 - **Node.js**: v20 or higher.
 - **Cloudflare Account**: Access to D1, R2, and KV namespaces.
 - **Wrangler CLI**: `npm install -g wrangler`.
+- **Git**: Configured for your GitHub account.
 
 ### 2. Local Setup
 ```bash
@@ -32,18 +34,17 @@ npm install
 
 ---
 
-## 🛠️ Architecture & Technology Stack
+## 🛠️ Branching & Versioning
 
-### Backend (Cloudflare Native)
-- **Runner**: Cloudflare Workers with `Hono`.
-- **Database**: `D1 SQL` for relational structured data (Reports, LSTs, Audit Logs).
-- **Storage**: `R2 Object Storage` for persisting generated documents and image assets.
-- **Intelligence**: `Google Gemini 3 Flash` (Asynchronous streaming via edge integration).
+### Conventional Commits
+We use **Conventional Commits** to automate our versioning and changelog generation. All PRs must follow this format:
 
-### Frontend (React Dashboard)
-- **Framework**: React 18 / Vite / TypeScript.
-- **Styling**: Tailwind CSS v4 with WashU PMS 200/350 theme tokens.
-- **State**: `@tanstack/react-query` with persistence layers for offline hospital use.
+| Type | Description | Resulting Version |
+| :--- | :--- | :--- |
+| `feat:` | New features | Minor (3.3.0) |
+| `fix:` | Bug fixes | Patch (3.2.1) |
+| `feat!:` | Breaking changes | Major (4.0.0) |
+| `chore:` | Internal maintenance | No bump |
 
 ---
 
@@ -56,23 +57,24 @@ npm install
 - `refactor/`: Architectural transitions.
 
 ### Standards & Quality
-- **Type Safety**: No `implicit-any`. All API responses from D1/Workers must be strictly typed.
-- **Data Integrity**: Database interactions should respect relational constraints. Use migrations in `schema.sql`.
-- **UI/UX**: Strictly adhere to the **WashU School of Medicine** design language. Ensure dark mode parity and hospital tablet responsiveness.
+- **TypeScript**: No `implicit-any`. Ensure API responses are strictly typed.
+- **UI/UX**: Strictly follow the simulation design language. Ensure dark mode parity and hospital tablet responsiveness.
 - **Security**: Never commit secrets. Use `npx wrangler secret put` for Gemini keys and tokens.
+- **Verification**: Run `npm run build` locally before submitting a PR.
 
 ---
 
 ## 🧪 Testing Protocol
-- **Build Validation**: `npm run build` must succeed before any PR submission.
+
+- **Build Validation**: Ensure the build succeeds in the root and `worker/`.
 - **Edge Testing**: Verify that AI streaming works without interruption.
 - **Schema Validation**: Ensure D1 triggers correctly synchronize the FTS5 search index.
-- **Accessibility**: Verify WCAG AA compliance for accessibility in high-stress clinical environments.
 
 ---
 
-## 📄 Governance
-By contributing, you agree that your code will be under the proprietary license of the **Washington University School of Medicine**.
+## 📄 License & Governance
+
+By contributing, you agree that your contributions will be licensed under the **GNU General Public License v3.0 (GPLv3)**.
 
 **Built for Clinical Safety, Powered by Intelligence.**  
 © 2026 Washington University Simulation Intelligence Team

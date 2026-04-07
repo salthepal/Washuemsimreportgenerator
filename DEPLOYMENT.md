@@ -1,6 +1,6 @@
-# Deployment Guide (v3.1.0)
+# Deployment Guide
 
-This document provides instructions for deploying the **WashU EM Sim Intelligence Platform** to the Cloudflare-native production stack.
+This document provides step-by-step instructions for deploying **WashU Sim Intelligence** to the Cloudflare-native production stack.
 
 ## 🏛️ Architecture Overview
 The platform has been migrated from legacy Supabase infrastructure to a high-concurrency Cloudflare architecture:
@@ -9,7 +9,7 @@ The platform has been migrated from legacy Supabase infrastructure to a high-con
 - **Database**: Cloudflare D1 (Relational SQL with FTS5).
 - **Object Storage**: Cloudflare R2 (Session documents/media).
 - **History/Audit**: Automated D1 Triggers (Safety Audit Logs).
-- **Security**: Cloudflare KV and Secrets.
+- **Security**: Cloudflare KV, Secrets, and Turnstile.
 
 ---
 
@@ -21,7 +21,7 @@ The frontend is built using Vite and deployed directly to the Cloudflare network
 - **Output Directory**: `dist`
 - **Native Routing**: Automatically handled by Cloudflare Pages.
 
-### Automated Deployment (GitHub integration)
+### Automated Deployment
 Connecting the GitHub repository to Cloudflare Pages handles all production builds and edge deployments automatically on push.
 
 ---
@@ -30,7 +30,7 @@ Connecting the GitHub repository to Cloudflare Pages handles all production buil
 
 ### Prerequisites
 - [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/) installed and authenticated (`npx wrangler login`).
-- A Cloudflare Account with D1, R2, and KV enabled (Free tier is sufficient).
+- A Cloudflare Account with D1, R2, and KV namespaces enabled.
 
 ### Database Setup (D1)
 1.  **Create Database**:
@@ -40,7 +40,7 @@ Connecting the GitHub repository to Cloudflare Pages handles all production buil
 2.  **Initialize Schema**:
     ```bash
     cd worker
-    npx wrangler d1 execute washu_sim_db --file=./schema.sql --remote
+    npx wrangler d1 execute washusim-db --file=./schema.sql --remote
     ```
 
 ### Storage Setup (R2)
@@ -59,31 +59,37 @@ Connecting the GitHub repository to Cloudflare Pages handles all production buil
 Update the `wrangler.toml` file in the `worker/` directory with your resource IDs, then run:
 ```bash
 cd worker
-npx wrangler deploy
+npm run deploy
 ```
 
 ---
 
 ## 🔑 3. Environment Variables & Secrets
 
-### Backend Secrets (Workers)
+### Required Backend Secrets (Workers)
 Configure the following secrets in your Cloudflare Worker:
 ```bash
+# Gemini API Key for report generation
 npx wrangler secret put GEMINI_API_KEY
-npx wrangler secret put ADMIN_TOKEN  # If using protected routes
+
+# Cloudflare Turnstile Secret Key for spam protection
+npx wrangler secret put TURNSTILE_SECRET_KEY
+
+# Optional: Admin token for protected administrative routes
+npx wrangler secret put ADMIN_TOKEN
 ```
 
 ### Frontend Configuration
-The frontend connects to the backend via the `API_URL` defined in `src/app/utils/api.ts` or detected automatically in production.
+The frontend automatically connects to the backend in production using the same domain context. For local development, update the API URL in `src/app/utils/api.ts` if needed.
 
 ---
 
 ## 🔒 Security & Governance
-- **Data Minimization**: Strips base64 image data before SQL persistence to optimize D1 storage.
+- **Data Minimization**: Automatically strips base64 image data before SQL persistence to optimize D1 storage and improve UI response times.
 - **Audit Logging**: All administrative actions are recorded in the central D1 `audit_logs` table.
-- **Access Control**: Ensure the GitHub repository and Cloudflare resources are restricted to authorized departmental personnel.
+- **Zero Trust**: For enterprise environments, we recommend deploying **Cloudflare Access** in front of the application dashboard.
 
 ---
 
-**Built for Clinical Safety, Powered by Intelligence.**
+**Built for Clinical Safety, Powered by Intelligence.**  
 © 2026 Washington University School of Medicine.

@@ -1,71 +1,93 @@
-<div align="center">
-  <img src="./banner.png" alt="WashU Sim Intelligence Hero Banner" width="100%">
-  <br />
-  <h1>WashU Sim Intelligence</h1>
-  <p><b>Simulation-driven Safety & Learning Intelligence System</b></p>
-  <p><i>Washington University School of Medicine - Department of Emergency Medicine</i></p>
+# WashU Sim Intelligence
 
-  [![Version](https://img.shields.io/badge/version-3.2.0-A51417?style=for-the-badge)](https://github.com/salthepal/WashUSimIntelligence)
-  [![Stack](https://img.shields.io/badge/platform-Cloudflare_Native-007A33?style=for-the-badge)](https://cloudflare.com)
-  [![Intelligence](https://img.shields.io/badge/AI-Gemini_3_Flash-blue?style=for-the-badge)](https://ai.google.dev)
-</div>
+**WashU Sim Intelligence** is a simulation-driven Safety & Learning Intelligence System developed for the **Washington University School of Medicine, Department of Emergency Medicine**.
+
+The platform streamlines the transition from high-fidelity clinical simulations to actionable safety insights by automating report generation and tracking system-level vulnerabilities.
 
 ---
 
 ## 🏛️ Project Overview
 
-**WashU Sim Intelligence** is a specialized platform designed for the Washington University Department of Emergency Medicine simulation programs. The system streamlines the transition from high-fidelity clinical simulations to actionable safety insights by automating report generation and tracking system-level vulnerabilities.
+WashU Sim Intelligence is specialized for clinical simulation programs, prioritizing psychological safety (**"Just Culture"**) and systemic improvement. It acts as a bridge between simulation data and institutional safety intelligence.
 
-### 🍱 Main Capabilities
+### Key Capabilities
 
-*   **AI-Powered Synthesis**: Real-time generation of simulation reports using advanced LLM prompts tailored to clinical safety and "Just Culture" frameworks.
-*   **LST Audit Tracking**: Centralized management of **Latent Safety Threats** with automated revision history, ensuring enterprise-grade auditability.
-*   **Universal Search**: High-performance searchable library of clinical scenarios, session notes, and historical reports using FTS5 Full-Text Search.
-*   **Atomic Hydration**: Consolidated API loading that populates all core safety datasets in a single PASS, optimized for departmental decision-making.
-*   **Offline Resilience**: Specialized persistence layers ensuring simulation specialists can maintain high-fidelity notes in hospital environments with intermittent Wi-Fi.
+*   **⚡ AI-Powered Synthesis**: Generate simulation reports using prompts tailored to clinical safety and "Just Culture" frameworks.
+*   **🏥 LST Audit Tracking**: Centralized management of **Latent Safety Threats** with automated revision history.
+*   **🔍 Universal Search**: High-performance searchable library of clinical scenarios and historical reports using FTS5 Full-Text Search.
+*   **💧 Atomic Hydration**: Optimized API loading that populates all core safety datasets in a single network request.
+*   **📶 Offline Resilience**: Persistence layers ensuring simulation specialists can maintain documentation in hospital environments with intermittent medical Wi-Fi.
 
 ---
 
 ## 🏗️ System Architecture
 
-Built on a globally distributed Cloudflare-native stack for maximum reliability and edge-intelligence:
+Built on a globally distributed Cloudflare-native stack for maximum reliability:
 
-- **Frontend**: React-based dashboard optimized for clinical and bedside tablet use.
-- **Edge API**: High-concurrency Worker layer providing sub-millisecond response times.
-- **Intelligence**: Real-time asynchronous streaming via **Google Gemini 3 Flash**.
-- **Data Primitives**: Relational SQL (D1), Object Storage (R2), and high-speed metadata (KV).
+- **Frontend**: React SPA (Vite + TypeScript) optimized for clinical bedside tablet use.
+- **Backend API**: Cloudflare Workers (Hono) running at the edge.
+- **Intelligence**: Real-time asynchronous streaming via **Google Gemini Flash**.
+- **Data Primitives**: 
+  - **Relational SQL**: Cloudflare D1
+  - **Object Storage**: Cloudflare R2
+  - **Metadata Cache**: Cloudflare KV
 
 ---
 
 ## 🛠️ Getting Started
 
+### Prerequisites
+
+- **Node.js**: v20 or higher.
+- **Cloudflare Account**: With access to D1, R2, and KV.
+- **Google AI Studio Key**: For the Gemini API.
+
 ### Local Development
-```bash
-# Frontend
-npm run dev
 
-# Simulation Worker
-cd worker
-npx wrangler dev
-```
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/salthepal/WashUSimIntelligence.git
+   cd WashUSimIntelligence
+   ```
 
-### Production Operations
-The system utilizes automated GitHub Actions for frontend deployments and Wrangler for edge worker updates.
-```bash
-cd worker
-npx wrangler deploy
-```
+2. **Frontend Setup**:
+   ```bash
+   npm install
+   npm run dev
+   ```
+
+3. **Backend Setup (Wrangler)**:
+   ```bash
+   cd worker
+   npm install
+   npx wrangler dev
+   ```
+
+---
+
+## 🚀 Deployment
+
+The system is designed for continuous delivery using GitHub Actions:
+
+- **Frontend**: Automatically deployed via **Cloudflare Pages**.
+- **Backend**: Update resource IDs in `wrangler.toml` and run `npm run deploy` in the `worker/` directory.
 
 ---
 
 ## 🔒 Security & Governance
-- **Just Culture**: Reports are structured to prioritize psychological safety and systemic improvements over individual performance.
-- **Data Integrity**: Institutional branding and safety lexicons are strictly enforced via standardized prompts and design tokens.
+
+- **Just Culture**: Reports are structured to prioritize systemic improvements over individual performance.
 - **Compliance**: Leveraging HIPAA-compliant storage primitives for clinical data sovereignty.
+- **Spam Protection**: Integrated with **Cloudflare Turnstile** for all public-facing generation endpoints.
+
+---
+
+## 📜 License
+
+This project is licensed under the **GNU General Public License v3.0 (GPLv3)**. See [LICENSE.md](./LICENSE.md) for full details.
 
 ---
 
 <p align="center">
-  <b>Built for Clinical Safety, Powered by Intelligence.</b><br />
   © 2026 Washington University School of Medicine. Emergency Medicine Simulation.
 </p>
