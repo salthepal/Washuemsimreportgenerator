@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Report, SessionNote, LST } from '../App';
-import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { ShieldAlert, CheckCircle2, AlertTriangle, MapPin, FileText, Users, Sparkles, Calendar, TrendingUp, Activity, Gauge } from 'lucide-react';
+import { ShieldAlert, CheckCircle2, FileText, Users, Sparkles, Calendar, Search, Brain, X } from 'lucide-react';
 import { Skeleton } from './ui/skeleton';
+import { API_BASE, getApiHeaders } from '../api';
+import { useDebounce } from 'use-debounce';
 
 interface DashboardProps {
   reports: Report[];
@@ -11,6 +12,7 @@ interface DashboardProps {
   lsts: LST[];
   isLoading?: boolean;
   selectedSite?: string;
+  onNavigate?: (tab: string) => void;
 }
 
 interface ActivityItem {
@@ -18,110 +20,78 @@ interface ActivityItem {
   title: string;
   type: 'prior_report' | 'session_notes' | 'generated_report' | 'lst_alert';
   createdAt: string | Date;
-  tags?: string[];
   status?: string;
   severity?: string;
 }
 
+interface SearchResult {
+  id: string;
+  title: string;
+  title_highlight?: string;
+  snippet?: string;
+  type: string;
+  score?: number;
+  matchType?: 'keyword' | 'semantic';
+}
 
-export function Dashboard({ reports, sessionNotes, generatedReports, lsts, isLoading, selectedSite }: DashboardProps) {
-  // ── Site-filtered LSTs ──
+export function Dashboard({ reports, sessionNotes, generatedReports, lsts, isLoading, selectedSite, onNavigate }: DashboardProps) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch] = useDebounce(searchQuery, 400);
+  const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null);
+  const [searching, setSearching] = useState(false);
+
   const filteredLsts = useMemo(() => {
     if (!selectedSite || selectedSite === 'All Sites') return lsts;
     return lsts.filter(l => l.location === selectedSite);
   }, [lsts, selectedSite]);
 
-  // ── LST-focused Metrics ──
-  const activeSystemGaps = useMemo(() =>
-    filteredLsts.filter(l => l.status !== 'Resolved').length,
-  [filteredLsts]);
+  const totalReportsGenerated = generatedReports.length;
+  const activeLsts = filteredLsts.filter(l => l.status !== 'Resolved').length;
+  const resolvedLsts = filteredLsts.filter(l => l.status === 'Resolved').length;
 
-  const resolutionRate = useMemo(() => {
-    if (filteredLsts.length === 0) return 100;
-    const resolved = filteredLsts.filter(l => l.status === 'Resolved').length;
-    return Math.round((resolved / filteredLsts.length) * 100);
-  }, [filteredLsts]);
-
-  const highRiskAlerts = useMemo(() =>
-    filteredLsts.filter(l => l.severity === 'High' && l.status !== 'Resolved').length,
-  [filteredLsts]);
-
-  // ── Gaps Found vs Gaps Resolved over time ──
-  const gapTimelineData = useMemo(() => {
-    // Grouping by a sortable key (YYYY-MM)
-    const monthMap: Record<string, { found: number; resolved: number; display: string }> = {};
-
-    filteredLsts.forEach(lst => {
-      if (!lst.identifiedDate) return;
-      const d = new Date(lst.identifiedDate);
-      if (isNaN(d.getTime())) return;
-      
-      const sortKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const display = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-      
-      if (!monthMap[sortKey]) monthMap[sortKey] = { found: 0, resolved: 0, display };
-      monthMap[sortKey].found += 1;
-
-      if (lst.resolvedDate) {
-        const rd = new Date(lst.resolvedDate);
-        if (!isNaN(rd.getTime())) {
-          const rSortKey = `${rd.getFullYear()}-${String(rd.getMonth() + 1).padStart(2, '0')}`;
-          const rDisplay = rd.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-          if (!monthMap[rSortKey]) monthMap[rSortKey] = { found: 0, resolved: 0, display: rDisplay };
-          monthMap[rSortKey].resolved += 1;
-        }
-      }
-    });
-
-    return Object.entries(monthMap)
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([key, data], idx) => ({ 
-        id: `gap-${idx}`, 
-        month: data.display, 
-        found: data.found, 
-        resolved: data.resolved 
-      }))
-      .slice(-8);
-  }, [filteredLsts]);
-
-  // ── Category distribution ──
-  const categoryData = useMemo(() => {
-    const counts: Record<string, number> = {};
-    filteredLsts.forEach(l => { counts[l.category] = (counts[l.category] || 0) + 1; });
-    return Object.entries(counts)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value);
-  }, [filteredLsts]);
-
-  // ── Recent Activity ──
   const recentActivity = useMemo(() => {
-    const all = [
-      ...reports.map(r => ({ id: r.id, title: r.title, type: 'prior_report' as const, createdAt: r.createdAt, tags: r.tags })),
-      ...sessionNotes.map(n => ({ id: n.id, title: n.sessionName, type: 'session_notes' as const, createdAt: n.createdAt, tags: n.tags })),
-      ...generatedReports.map(r => ({ id: r.id, title: r.title, type: 'generated_report' as const, createdAt: r.createdAt, tags: r.tags })),
-      ...filteredLsts.map(l => ({ 
-        id: l.id, 
-        title: l.title, 
-        type: 'lst_alert' as const, 
+    const all: ActivityItem[] = [
+      ...reports.map(r => ({ id: r.id, title: r.title, type: 'prior_report' as const, createdAt: r.createdAt })),
+      ...sessionNotes.map(n => ({ id: n.id, title: n.sessionName, type: 'session_notes' as const, createdAt: n.createdAt })),
+      ...generatedReports.map(r => ({ id: r.id, title: r.title, type: 'generated_report' as const, createdAt: r.createdAt })),
+      ...filteredLsts.map(l => ({
+        id: l.id,
+        title: l.title,
+        type: 'lst_alert' as const,
         createdAt: l.lastSeenDate || l.identifiedDate,
         status: l.status,
-        severity: l.severity
+        severity: l.severity,
       })),
     ];
-    return all.sort((a, b) => {
-      const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return db - da;
-    }).slice(0, 8);
+    return all
+      .sort((a, b) => {
+        const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return db - da;
+      })
+      .slice(0, 20);
   }, [reports, sessionNotes, generatedReports, filteredLsts]);
+
+  useEffect(() => {
+    if (!debouncedSearch || debouncedSearch.length < 2) {
+      setSearchResults(null);
+      return;
+    }
+    setSearching(true);
+    fetch(`${API_BASE}/search?q=${encodeURIComponent(debouncedSearch)}`, { headers: getApiHeaders() })
+      .then(r => r.ok ? r.json() : [])
+      .then(data => setSearchResults(Array.isArray(data) ? data : []))
+      .catch(() => setSearchResults([]))
+      .finally(() => setSearching(false));
+  }, [debouncedSearch]);
 
   const getActivityIcon = (type: string, severity?: string) => {
     switch (type) {
-      case 'prior_report': return <FileText className="w-4 h-4 text-blue-600 dark:text-blue-400" />;
-      case 'session_notes': return <Users className="w-4 h-4 text-[#007A33] dark:text-green-400" />;
-      case 'generated_report': return <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400" />;
-      case 'lst_alert': return <ShieldAlert className={`w-4 h-4 ${severity === 'High' ? 'text-[#A51417]' : 'text-orange-500'}`} />;
-      default: return <FileText className="w-4 h-4 text-slate-600" />;
+      case 'prior_report': return <FileText className="w-4 h-4 text-blue-500" />;
+      case 'session_notes': return <Users className="w-4 h-4 text-emerald-600" />;
+      case 'generated_report': return <Sparkles className="w-4 h-4 text-purple-500" />;
+      case 'lst_alert': return <ShieldAlert className={`w-4 h-4 ${severity === 'High' ? 'text-red-600' : 'text-orange-500'}`} />;
+      default: return <FileText className="w-4 h-4 text-slate-500" />;
     }
   };
 
@@ -135,199 +105,190 @@ export function Dashboard({ reports, sessionNotes, generatedReports, lsts, isLoa
     }
   };
 
+  const HighlightText = ({ text }: { text: string }) => {
+    const parts = text.split(/(<mark>.*?<\/mark>)/g);
+    return (
+      <>
+        {parts.map((part, i) =>
+          part.startsWith('<mark>') ? (
+            <mark key={i} className="bg-yellow-200 dark:bg-yellow-800 text-inherit rounded-sm px-0.5">
+              {part.replace(/<\/?mark>/g, '')}
+            </mark>
+          ) : (
+            <span key={i}>{part}</span>
+          )
+        )}
+      </>
+    );
+  };
+
+  if (isLoading && reports.length === 0 && lsts.length === 0) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-12 w-full rounded-xl" />
+        <Skeleton className="h-24 w-full rounded-xl" />
+        <div className="grid grid-cols-3 gap-4">
+          {[0, 1, 2].map(i => <Skeleton key={i} className="h-28 rounded-xl" />)}
+        </div>
+        <Skeleton className="h-96 rounded-xl" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {isLoading && reports.length === 0 && lsts.length === 0 ? (
-        <div className="space-y-6">
-          <Skeleton className="h-8 w-72" />
-          <Skeleton className="h-4 w-96" />
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[...Array(4)].map((_, i) => (
-              <Skeleton key={`stat-${i}`} className="h-28 rounded-xl" />
-            ))}
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {[...Array(4)].map((_, i) => (
-              <Skeleton key={`chart-${i}`} className="h-64 rounded-xl" />
-            ))}
-          </div>
-          <Skeleton className="h-48 rounded-xl" />
-        </div>
-      ) : (
-      <>
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-1">Safety Intelligence Dashboard</h2>
-          <p className="text-sm text-slate-600 dark:text-slate-400">
-            System safety posture at a glance &mdash; {filteredLsts.length} tracked threats at {selectedSite || 'All Sites'}
-          </p>
-        </div>
-      </div>
 
-      {/* ── App Summary ── */}
-      <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm">
-        <div className="flex items-start gap-4">
-          <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg shrink-0">
-            <Activity className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-          </div>
-          <div>
-            <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300">
-              <span className="font-bold text-slate-900 dark:text-white">WashU Sim Intelligence</span> is a specialized clinical safety platform for the Department of Emergency Medicine. It centralizes simulation data to identify **Latent Safety Threats (LSTs)**, automate institutional reporting with **AI synthesis**, and provide a searchable repository for clinical scenario intelligence.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Primary Metric Cards ── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-        {/* Active System Gaps */}
-        <div className="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-950/40 dark:to-red-900/30 border-2 border-red-200 dark:border-red-800 rounded-xl p-4 md:p-5 transition-all hover:shadow-lg">
-          <div className="flex items-center justify-between mb-2">
-            <ShieldAlert className="w-7 h-7 md:w-8 md:h-8 text-[#A51417] dark:text-red-400" />
-            <span className="text-xs font-bold uppercase tracking-wider text-[#A51417] dark:text-red-400 bg-red-200 dark:bg-red-900/50 px-2 py-0.5 rounded">Active Hits</span>
-          </div>
-          <div className="text-3xl md:text-4xl font-black text-red-900 dark:text-red-200">{activeSystemGaps}</div>
-          <div className="text-xs font-semibold text-red-700 dark:text-red-400 mt-1">Unresolved System Gaps</div>
+      {/* ── Search Bar ── */}
+      <div className="relative">
+        <div className="flex items-center gap-3 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 shadow-sm focus-within:border-blue-400 dark:focus-within:border-blue-500 transition-colors">
+          {searching ? (
+            <Brain className="w-5 h-5 text-blue-500 animate-pulse shrink-0" />
+          ) : (
+            <Search className="w-5 h-5 text-slate-400 shrink-0" />
+          )}
+          <input
+            type="text"
+            placeholder="Search clinical library — keyword + AI semantic search..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="flex-1 bg-transparent text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 outline-none"
+          />
+          {searchQuery && (
+            <button onClick={() => { setSearchQuery(''); setSearchResults(null); }}>
+              <X className="w-4 h-4 text-slate-400 hover:text-slate-600" />
+            </button>
+          )}
         </div>
 
-        {/* Resolution Rate */}
-        <div className="bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-950/40 dark:to-emerald-900/30 border-2 border-[#007A33]/40 dark:border-green-700 rounded-xl p-4 md:p-5 transition-all hover:shadow-lg">
-          <div className="flex items-center justify-between mb-2">
-            <CheckCircle2 className="w-7 h-7 md:w-8 md:h-8 text-[#007A33] dark:text-green-400" />
-            <span className="text-xs font-bold uppercase tracking-wider text-[#007A33] dark:text-green-400 bg-green-200 dark:bg-green-900/50 px-2 py-0.5 rounded">Efficiency</span>
-          </div>
-          <div className="text-3xl md:text-4xl font-black text-[#007A33] dark:text-green-200">{resolutionRate}%</div>
-          <div className="text-xs font-semibold text-[#007A33] dark:text-green-400 mt-1">Mitigation Percentage</div>
-        </div>
-
-        {/* High-Risk Alerts */}
-        <div className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-950/40 dark:to-orange-900/30 border-2 border-orange-300 dark:border-orange-800 rounded-xl p-4 md:p-5 transition-all hover:shadow-lg">
-          <div className="flex items-center justify-between mb-2">
-            <AlertTriangle className="w-7 h-7 md:w-8 md:h-8 text-orange-600 dark:text-orange-400" />
-            {highRiskAlerts > 0 && (
-              <span className="text-xs font-bold uppercase tracking-wider text-white bg-orange-600 px-2 py-0.5 rounded animate-pulse">Critical</span>
+        {/* Search Results Dropdown */}
+        {searchResults && (
+          <div className="absolute top-full left-0 right-0 z-50 mt-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden">
+            {searchResults.length === 0 ? (
+              <div className="py-10 text-center text-sm text-slate-500">No matches found for "<strong>{debouncedSearch}</strong>"</div>
+            ) : (
+              <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-700">
+                <div className="px-4 py-2 bg-slate-50 dark:bg-slate-900/50 flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                    {searchResults.length} Intelligent {searchResults.length === 1 ? 'Match' : 'Matches'}
+                  </span>
+                  {onNavigate && (
+                    <button
+                      onClick={() => onNavigate('repository')}
+                      className="text-xs text-blue-500 hover:text-blue-700 font-semibold"
+                    >
+                      View all in Library →
+                    </button>
+                  )}
+                </div>
+                {searchResults.map(result => (
+                  <div key={result.id} className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors">
+                    <div className={`mt-0.5 p-1.5 rounded-lg shrink-0 ${result.matchType === 'semantic' ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'}`}>
+                      {result.matchType === 'semantic' ? <Sparkles className="w-3.5 h-3.5" /> : <Search className="w-3.5 h-3.5" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">
+                        {result.title_highlight ? <HighlightText text={result.title_highlight} /> : result.title}
+                      </p>
+                      {result.snippet && (
+                        <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5 italic">
+                          <HighlightText text={result.snippet} />
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {result.matchType === 'semantic' && result.score && (
+                        <span className="text-[10px] font-bold text-purple-500">{Math.round(result.score * 100)}%</span>
+                      )}
+                      <span className="text-[10px] uppercase font-bold text-slate-400 bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded">
+                        {result.type?.replace('_', ' ')}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
-          <div className="text-3xl md:text-4xl font-black text-orange-900 dark:text-orange-300">{highRiskAlerts}</div>
-          <div className="text-xs font-semibold text-orange-700 dark:text-orange-400 mt-1">Critical Priority Fixes</div>
-        </div>
+        )}
+      </div>
 
-        {/* Activity Volume */}
-        <div className="bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-blue-950/40 dark:to-indigo-900/30 border-2 border-blue-300 dark:border-blue-700 rounded-xl p-4 md:p-5 transition-all hover:shadow-lg">
-          <div className="flex items-center justify-between mb-2">
-            <Activity className="w-7 h-7 md:w-8 md:h-8 text-blue-600 dark:text-blue-400" />
-            <span className="text-xs font-bold text-blue-700 dark:text-blue-300 bg-blue-200 dark:bg-blue-900/50 px-2 py-0.5 rounded">Intell</span>
+      {/* ── Intro Statement ── */}
+      <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl p-5">
+        <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+          <span className="font-bold text-slate-900 dark:text-white">WashU Sim Intelligence</span> is a clinical safety platform for the WashU Department of Emergency Medicine. It centralizes simulation data to identify <span className="font-semibold text-[#A51417]">Latent Safety Threats (LSTs)</span>, automate institutional reporting with <span className="font-semibold text-purple-600">AI synthesis</span>, and provide an <span className="font-semibold text-blue-600">intelligent, searchable repository</span> for clinical scenario data.
+        </p>
+      </div>
+
+      {/* ── Stat Cards ── */}
+      <div className="grid grid-cols-3 gap-4">
+        {/* Total Reports Generated */}
+        <div className="bg-gradient-to-br from-purple-50 to-indigo-100 dark:from-purple-950/40 dark:to-indigo-900/30 border-2 border-purple-200 dark:border-purple-800 rounded-xl p-5 hover:shadow-lg transition-all">
+          <div className="flex items-center justify-between mb-3">
+            <Sparkles className="w-7 h-7 text-purple-600 dark:text-purple-400" />
+            <span className="text-xs font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 bg-purple-200 dark:bg-purple-900/50 px-2 py-0.5 rounded">AI</span>
           </div>
-          <div className="text-3xl md:text-4xl font-black text-blue-900 dark:text-blue-200">{reports.length + sessionNotes.length + generatedReports.length}</div>
-          <div className="text-xs font-semibold text-blue-700 dark:text-blue-400 mt-1">Total Clinical Objects</div>
+          <div className="text-4xl font-black text-purple-900 dark:text-purple-200">{totalReportsGenerated}</div>
+          <div className="text-xs font-semibold text-purple-700 dark:text-purple-400 mt-1">Reports Generated</div>
+        </div>
+
+        {/* Active LSTs */}
+        <div className="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-950/40 dark:to-red-900/30 border-2 border-red-200 dark:border-red-800 rounded-xl p-5 hover:shadow-lg transition-all">
+          <div className="flex items-center justify-between mb-3">
+            <ShieldAlert className="w-7 h-7 text-[#A51417] dark:text-red-400" />
+            <span className="text-xs font-bold uppercase tracking-wider text-[#A51417] dark:text-red-400 bg-red-200 dark:bg-red-900/50 px-2 py-0.5 rounded">Active</span>
+          </div>
+          <div className="text-4xl font-black text-red-900 dark:text-red-200">{activeLsts}</div>
+          <div className="text-xs font-semibold text-red-700 dark:text-red-400 mt-1">Active LSTs</div>
+        </div>
+
+        {/* Resolved LSTs */}
+        <div className="bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-950/40 dark:to-emerald-900/30 border-2 border-green-200 dark:border-green-800 rounded-xl p-5 hover:shadow-lg transition-all">
+          <div className="flex items-center justify-between mb-3">
+            <CheckCircle2 className="w-7 h-7 text-[#007A33] dark:text-green-400" />
+            <span className="text-xs font-bold uppercase tracking-wider text-[#007A33] dark:text-green-400 bg-green-200 dark:bg-green-900/50 px-2 py-0.5 rounded">Resolved</span>
+          </div>
+          <div className="text-4xl font-black text-green-900 dark:text-green-200">{resolvedLsts}</div>
+          <div className="text-xs font-semibold text-green-700 dark:text-green-400 mt-1">Resolved LSTs</div>
         </div>
       </div>
 
-      {/* ── Charts Grid ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Gaps Found vs. Gaps Resolved */}
-        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 md:p-6 shadow-sm">
-          <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 mb-4 flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            Mitigation Pipeline Trends
-          </h3>
-          {gapTimelineData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={260}>
-              <LineChart data={gapTimelineData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                <XAxis dataKey="month" stroke="#64748b" tick={{ fontSize: 11 }} />
-                <YAxis stroke="#64748b" allowDecimals={false} tick={{ fontSize: 11 }} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'var(--tooltip-bg, #ffffff)',
-                    border: '1px solid #cbd5e1',
-                    borderRadius: '0.5rem',
-                    fontSize: '12px',
-                  }}
-                />
-                <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
-                <Line type="monotone" dataKey="found" name="New Threats" stroke="#A51417" strokeWidth={3} dot={{ r: 4, fill: '#A51417' }} activeDot={{ r: 6 }} />
-                <Line type="monotone" dataKey="resolved" name="Resolutions" stroke="#007A33" strokeWidth={3} dot={{ r: 4, fill: '#007A33' }} activeDot={{ r: 6 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="text-center text-slate-500 dark:text-slate-400 py-16 text-sm italic">Insufficient data for predictive trending</div>
-          )}
+      {/* ── System Audit Log ── */}
+      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
+        <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-100 dark:border-slate-700">
+          <Calendar className="w-4 h-4 text-slate-500" />
+          <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">System Audit Log</h3>
+          <span className="ml-auto text-xs text-slate-400 font-medium">Most recent activity</span>
         </div>
-
-        {/* Category Breakdown bar chart */}
-        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 md:p-6 shadow-sm">
-          <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 mb-4 flex items-center gap-2">
-            <Users className="w-5 h-5 text-[#007A33] dark:text-green-400" />
-            Threat Vector Analysis (by Category)
-          </h3>
-          {categoryData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={categoryData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                <XAxis dataKey="name" stroke="#64748b" tick={{ fontSize: 11 }} />
-                <YAxis stroke="#64748b" allowDecimals={false} tick={{ fontSize: 11 }} />
-                <Tooltip
-                  cursor={{fill: '#f1f5f9'}}
-                  contentStyle={{
-                    backgroundColor: '#ffffff',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '0.5rem',
-                    fontSize: '12px',
-                  }}
-                />
-                <Bar dataKey="value" fill="#007A33" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="text-center text-slate-500 dark:text-slate-400 py-16 text-sm">No categorical distribution mapped</div>
-          )}
-        </div>
-      </div>
-
-      {/* ── Recent Activity ── */}
-      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 md:p-6 shadow-sm">
-        <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 mb-4 flex items-center gap-2">
-          <Calendar className="w-5 h-5 text-slate-600 dark:text-slate-400" />
-          System Audit Log / Recent Activity
-        </h3>
         {recentActivity.length === 0 ? (
-          <div className="text-center text-slate-500 dark:text-slate-400 py-8 text-sm">System idle &mdash; no clinical activity recorded</div>
+          <div className="text-center text-slate-500 dark:text-slate-400 py-12 text-sm">
+            System idle — no clinical activity recorded
+          </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {recentActivity.map((item: ActivityItem) => (
-              <div key={`${item.type}-${item.id}`} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-900 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 rounded-lg transition-all shadow-sm">
-                <div className="p-2 bg-white dark:bg-slate-800 rounded-lg shadow-sm">
-                    {getActivityIcon(item.type, item.severity)}
+          <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
+            {recentActivity.map(item => (
+              <div key={`${item.type}-${item.id}`} className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+                <div className="p-2 bg-slate-100 dark:bg-slate-700 rounded-lg shrink-0">
+                  {getActivityIcon(item.type, item.severity)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-bold text-xs text-slate-900 dark:text-slate-100 truncate">
-                    {item.title}
-                  </div>
-                  <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-2 uppercase tracking-tight">
-                    <span className={item.type === 'lst_alert' ? 'font-bold text-amber-600 dark:text-amber-500' : ''}>
-                        {getActivityLabel(item.type, item.status)}
+                  <div className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{item.title}</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mt-0.5">
+                    <span className={item.type === 'lst_alert' && item.status !== 'Resolved' ? 'font-bold text-amber-600 dark:text-amber-500' : ''}>
+                      {getActivityLabel(item.type, item.status)}
                     </span>
-                    <span className="opacity-30">&bull;</span>
-                    <span className="font-medium">{new Date(item.createdAt).toLocaleDateString()}</span>
                   </div>
                 </div>
-                {item.tags?.length ? (
-                  <div className="flex -space-x-1 overflow-hidden opacity-80">
-                    {item.tags.slice(0, 3).map((tag: string, i: number) => (
-                      <div key={i} title={tag} className="w-2 h-2 rounded-full border border-white dark:border-slate-800 bg-[#A51417]/40" />
-                    ))}
-                  </div>
-                ) : item.severity === 'High' ? (
-                    <div className="w-2 h-2 rounded-full bg-[#A51417] animate-pulse shadow-[0_0_8px_#A51417]" />
-                ) : null}
+                <div className="text-xs text-slate-400 font-medium shrink-0">
+                  {item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }) : '—'}
+                </div>
+                {item.severity === 'High' && item.status !== 'Resolved' && (
+                  <div className="w-2 h-2 rounded-full bg-[#A51417] animate-pulse shadow-[0_0_6px_#A51417] shrink-0" />
+                )}
               </div>
             ))}
           </div>
         )}
       </div>
-      </>
-      )}
+
     </div>
   );
 }
