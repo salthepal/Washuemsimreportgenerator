@@ -19,6 +19,17 @@ CREATE TABLE IF NOT EXISTS session_notes (
   created_at DATETIME DEFAULT (strftime('%Y-%m-%dT%H:%M:%f', 'now', 'utc'))
 );
 
+CREATE TABLE IF NOT EXISTS case_files (
+  id TEXT PRIMARY KEY,
+  title TEXT,
+  content TEXT,
+  html_content TEXT,
+  date TEXT,
+  uploader_name TEXT,
+  case_type TEXT,
+  created_at DATETIME DEFAULT (strftime("%Y-%m-%dT%H:%M:%f", "now", "utc"))
+);
+
 CREATE TABLE IF NOT EXISTS lsts (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
@@ -78,6 +89,11 @@ CREATE INDEX IF NOT EXISTS idx_reports_site ON reports(metadata->>'location');
 CREATE INDEX IF NOT EXISTS idx_notes_site ON session_notes(metadata->>'location');
 CREATE INDEX IF NOT EXISTS idx_lsts_site ON lsts(location);
 CREATE INDEX IF NOT EXISTS idx_lsts_status ON lsts(status);
+
+-- New Indexes for Performance
+CREATE INDEX IF NOT EXISTS idx_reports_type ON reports(type);
+CREATE INDEX IF NOT EXISTS idx_notes_session ON session_notes(session_name);
+CREATE INDEX IF NOT EXISTS idx_case_files_type ON case_files(case_type);
 
 -- Triggers to auto-record LST History
 CREATE TRIGGER IF NOT EXISTS trg_lst_history 
