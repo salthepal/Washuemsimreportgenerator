@@ -299,7 +299,12 @@ app.onError((err, c) => {
 // LST Extraction Tracker
 app.get('/lsts', async (c) => {
   try {
-    const { results } = await c.env.DB.prepare('SELECT * FROM lsts ORDER BY CASE WHEN status = "Resolved" THEN 1 ELSE 0 END, CASE WHEN severity = "High" THEN 0 WHEN severity = "Medium" THEN 1 ELSE 2 END, last_seen_date DESC').all();
+    const limit = Math.min(Number(c.req.query('limit') || 100), 500);
+    const offset = Number(c.req.query('offset') || 0);
+    
+    const { results } = await c.env.DB.prepare('SELECT * FROM lsts ORDER BY CASE WHEN status = "Resolved" THEN 1 ELSE 0 END, CASE WHEN severity = "High" THEN 0 WHEN severity = "Medium" THEN 1 ELSE 2 END, last_seen_date DESC LIMIT ? OFFSET ?')
+      .bind(limit, offset)
+      .all();
     return c.json({ 
       lsts: results.map((l: any) => ({
         ...l,
@@ -767,7 +772,12 @@ app.post('/generate-report', verifyTurnstile, rateLimit, async (c) => {
 // Reports
 app.get('/reports', async (c) => {
   try {
-    const { results } = await c.env.DB.prepare('SELECT * FROM reports ORDER BY created_at DESC').all();
+    const limit = Math.min(Number(c.req.query('limit') || 100), 500);
+    const offset = Number(c.req.query('offset') || 0);
+
+    const { results } = await c.env.DB.prepare('SELECT * FROM reports ORDER BY created_at DESC LIMIT ? OFFSET ?')
+      .bind(limit, offset)
+      .all();
     return c.json({ 
       reports: results.map((r: any) => ({
         ...r,
@@ -783,7 +793,12 @@ app.get('/reports', async (c) => {
 
 app.get('/reports/generated', async (c) => {
   try {
-    const { results } = await c.env.DB.prepare("SELECT * FROM reports WHERE type = 'generated_report' ORDER BY created_at DESC").all();
+    const limit = Math.min(Number(c.req.query('limit') || 100), 500);
+    const offset = Number(c.req.query('offset') || 0);
+
+    const { results } = await c.env.DB.prepare("SELECT * FROM reports WHERE type = 'generated_report' ORDER BY created_at DESC LIMIT ? OFFSET ?")
+      .bind(limit, offset)
+      .all();
     return c.json({ 
       reports: results.map((r: any) => ({
         ...r,
@@ -931,7 +946,12 @@ app.post('/model-preference', verifyAdmin, async (c) => {
 // Session Notes
 app.get('/notes', async (c) => {
   try {
-    const { results } = await c.env.DB.prepare('SELECT * FROM session_notes ORDER BY created_at DESC').all();
+    const limit = Math.min(Number(c.req.query('limit') || 100), 500);
+    const offset = Number(c.req.query('offset') || 0);
+
+    const { results } = await c.env.DB.prepare('SELECT * FROM session_notes ORDER BY created_at DESC LIMIT ? OFFSET ?')
+      .bind(limit, offset)
+      .all();
     return c.json({
       notes: results.map((n: any) => ({
         id: n.id,
@@ -980,8 +1000,13 @@ app.delete('/notes/:id', verifyAdmin, async (c) => {
 // Case Files
 app.get('/case-files', async (c) => {
   try {
+    const limit = Math.min(Number(c.req.query('limit') || 100), 500);
+    const offset = Number(c.req.query('offset') || 0);
+
     // Try relational table first
-    const { results } = await c.env.DB.prepare('SELECT * FROM case_files ORDER BY date DESC').all();
+    const { results } = await c.env.DB.prepare('SELECT * FROM case_files ORDER BY date DESC LIMIT ? OFFSET ?')
+      .bind(limit, offset)
+      .all();
     if (results && results.length > 0) {
       return c.json(results.map((cf: any) => ({
         ...cf,
