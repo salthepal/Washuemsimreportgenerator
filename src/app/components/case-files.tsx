@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Upload, Trash2, Calendar, Eye, FolderOpen, User, CheckCircle, Save } from 'lucide-react';
-import { API_BASE, API_HEADERS } from '../App';
+import { API_BASE, getApiHeaders } from '../App';
 import { toast } from 'sonner';
 import { useConfirmDialog } from './ui/confirm-dialog';
 import { DocumentPreviewModal } from './document-preview-modal';
@@ -205,7 +205,7 @@ export function CaseFiles({ caseFiles, onRefresh }: CaseFilesProps) {
       const response = await fetch(`${API_BASE}/case-files/upload`, {
         method: 'POST',
         headers: {
-          ...API_HEADERS,
+          ...getApiHeaders(),
           'X-Turnstile-Token': turnstileToken || '',
         },
         body: JSON.stringify(payload),
@@ -251,7 +251,7 @@ export function CaseFiles({ caseFiles, onRefresh }: CaseFilesProps) {
         try {
           const response = await fetch(`${API_BASE}/case-files/${id}`, {
             method: 'DELETE',
-            headers: API_HEADERS,
+            headers: getApiHeaders(),
           });
 
           if (response.ok) {

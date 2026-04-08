@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { FileText, Calendar, Users, Sparkles, ChevronDown, ChevronUp, Eye, Trash2, Search, Filter, Download, X, GitCompare, CheckCircle2 } from 'lucide-react';
-import { Report, SessionNote, API_BASE, API_HEADERS } from '../App';
+import { Report, SessionNote, API_BASE, getApiHeaders } from '../App';
 import { ReportViewer } from './report-viewer';
 import { ComparisonView } from './comparison-view';
 import { BulkExportModal } from './bulk-export-modal';
@@ -57,7 +57,7 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
         setSearching(true);
         try {
           const response = await fetch(`${API_BASE}/search?q=${encodeURIComponent(debouncedSearch)}`, {
-            headers: API_HEADERS,
+            headers: getApiHeaders(),
           });
           if (response.ok) {
             const data = await response.json();
@@ -94,7 +94,7 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
       const endpoint = type === 'report' ? `/reports/${id}` : `/notes/${id}`;
       const response = await fetch(`${API_BASE}${endpoint}`, {
         method: 'DELETE',
-        headers: API_HEADERS,
+        headers: getApiHeaders(),
       });
       if (response.ok) {
         toast.success(`${type === 'report' ? 'Report' : 'Note'} deleted successfully`);
@@ -180,7 +180,7 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
         const type = doc && 'sessionName' in doc ? 'notes' : 'reports';
         return fetch(`${API_BASE}/${type}/${id}`, {
           method: 'DELETE',
-          headers: API_HEADERS,
+          headers: getApiHeaders(),
         });
       });
       

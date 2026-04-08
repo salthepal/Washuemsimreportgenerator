@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Upload, Trash2, Calendar, Eye, FolderOpen, User, CheckCircle, FileText, FileUp } from 'lucide-react';
-import { Report, API_BASE, API_HEADERS } from '../App';
+import { Report, API_BASE, getApiHeaders } from '../App';
 import { toast } from 'sonner';
 import { useConfirmDialog } from './ui/confirm-dialog';
 import { DocumentPreviewModal } from './document-preview-modal';
@@ -65,7 +65,7 @@ export function UploadReports({ reports, onRefresh }: UploadReportsProps) {
     setDebugging(true);
     try {
       const response = await fetch(`${API_BASE}/debug/all-keys`, {
-        headers: API_HEADERS,
+        headers: getApiHeaders(),
       });
       const data = await response.json();
       console.log('=== DATABASE DEBUG INFO ===');
@@ -157,7 +157,7 @@ export function UploadReports({ reports, onRefresh }: UploadReportsProps) {
       const response = await fetch(`${API_BASE}/reports/upload`, {
         method: 'POST',
         headers: {
-          ...API_HEADERS,
+          ...getApiHeaders(),
           'X-Turnstile-Token': turnstileToken || '',
         },
         body: JSON.stringify(payload),
@@ -202,7 +202,7 @@ export function UploadReports({ reports, onRefresh }: UploadReportsProps) {
         try {
           const response = await fetch(`${API_BASE}/reports/${id}`, {
             method: 'DELETE',
-            headers: API_HEADERS,
+            headers: getApiHeaders(),
           });
 
           if (response.ok) {

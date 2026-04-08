@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, Trash2, Users, Calendar, User, Save, Eye } from 'lucide-react';
-import { SessionNote, API_BASE, API_HEADERS } from '../App';
+import { SessionNote, API_BASE, getApiHeaders } from '../App';
 import { toast } from 'sonner';
 import { useConfirmDialog } from './ui/confirm-dialog';
 import { DocumentPreviewModal } from './document-preview-modal';
@@ -131,7 +131,7 @@ export function SessionNotes({ sessionNotes, onRefresh }: SessionNotesProps) {
       const response = await fetch(`${API_BASE}/notes/add`, {
         method: 'POST',
         headers: {
-          ...API_HEADERS,
+          ...getApiHeaders(),
           'X-Turnstile-Token': turnstileToken || '',
         },
         body: JSON.stringify(payload),
@@ -170,7 +170,7 @@ export function SessionNotes({ sessionNotes, onRefresh }: SessionNotesProps) {
         try {
           const response = await fetch(`${API_BASE}/notes/${id}`, {
             method: 'DELETE',
-            headers: API_HEADERS,
+            headers: getApiHeaders(),
           });
 
           if (response.ok) {

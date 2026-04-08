@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Sparkles, CheckCircle2, AlertCircle, Download, Copy, Lightbulb, Target, FolderOpen, Search, Edit3, FileText } from 'lucide-react';
 import { Report, SessionNote, CaseFile } from '../types';
-import { API_BASE, API_HEADERS, streamGenerateReport } from '../api';
+import { API_BASE, getApiHeaders, streamGenerateReport } from '../api';
 import { toast } from 'sonner';
 import { downloadDocxFromMarkdown } from '../utils/docx';
 import { useSelection } from '../hooks/useSelection';
@@ -91,7 +91,7 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
         try {
           const response = await fetch(`${API_BASE}/recommend-reports`, {
             method: 'POST',
-            headers: API_HEADERS,
+            headers: getApiHeaders(),
             body: JSON.stringify({ noteIds: noteSelection.selected }),
           });
           if (response.ok) {

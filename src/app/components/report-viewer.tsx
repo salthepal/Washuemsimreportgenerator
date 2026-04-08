@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Download, Eye, X, Edit, Save, CheckCircle, XCircle, Tag as TagIcon } from 'lucide-react';
-import { Report, API_BASE, API_HEADERS } from '../App';
+import { Report, API_BASE, getApiHeaders } from '../App';
 import { toast } from 'sonner';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
 
@@ -26,7 +26,7 @@ export function ReportViewer({ report, onClose, onUpdate }: ReportViewerProps) {
     try {
       const response = await fetch(`${API_BASE}/reports/${report.id}`, {
         method: 'PATCH',
-        headers: API_HEADERS,
+        headers: getApiHeaders(),
         body: JSON.stringify({
           editedContent: editedContent !== report.content ? editedContent : undefined,
           status,
