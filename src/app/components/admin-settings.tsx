@@ -26,7 +26,7 @@ export function AdminSettings() {
       localStorage.setItem('washu_admin_token', token.trim());
       setIsSaved(true);
       toast.success('Admin Token saved locally');
-      // Reload to update global API_HEADERS
+      // Reload to update auth state for getApiHeaders()
       window.location.reload();
     }
   };

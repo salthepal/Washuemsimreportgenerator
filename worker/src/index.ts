@@ -30,7 +30,12 @@ app.use('*', secureHeaders());
 // 2. Base Middlewares
 app.use('*', honoLogger());
 app.use('*', cors({
-  origin: (origin) => origin,
+  origin: [
+    'https://washusimintelligence.pages.dev',
+    'https://washu-em-sim-intelligence.sphadnisuf.workers.dev',
+    'http://localhost:5173',
+    'http://localhost:8787',
+  ],
   allowHeaders: ['Content-Type', 'X-Turnstile-Token', 'Authorization', 'X-Admin-Token'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true,
@@ -1085,29 +1090,6 @@ app.get('/backup', verifyAdmin, async (c) => {
   }
 });
 
-// Model Preference
-app.get('/model-preference', async (c) => {
-  try {
-    const { results } = await c.env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('ai_model_preference').all();
-    return c.json({ model: results[0] ? JSON.parse(results[0].value as string) : 'gemini-flash-latest' });
-  } catch (error: any) {
-    return c.json({ model: 'gemini-flash-latest' });
-  }
-});
-
-app.post('/settings/ai-model', verifyAdmin, async (c) => {
-  try {
-    const { model } = await c.req.json();
-    await c.env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
-      .bind('ai_model_preference', JSON.stringify(model))
-      .run();
-      
-    await logAudit(c.env.DB, 'update', 'settings', `Changed AI model to ${model}`, 'settings');
-    return c.json({ success: true, model });
-  } catch (error: any) {
-    return c.json({ error: error.message }, 500);
-  }
-});
 
 // ─────────────────────────────────────────────────────
 // Cron: Automated R2 Backup

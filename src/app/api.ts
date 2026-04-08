@@ -21,7 +21,7 @@ export const getApiHeaders = () => {
   return headers;
 };
 
-export const API_HEADERS = getApiHeaders();
+// NOTE: Always use getApiHeaders() for fresh auth tokens — never cache headers at module scope.
 
 export async function fetchHydration(): Promise<{
   reports: Report[],
@@ -42,7 +42,7 @@ export async function fetchReports(): Promise<Report[]> {
 }
 
 export async function fetchGeneratedReports(): Promise<Report[]> {
-  const res = await fetch(`${API_BASE}/reports/generated`, { headers: API_HEADERS });
+  const res = await fetch(`${API_BASE}/reports/generated`, { headers: getApiHeaders() });
   if (!res.ok) throw new Error('Failed to fetch generated reports');
   const data = await res.json();
   return Array.isArray(data) ? data : (data.reports || []);
@@ -186,7 +186,7 @@ export async function restoreData(data: any): Promise<{ success: boolean }> {
 
 export async function searchReports(query: string): Promise<Report[]> {
   const response = await fetch(`${API_BASE}/search?q=${encodeURIComponent(query)}`, {
-    headers: API_HEADERS,
+    headers: getApiHeaders(),
   });
   if (!response.ok) throw new Error('Search failed');
   return response.json();
@@ -196,7 +196,7 @@ export async function* streamGenerateReport(payload: any, token?: string): Async
   const response = await fetch(`${API_BASE}/generate-report`, {
     method: 'POST',
     headers: {
-      ...API_HEADERS,
+      ...getApiHeaders(),
       'X-Turnstile-Token': token || '',
     },
     body: JSON.stringify(payload),
@@ -225,7 +225,7 @@ export const semanticSearch = async (query: string): Promise<any[]> => {
 export async function reindexAll() {
   const response = await fetch(`${API_BASE}/admin/reindex`, {
     method: 'POST',
-    headers: API_HEADERS,
+    headers: getApiHeaders(),
   });
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
