@@ -296,88 +296,8 @@ app.onError((err, c) => {
 
 // --- API Endpoints ---
 
-// LST Extraction Tracker
-app.get('/lsts', async (c) => {
-  try {
-    const { results } = await c.env.DB.prepare('SELECT * FROM lsts ORDER BY CASE WHEN status = "Resolved" THEN 1 ELSE 0 END, CASE WHEN severity = "High" THEN 0 WHEN severity = "Medium" THEN 1 ELSE 2 END, last_seen_date DESC').all();
-    return c.json({ 
-      lsts: results.map((l: any) => ({
-        ...l,
-        identifiedDate: l.identified_date,
-        lastSeenDate: l.last_seen_date,
-        resolvedDate: l.resolved_date,
-        createdAt: l.created_at,
-        relatedReportId: l.related_report_id,
-        resolutionNote: l.resolution_note,
-        recurrenceCount: l.recurrence_count || 1,
-        parentIssueId: l.parent_issue_id,
-        locationStatuses: l.location_statuses ? JSON.parse(l.location_statuses) : {}
-      }))
-    });
-  } catch (error: any) {
-    return c.json({ error: error.message }, 500);
-  }
-});
-
-app.put('/lsts/:id', verifyAdmin, async (c) => {
-  try {
-    const id = c.req.param('id');
-    const lst = await c.req.json();
-    
-    await c.env.DB.prepare(`
-      UPDATE lsts SET 
-        title = ?, description = ?, recommendation = ?, 
-        severity = ?, status = ?, category = ?, 
-        location = ?, resolution_note = ?, 
-        resolved_date = ?, assignee = ?,
-        parent_issue_id = ?, location_statuses = ?
-      WHERE id = ?
-    `)
-    .bind(
-      lst.title, lst.description, lst.recommendation, 
-      lst.severity, lst.status, lst.category, 
-      lst.location, lst.resolutionNote || null,
-      lst.resolvedDate || null, lst.assignee || null,
-      lst.parentIssueId || null, lst.locationStatuses ? JSON.stringify(lst.locationStatuses) : null,
-      id
-    ).run();
-    
-    return c.json({ success: true });
-  } catch (error: any) {
-    return c.json({ error: error.message }, 500);
-  }
-});
-
-app.post('/lsts/add', verifyTurnstile, async (c) => {
-  try {
-    const lst = await c.req.json();
-    const id = lst.id || `lst_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-    
-    await c.env.DB.prepare('INSERT INTO lsts (id, title, description, recommendation, severity, status, category, location, identified_date, last_seen_date, recurrence_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(id, lst.title || 'Untitled', lst.description || '', lst.recommendation || '', lst.severity || 'Medium', lst.status || 'Identified', lst.category || '', lst.location || '', lst.identifiedDate || new Date().toISOString(), lst.lastSeenDate || new Date().toISOString(), 1)
-      .run();
-      
-    await logAudit(c.env.DB, 'create', 'lst', lst.title || 'Untitled LST', id);
-    return c.json({ success: true, id });
-  } catch (error: any) {
-    return c.json({ error: error.message }, 500);
-  }
-});
-
-// ... LST history handled below
-
-// --- LST HISTORY ENDPOINT (Optimization #4) ---
-app.get('/lsts/:id/history', async (c) => {
-  try {
-    const id = c.req.param('id');
-    const { results } = await c.env.DB.prepare('SELECT * FROM lst_history WHERE lst_id = ? ORDER BY created_at DESC')
-      .bind(id)
-      .all();
-    return c.json(results);
-  } catch (error: any) {
-    return c.json({ error: error.message }, 500);
-  }
-});
+import { lstsRouter } from './routes/lsts';
+app.route('/lsts', lstsRouter);
 
 
 // R2 Object Storage (File Handling)
@@ -767,7 +687,12 @@ app.post('/generate-report', verifyTurnstile, rateLimit, async (c) => {
 // Reports
 app.get('/reports', async (c) => {
   try {
-    const { results } = await c.env.DB.prepare('SELECT * FROM reports ORDER BY created_at DESC').all();
+    const limit = Math.min(Number(c.req.query('limit') || 100), 500);
+    const offset = Number(c.req.query('offset') || 0);
+
+    const { results } = await c.env.DB.prepare('SELECT * FROM reports ORDER BY created_at DESC LIMIT ? OFFSET ?')
+      .bind(limit, offset)
+      .all();
     return c.json({ 
       reports: results.map((r: any) => ({
         ...r,
@@ -783,7 +708,12 @@ app.get('/reports', async (c) => {
 
 app.get('/reports/generated', async (c) => {
   try {
-    const { results } = await c.env.DB.prepare("SELECT * FROM reports WHERE type = 'generated_report' ORDER BY created_at DESC").all();
+    const limit = Math.min(Number(c.req.query('limit') || 100), 500);
+    const offset = Number(c.req.query('offset') || 0);
+
+    const { results } = await c.env.DB.prepare("SELECT * FROM reports WHERE type = 'generated_report' ORDER BY created_at DESC LIMIT ? OFFSET ?")
+      .bind(limit, offset)
+      .all();
     return c.json({ 
       reports: results.map((r: any) => ({
         ...r,
@@ -928,60 +858,19 @@ app.post('/model-preference', verifyAdmin, async (c) => {
 });
 
 
-// Session Notes
-app.get('/notes', async (c) => {
-  try {
-    const { results } = await c.env.DB.prepare('SELECT * FROM session_notes ORDER BY created_at DESC').all();
-    return c.json({
-      notes: results.map((n: any) => ({
-        id: n.id,
-        sessionName: n.session_name,
-        notes: n.notes,
-        createdAt: n.created_at || new Date().toISOString(),
-        participants: n.participants ? JSON.parse(n.participants) : [],
-        tags: n.tags ? JSON.parse(n.tags) : [],
-        metadata: n.metadata ? JSON.parse(n.metadata) : {}
-      }))
-    });
-  } catch (error: any) {
-    return c.json({ error: error.message }, 500);
-  }
-});
-
-app.post('/notes/add', verifyTurnstile, async (c) => {
-  try {
-    const note = await c.req.json();
-    const id = note.id || `notes_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-    
-    await c.env.DB.prepare('INSERT INTO session_notes (id, session_name, notes, participants, tags, metadata) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(id, note.sessionName || 'Untitled Session', note.notes || '', JSON.stringify(note.participants || []), JSON.stringify(note.tags || []), JSON.stringify(note.metadata || {}))
-      .run();
-      
-    await logAudit(c.env.DB, 'create', 'session_notes', note.sessionName || 'Untitled Session', id);
-    return c.json({ success: true, notes: { ...note, id } });
-  } catch (error: any) {
-    await logError(c.env.DB, 'note_upload', error);
-    return c.json({ error: error.message }, 500);
-  }
-});
-
-app.delete('/notes/:id', verifyAdmin, async (c) => {
-  try {
-    const id = c.req.param('id');
-    await c.env.DB.prepare('DELETE FROM session_notes WHERE id = ?').bind(id).run();
-    await logAudit(c.env.DB, 'delete', 'session_notes', `Deleted note ${id}`, id);
-    return c.json({ success: true });
-  } catch (error: any) {
-    await logError(c.env.DB, 'note_delete', error);
-    return c.json({ error: error.message }, 500);
-  }
-});
+import { notesRouter } from './routes/notes';
+app.route('/notes', notesRouter);
 
 // Case Files
 app.get('/case-files', async (c) => {
   try {
+    const limit = Math.min(Number(c.req.query('limit') || 100), 500);
+    const offset = Number(c.req.query('offset') || 0);
+
     // Try relational table first
-    const { results } = await c.env.DB.prepare('SELECT * FROM case_files ORDER BY date DESC').all();
+    const { results } = await c.env.DB.prepare('SELECT * FROM case_files ORDER BY date DESC LIMIT ? OFFSET ?')
+      .bind(limit, offset)
+      .all();
     if (results && results.length > 0) {
       return c.json(results.map((cf: any) => ({
         ...cf,
