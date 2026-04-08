@@ -1008,8 +1008,7 @@ app.post('/case-files/upload', verifyTurnstile, async (c) => {
     const data = await c.req.json();
     const id = data.id || `case_file_${Date.now()}_${Math.random().toString(36).substring(7)}`;
     
-    // Ensure table exists (idempotent for safety)
-    await c.env.DB.prepare('CREATE TABLE IF NOT EXISTS case_files (id TEXT PRIMARY KEY, title TEXT, content TEXT, html_content TEXT, date TEXT, uploader_name TEXT, case_type TEXT, created_at DATETIME DEFAULT (strftime("%Y-%m-%dT%H:%M:%f", "now", "utc")))').run();
+
     
     await c.env.DB.prepare('INSERT INTO case_files (id, title, content, html_content, date, uploader_name, case_type) VALUES (?, ?, ?, ?, ?, ?, ?)')
       .bind(id, data.title || 'Untitled Case', data.content || '', data.htmlContent || '', data.date || new Date().toISOString(), data.metadata?.uploaderName || '', data.metadata?.caseType || '')
@@ -1069,10 +1068,12 @@ app.delete('/error-log', verifyAdmin, async (c) => {
 // Backup & Restore
 app.get('/backup', verifyAdmin, async (c) => {
   try {
-    const reports = await c.env.DB.prepare('SELECT * FROM reports').all();
-    const lsts = await c.env.DB.prepare('SELECT * FROM lsts').all();
-    const notes = await c.env.DB.prepare('SELECT * FROM session_notes').all();
-    const audit = await c.env.DB.prepare('SELECT * FROM audit_logs').all();
+    const [reports, lsts, notes, audit] = await c.env.DB.batch([
+      c.env.DB.prepare('SELECT * FROM reports'),
+      c.env.DB.prepare('SELECT * FROM lsts'),
+      c.env.DB.prepare('SELECT * FROM session_notes'),
+      c.env.DB.prepare('SELECT * FROM audit_logs')
+    ]);
     
     const backup = {
       exportedAt: new Date().toISOString(),
