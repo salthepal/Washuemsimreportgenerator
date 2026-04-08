@@ -8,7 +8,33 @@ import { cors } from 'hono/cors';
 import { logger as honoLogger } from 'hono/logger';
 import { secureHeaders } from 'hono/secure-headers';
 import { cache } from 'hono/cache';
+import { z } from 'zod';
 import { extractAndScoreLSTs } from './utils/ai';
+
+const reportUploadSchema = z.object({
+  id: z.string().optional(),
+  title: z.string().min(1).default('Untitled Report'),
+  content: z.string().default(''),
+  type: z.string().default('prior_report'),
+  metadata: z.any().optional().default({})
+});
+
+const caseFileUploadSchema = z.object({
+  id: z.string().optional(),
+  title: z.string().min(1).default('Untitled Case'),
+  content: z.string().default(''),
+  htmlContent: z.string().optional().default(''),
+  date: z.string().optional(),
+  metadata: z.object({
+    uploaderName: z.string().optional().default(''),
+    caseType: z.string().optional().default('')
+  }).optional().default({ uploaderName: '', caseType: '' })
+});
+
+const askSchema = z.object({
+  query: z.string().min(1, "Query is required"),
+  stream: z.boolean().optional().default(false)
+});
 
 type Bindings = {
   DB: D1Database;
@@ -98,7 +124,7 @@ app.get('/hydrate', verifyAdmin, async (c) => {
 // Error logging helper for Cloudflare
 async function logError(db: D1Database, action: string, error: any, context?: any) {
   try {
-    const errorId = `error_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const errorId = `error_${crypto.randomUUID()}`;
     const entry = {
       id: errorId,
       action,
@@ -121,7 +147,7 @@ async function logError(db: D1Database, action: string, error: any, context?: an
 // Audit logging helper
 async function logAudit(db: D1Database, action: string, type: string, target: string, id: string) {
   try {
-    const auditId = `audit_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const auditId = `audit_${crypto.randomUUID()}`;
     await db.prepare('INSERT INTO audit_logs (id, action, type, target, target_id, timestamp) VALUES (?, ?, ?, ?, ?, ?)')
       .bind(auditId, action, type, target, id, new Date().toISOString())
       .run();
@@ -267,7 +293,7 @@ async function extractLSTs(db: D1Database, reportContent: string, reportId: stri
       const recMatch = finding.match(/\*\*Recommendations:\*\*(.*)/i);
       const recommendation = recMatch ? recMatch[1].trim() : '';
       
-      const lstId = `lst_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      const lstId = `lst_${crypto.randomUUID()}`;
       
       // Check for duplicates (very basic check)
       const existing = await db.prepare('SELECT id FROM lsts WHERE title = ?').bind(title).all();
@@ -343,8 +369,12 @@ app.get('/files/:path{.+}', async (c) => {
 // Uses Workers AI binding to query the 'washu-sim-ssearch' instance
 app.post('/ask', rateLimit, async (c) => {
   try {
-    const { query, stream: doStream } = await c.req.json();
-    if (!query) return c.json({ error: 'Query is required' }, 400);
+    const rawData = await c.req.json();
+    const parseResult = askSchema.safeParse(rawData);
+    if (!parseResult.success) {
+      return c.json({ error: 'Validation failed', details: parseResult.error.issues }, 400);
+    }
+    const { query, stream: doStream } = parseResult.data;
 
     if (!c.env.AI) {
       return c.json({ error: 'AI binding not configured' }, 503);
@@ -650,7 +680,7 @@ app.post('/generate-report', verifyTurnstile, rateLimit, async (c) => {
       }
 
       // After stream completes, save the full report to D1 (fire and forget)
-      const reportId = `report_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      const reportId = `report_${crypto.randomUUID()}`;
       c.executionCtx.waitUntil((async () => {
          try {
            const reportTitle = `AI Created - ${new Date().toLocaleDateString()}`;
@@ -729,10 +759,16 @@ app.get('/reports/generated', async (c) => {
 
 app.post('/reports/upload', verifyTurnstile, async (c) => {
   try {
-    const reportData = await c.req.json();
-    const id = reportData.id || `report_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-    const title = reportData.title || 'Untitled Report';
-    const content = reportData.content || '';
+    const rawData = await c.req.json();
+    const parseResult = reportUploadSchema.safeParse(rawData);
+    if (!parseResult.success) {
+      return c.json({ error: 'Validation failed', details: parseResult.error.issues }, 400);
+    }
+    const reportData = parseResult.data;
+    
+    const id = reportData.id || `report_${crypto.randomUUID()}`;
+    const title = reportData.title;
+    const content = reportData.content;
     
     await c.env.DB.prepare('INSERT INTO reports (id, title, content, type, metadata) VALUES (?, ?, ?, ?, ?)')
       .bind(id, title, content, reportData.type || 'prior_report', JSON.stringify(reportData.metadata || {}))
@@ -894,8 +930,13 @@ app.get('/case-files', async (c) => {
 
 app.post('/case-files/upload', verifyTurnstile, async (c) => {
   try {
-    const data = await c.req.json();
-    const id = data.id || `case_file_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const rawData = await c.req.json();
+    const parseResult = caseFileUploadSchema.safeParse(rawData);
+    if (!parseResult.success) {
+      return c.json({ error: 'Validation failed', details: parseResult.error.issues }, 400);
+    }
+    const data = parseResult.data;
+    const id = data.id || `case_file_${crypto.randomUUID()}`;
     
 
     

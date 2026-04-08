@@ -9,7 +9,7 @@ export interface LSTPayload {
 
 async function logError(db: D1Database, action: string, error: any, context?: any) {
   try {
-    const errorId = `error_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const errorId = `error_${crypto.randomUUID()}`;
     await db.prepare('INSERT INTO error_logs (id, action, message, stack, context, timestamp) VALUES (?, ?, ?, ?, ?, ?)')
       .bind(errorId, action, error?.message || String(error), error?.stack, context ? JSON.stringify(context) : null, new Date().toISOString())
       .run();
@@ -66,7 +66,7 @@ Format: [{"title": "...", "description": "...", "recommendation": "...", "severi
     const parsedLSTs: LSTPayload[] = JSON.parse(rawText);
 
     for (const lst of parsedLSTs) {
-      const lstId = `lst_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      const lstId = `lst_${crypto.randomUUID()}`;
       
       // Step 1: Detect Current Report Location (if available)
       const reportRes = await db.prepare('SELECT metadata FROM reports WHERE id = ?').bind(reportId).all();

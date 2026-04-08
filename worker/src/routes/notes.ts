@@ -1,6 +1,16 @@
 import { Hono } from 'hono';
+import { z } from 'zod';
 import type { Bindings } from '../types';
 import { verifyAdmin, verifyTurnstile, logAudit, logError } from '../lib/helpers';
+
+const noteSchema = z.object({
+  id: z.string().optional(),
+  sessionName: z.string().min(1, "Session Name is required").default('Untitled Session'),
+  notes: z.string().optional().default(''),
+  participants: z.array(z.string()).optional().default([]),
+  tags: z.array(z.string()).optional().default([]),
+  metadata: z.any().optional().default({})
+});
 
 export const notesRouter = new Hono<{ Bindings: Bindings }>();
 
@@ -30,8 +40,13 @@ notesRouter.get('/', async (c) => {
 
 notesRouter.post('/add', verifyTurnstile, async (c) => {
   try {
-    const note = await c.req.json();
-    const id = note.id || `notes_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const rawNote = await c.req.json();
+    const parseResult = noteSchema.safeParse(rawNote);
+    if (!parseResult.success) {
+      return c.json({ error: 'Validation failed', details: parseResult.error.issues }, 400);
+    }
+    const note = parseResult.data;
+    const id = note.id || `notes_${crypto.randomUUID()}`;
     
     await c.env.DB.prepare('INSERT INTO session_notes (id, session_name, notes, participants, tags, metadata) VALUES (?, ?, ?, ?, ?, ?)')
       .bind(id, note.sessionName || 'Untitled Session', note.notes || '', JSON.stringify(note.participants || []), JSON.stringify(note.tags || []), JSON.stringify(note.metadata || {}))

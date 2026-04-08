@@ -1,6 +1,25 @@
 import { Hono } from 'hono';
+import { z } from 'zod';
 import type { Bindings } from '../types';
 import { verifyAdmin, verifyTurnstile, logAudit } from '../lib/helpers';
+
+const lstSchema = z.object({
+  id: z.string().optional(),
+  title: z.string().min(1, "Title is required").default('Untitled'),
+  description: z.string().optional().default(''),
+  recommendation: z.string().optional().default(''),
+  severity: z.string().optional().default('Medium'),
+  status: z.string().optional().default('Identified'),
+  category: z.string().optional().default(''),
+  location: z.string().optional().default(''),
+  resolutionNote: z.string().optional().nullable(),
+  resolvedDate: z.string().optional().nullable(),
+  assignee: z.string().optional().nullable(),
+  parentIssueId: z.string().optional().nullable(),
+  locationStatuses: z.any().optional().nullable(),
+  identifiedDate: z.string().optional(),
+  lastSeenDate: z.string().optional()
+});
 
 export const lstsRouter = new Hono<{ Bindings: Bindings }>();
 
@@ -35,7 +54,12 @@ lstsRouter.get('/', async (c) => {
 lstsRouter.put('/:id', verifyAdmin, async (c) => {
   try {
     const id = c.req.param('id');
-    const lst = await c.req.json();
+    const rawLst = await c.req.json();
+    const parseResult = lstSchema.safeParse(rawLst);
+    if (!parseResult.success) {
+      return c.json({ error: 'Validation failed', details: parseResult.error.issues }, 400);
+    }
+    const lst = parseResult.data;
     
     await c.env.DB.prepare(`
       UPDATE lsts SET 
@@ -63,8 +87,13 @@ lstsRouter.put('/:id', verifyAdmin, async (c) => {
 
 lstsRouter.post('/add', verifyTurnstile, async (c) => {
   try {
-    const lst = await c.req.json();
-    const id = lst.id || `lst_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const rawLst = await c.req.json();
+    const parseResult = lstSchema.safeParse(rawLst);
+    if (!parseResult.success) {
+      return c.json({ error: 'Validation failed', details: parseResult.error.issues }, 400);
+    }
+    const lst = parseResult.data;
+    const id = lst.id || `lst_${crypto.randomUUID()}`;
     
     await c.env.DB.prepare('INSERT INTO lsts (id, title, description, recommendation, severity, status, category, location, identified_date, last_seen_date, recurrence_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
       .bind(id, lst.title || 'Untitled', lst.description || '', lst.recommendation || '', lst.severity || 'Medium', lst.status || 'Identified', lst.category || '', lst.location || '', lst.identifiedDate || new Date().toISOString(), lst.lastSeenDate || new Date().toISOString(), 1)

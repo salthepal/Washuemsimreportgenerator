@@ -2,7 +2,7 @@ import type { Bindings } from '../types';
 
 export async function logError(db: D1Database, action: string, error: any, context?: any) {
   try {
-    const errorId = `error_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const errorId = `error_${crypto.randomUUID()}`;
     const entry = {
       id: errorId,
       action,
@@ -24,7 +24,7 @@ export async function logError(db: D1Database, action: string, error: any, conte
 
 export async function logAudit(db: D1Database, action: string, type: string, target: string, id: string) {
   try {
-    const auditId = `audit_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const auditId = `audit_${crypto.randomUUID()}`;
     await db.prepare('INSERT INTO audit_logs (id, action, type, target, target_id, timestamp) VALUES (?, ?, ?, ?, ?, ?)')
       .bind(auditId, action, type, target, id, new Date().toISOString())
       .run();
