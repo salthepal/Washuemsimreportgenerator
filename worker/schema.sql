@@ -124,3 +124,31 @@ CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL -- JSON blob
 );
+
+CREATE TRIGGER IF NOT EXISTS trg_reports_search_update
+AFTER UPDATE ON reports
+BEGIN
+  DELETE FROM search_index WHERE id = old.id;
+  INSERT INTO search_index (id, type, title, content)
+  VALUES (new.id, new.type, new.title, new.content);
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_reports_search_delete
+AFTER DELETE ON reports
+BEGIN
+  DELETE FROM search_index WHERE id = old.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_notes_search_update
+AFTER UPDATE ON session_notes
+BEGIN
+  DELETE FROM search_index WHERE id = old.id;
+  INSERT INTO search_index (id, type, title, content)
+  VALUES (new.id, 'session_note', new.session_name, new.notes);
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_notes_search_delete
+AFTER DELETE ON session_notes
+BEGIN
+  DELETE FROM search_index WHERE id = old.id;
+END;
