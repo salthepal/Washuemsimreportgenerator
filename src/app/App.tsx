@@ -43,7 +43,8 @@ if (typeof window !== 'undefined') {
 const Dashboard = lazy(() => import('./components/dashboard').then(module => ({ default: module.Dashboard })));
 
 export type { Report, SessionNote, LST } from './types';
-import { API_BASE, getApiHeaders } from './api';\r\nexport { API_BASE, getApiHeaders };
+import { API_BASE, getApiHeaders } from './api';
+export { API_BASE, getApiHeaders };
 
 export default function App() {
   const queryClient = useQueryClient();
