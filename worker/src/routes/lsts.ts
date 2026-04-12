@@ -106,6 +106,52 @@ lstsRouter.post('/add', verifyTurnstile, async (c) => {
   }
 });
 
+lstsRouter.post('/merge', verifyAdmin, async (c) => {
+  try {
+    const { ids, mergedLST } = await c.req.json();
+    if (!ids || !Array.isArray(ids) || ids.length < 2) {
+      return c.json({ error: 'At least 2 IDs required for merge' }, 400);
+    }
+
+    const id = `lst_${crypto.randomUUID()}`;
+    await c.env.DB.prepare(
+      'INSERT INTO lsts (id, title, description, recommendation, severity, status, category, location, identified_date, last_seen_date, recurrence_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(
+      id,
+      mergedLST.title || 'Merged LST',
+      mergedLST.description || '',
+      mergedLST.recommendation || '',
+      mergedLST.severity || 'Medium',
+      mergedLST.status || 'Identified',
+      mergedLST.category || '',
+      mergedLST.location || '',
+      mergedLST.identifiedDate || new Date().toISOString(),
+      mergedLST.lastSeenDate || new Date().toISOString(),
+      1
+    ).run();
+
+    for (const origId of ids) {
+      await c.env.DB.prepare('DELETE FROM lsts WHERE id = ?').bind(origId).run();
+    }
+
+    await logAudit(c.env.DB, 'merge', 'lst', `Merged ${ids.length} LSTs into "${mergedLST.title}"`, id);
+    return c.json({ success: true, id });
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+lstsRouter.delete('/:id', verifyAdmin, async (c) => {
+  try {
+    const id = c.req.param('id');
+    await c.env.DB.prepare('DELETE FROM lsts WHERE id = ?').bind(id).run();
+    await logAudit(c.env.DB, 'delete', 'lst', `Deleted LST ${id}`, id);
+    return c.json({ success: true });
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500);
+  }
+});
+
 lstsRouter.get('/:id/history', async (c) => {
   try {
     const id = c.req.param('id');
