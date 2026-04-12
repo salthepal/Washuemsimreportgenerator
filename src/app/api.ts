@@ -104,6 +104,15 @@ export async function deleteLst(id: string): Promise<{ success: boolean }> {
   return response.json();
 }
 
+export async function deleteReport(id: string): Promise<{ success: boolean }> {
+  const response = await fetch(`${API_BASE}/reports/${id}`, {
+    method: 'DELETE',
+    headers: getApiHeaders(),
+  });
+  if (!response.ok) throw new Error('Failed to delete report');
+  return response.json();
+}
+
 export async function mergeLsts(ids: string[], mergedLST: Partial<LST>): Promise<{ success: boolean, id: string }> {
   const response = await fetch(`${API_BASE}/lsts/merge`, {
     method: 'POST',

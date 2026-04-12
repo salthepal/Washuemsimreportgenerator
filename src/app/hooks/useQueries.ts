@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchReports, fetchGeneratedReports, fetchNotes, fetchCaseFiles, fetchLSTs, updateLst, addLst, deleteLst, mergeLsts, fetchErrorLog, clearErrorLog, fetchHydration, fetchLstHistory } from '../api';
-import { LST } from '../types';
+import { fetchReports, fetchGeneratedReports, fetchNotes, fetchCaseFiles, fetchLSTs, updateLst, addLst, deleteLst, mergeLsts, fetchErrorLog, clearErrorLog, fetchHydration, fetchLstHistory, deleteReport } from '../api';
+import { LST, Report } from '../types';
 
 export function useHydration() {
   return useQuery({ queryKey: ['hydration'], queryFn: fetchHydration });
@@ -66,6 +66,27 @@ export function useMergeLSTs() {
     mutationFn: ({ ids, mergedLST }: { ids: string[], mergedLST: Partial<LST> }) => mergeLsts(ids, mergedLST),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['lsts'] });
+    },
+  });
+}
+
+export function useDeleteReport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteReport(id),
+    onMutate: async (id: string) => {
+      await queryClient.cancelQueries({ queryKey: ['reports'] });
+      const previousReports = queryClient.getQueryData<Report[]>(['reports']);
+      queryClient.setQueryData<Report[]>(['reports'], (old = []) =>
+        old.filter((r) => r.id !== id)
+      );
+      return { previousReports };
+    },
+    onError: (_err, _id, context) => {
+      queryClient.setQueryData(['reports'], context?.previousReports);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['reports'] });
     },
   });
 }
