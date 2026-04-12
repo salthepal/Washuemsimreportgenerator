@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Upload, Trash2, Calendar, Eye, FolderOpen, User, CheckCircle, FileText, FileUp } from 'lucide-react';
 import { Report, API_BASE, getApiHeaders } from '../App';
+import { useDeleteReport } from '../hooks/useQueries';
 import { toast } from 'sonner';
 import { useConfirmDialog } from './ui/confirm-dialog';
 import { DocumentPreviewModal } from './document-preview-modal';
@@ -32,6 +33,7 @@ export function UploadReports({ reports, onRefresh }: UploadReportsProps) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const { confirm, dialog } = useConfirmDialog();
+  const deleteReport = useDeleteReport();
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -192,29 +194,17 @@ export function UploadReports({ reports, onRefresh }: UploadReportsProps) {
     }
   };
 
-  const handleDelete = async (id: string, title: string) => {
+  const handleDelete = (id: string, title: string) => {
     confirm({
       title: 'Delete Report',
       description: `Are you sure you want to delete "${title}"? This action cannot be undone.`,
       variant: 'destructive',
       confirmText: 'Delete',
-      onConfirm: async () => {
-        try {
-          const response = await fetch(`${API_BASE}/reports/${id}`, {
-            method: 'DELETE',
-            headers: getApiHeaders(),
-          });
-
-          if (response.ok) {
-            toast.success('Report deleted successfully');
-            onRefresh();
-          } else {
-            toast.error('Failed to delete report');
-          }
-        } catch (error) {
-          console.error('Delete error:', error);
-          toast.error('Failed to delete report');
-        }
+      onConfirm: () => {
+        deleteReport.mutate(id, {
+          onSuccess: () => toast.success('Report deleted successfully'),
+          onError: () => toast.error('Failed to delete report'),
+        });
       },
     });
   };
