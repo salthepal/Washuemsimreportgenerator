@@ -7,6 +7,7 @@ import {
 import { formatDate } from '../utils/document';
 import { LST } from '../types';
 import { toast } from 'sonner';
+import { useConfirmDialog } from './ui/confirm-dialog';
 
 interface LSTTrackerProps {
   selectedSite?: string;
@@ -51,6 +52,28 @@ export function LSTTracker({ selectedSite }: LSTTrackerProps) {
     id: '',
     title: '',
   });
+
+  // Batch edit
+  const [isBatchEditOpen, setIsBatchEditOpen] = useState(false);
+  const [batchEdit, setBatchEdit] = useState<{
+    status: '' | LST['status'];
+    severity: '' | LST['severity'];
+    category: '' | LST['category'];
+    assigneeEnabled: boolean;
+    assignee: string;
+    locationEnabled: boolean;
+    location: string;
+  }>({
+    status: '',
+    severity: '',
+    category: '',
+    assigneeEnabled: false,
+    assignee: '',
+    locationEnabled: false,
+    location: '',
+  });
+
+  const { confirm, dialog } = useConfirmDialog();
 
   const addLstMutation = useAddLST();
   const deleteLstMutation = useDeleteLST();
@@ -189,19 +212,59 @@ export function LSTTracker({ selectedSite }: LSTTrackerProps) {
     }
   };
 
-  const handleDeleteSelected = async () => {
+  const handleDeleteSelected = () => {
     if (selectedIds.size === 0) return;
-    if (!confirm(`Are you sure you want to delete ${selectedIds.size} LST(s)?`)) return;
+    confirm({
+      title: `Delete ${selectedIds.size} LST${selectedIds.size > 1 ? 's' : ''}`,
+      description: `Are you sure you want to permanently delete ${selectedIds.size} selected LST${selectedIds.size > 1 ? 's' : ''}? This cannot be undone.`,
+      variant: 'destructive',
+      confirmText: 'Delete',
+      onConfirm: async () => {
+        setSaving(true);
+        try {
+          for (const id of Array.from(selectedIds)) {
+            await deleteLstMutation.mutateAsync(id);
+          }
+          toast.success(`${selectedIds.size} LST${selectedIds.size > 1 ? 's' : ''} deleted`);
+          setSelectedIds(new Set());
+        } catch (error) {
+          toast.error('Failed to delete some LSTs');
+        } finally {
+          setSaving(false);
+        }
+      },
+    });
+  };
 
+  const handleBatchEdit = async () => {
+    const hasChanges = batchEdit.status || batchEdit.severity || batchEdit.category ||
+      batchEdit.assigneeEnabled || batchEdit.locationEnabled;
+    if (!hasChanges) {
+      toast.error('No changes selected');
+      return;
+    }
     setSaving(true);
     try {
       for (const id of Array.from(selectedIds)) {
-        await deleteLstMutation.mutateAsync(id);
+        const lst = lsts.find((l: LST) => l.id === id);
+        if (!lst) continue;
+        const payload: Partial<LST> = { ...lst };
+        if (batchEdit.status) payload.status = batchEdit.status;
+        if (batchEdit.severity) payload.severity = batchEdit.severity;
+        if (batchEdit.category) payload.category = batchEdit.category;
+        if (batchEdit.assigneeEnabled) payload.assignee = batchEdit.assignee || undefined;
+        if (batchEdit.locationEnabled) payload.location = batchEdit.location || undefined;
+        if (batchEdit.status === 'Resolved' && !lst.resolvedDate) {
+          payload.resolvedDate = new Date().toISOString();
+        }
+        await updateLstMutation.mutateAsync({ id, payload });
       }
-      toast.success('LSTs deleted successfully');
+      toast.success(`Updated ${selectedIds.size} LST${selectedIds.size > 1 ? 's' : ''}`);
+      setIsBatchEditOpen(false);
+      setBatchEdit({ status: '', severity: '', category: '', assigneeEnabled: false, assignee: '', locationEnabled: false, location: '' });
       setSelectedIds(new Set());
     } catch (error) {
-      toast.error('Failed to delete some LSTs');
+      toast.error('Failed to update some LSTs');
     } finally {
       setSaving(false);
     }
@@ -312,6 +375,7 @@ export function LSTTracker({ selectedSite }: LSTTrackerProps) {
 
   return (
     <div className="space-y-4 md:space-y-5 p-2 md:p-0">
+      {dialog}
       {/* ── Edit Modal Overlay ── */}
       <LstEditModal editModal={editModal} setEditModal={setEditModal} saving={saving} onSave={handleSaveEdit} />
 
@@ -457,36 +521,59 @@ export function LSTTracker({ selectedSite }: LSTTrackerProps) {
           </div>
         )}
 
-        {/* Bulk Actions Header */}
-        {(selectedIds.size > 0 || sortedLsts.length > 0) && (
-          <div className={`mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between transition-all ${selectedIds.size > 0 ? 'opacity-100 h-auto' : 'opacity-0 h-0 overflow-hidden'}`}>
-            <div className="flex items-center gap-3 text-xs font-bold text-slate-600 dark:text-slate-400">
-              <input 
-                type="checkbox" 
-                checked={selectedIds.size === filteredLsts.length && filteredLsts.length > 0} 
+        {/* Bulk Actions Header — always visible when list has items */}
+        {sortedLsts.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+            <div className="flex items-center gap-2.5 text-xs font-bold text-slate-600 dark:text-slate-400">
+              <input
+                type="checkbox"
+                checked={selectedIds.size === filteredLsts.length && filteredLsts.length > 0}
                 onChange={selectAllFiltered}
-                className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
               />
-              {selectedIds.size} Selected
+              <span>
+                {selectedIds.size > 0 ? `${selectedIds.size} of ${filteredLsts.length} selected` : 'Select all'}
+              </span>
+              {selectedIds.size > 0 && (
+                <button
+                  onClick={() => setSelectedIds(new Set())}
+                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-normal"
+                >
+                  Clear
+                </button>
+              )}
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={openMergeModal}
-                disabled={selectedIds.size < 2 || saving}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/40 dark:hover:bg-amber-900/60 text-amber-700 dark:text-amber-300 font-bold rounded text-[10px] uppercase tracking-wider transition-all disabled:opacity-50"
-              >
-                <GitMerge className="w-3.5 h-3.5" />
-                Merge
-              </button>
-              <button
-                onClick={handleDeleteSelected}
-                disabled={saving}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-red-100 hover:bg-red-200 dark:bg-red-900/40 dark:hover:bg-red-900/60 text-red-700 dark:text-red-300 font-bold rounded text-[10px] uppercase tracking-wider transition-all disabled:opacity-50"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                Delete
-              </button>
-            </div>
+            {selectedIds.size > 0 && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setBatchEdit({ status: '', severity: '', category: '', assigneeEnabled: false, assignee: '', locationEnabled: false, location: '' });
+                    setIsBatchEditOpen(true);
+                  }}
+                  disabled={saving}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/40 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-bold rounded text-[10px] uppercase tracking-wider transition-all disabled:opacity-50"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  Batch Edit
+                </button>
+                <button
+                  onClick={openMergeModal}
+                  disabled={selectedIds.size < 2 || saving}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/40 dark:hover:bg-amber-900/60 text-amber-700 dark:text-amber-300 font-bold rounded text-[10px] uppercase tracking-wider transition-all disabled:opacity-50"
+                >
+                  <GitMerge className="w-3.5 h-3.5" />
+                  Merge
+                </button>
+                <button
+                  onClick={handleDeleteSelected}
+                  disabled={saving}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-100 hover:bg-red-200 dark:bg-red-900/40 dark:hover:bg-red-900/60 text-red-700 dark:text-red-300 font-bold rounded text-[10px] uppercase tracking-wider transition-all disabled:opacity-50"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Delete
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -662,6 +749,143 @@ export function LSTTracker({ selectedSite }: LSTTrackerProps) {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* ── Batch Edit Modal ── */}
+      {isBatchEditOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 animate-in fade-in duration-200" onClick={() => setIsBatchEditOpen(false)}>
+          <div
+            className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md border border-slate-200 dark:border-slate-700"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 rounded-t-xl">
+              <div className="flex items-center gap-2">
+                <Pencil className="w-5 h-5 text-blue-600" />
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
+                  Batch Edit — {selectedIds.size} LST{selectedIds.size > 1 ? 's' : ''}
+                </h3>
+              </div>
+              <button onClick={() => setIsBatchEditOpen(false)} className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg">
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <p className="text-xs text-slate-500 dark:text-slate-400">Fields set to "— No change —" will be left as-is on each selected LST.</p>
+
+              <div className="grid grid-cols-1 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Status</label>
+                  <select
+                    value={batchEdit.status}
+                    onChange={(e) => setBatchEdit(prev => ({ ...prev, status: e.target.value as typeof batchEdit.status }))}
+                    className="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">— No change —</option>
+                    <option value="Identified">Identified</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Resolved">Resolved</option>
+                    <option value="Recurring">Recurring</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Severity</label>
+                  <select
+                    value={batchEdit.severity}
+                    onChange={(e) => setBatchEdit(prev => ({ ...prev, severity: e.target.value as typeof batchEdit.severity }))}
+                    className="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">— No change —</option>
+                    <option value="High">High</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Low">Low</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Category</label>
+                  <select
+                    value={batchEdit.category}
+                    onChange={(e) => setBatchEdit(prev => ({ ...prev, category: e.target.value as typeof batchEdit.category }))}
+                    className="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">— No change —</option>
+                    <option value="Equipment">Equipment</option>
+                    <option value="Process">Process</option>
+                    <option value="Resources">Resources</option>
+                    <option value="Logistics">Logistics</option>
+                  </select>
+                </div>
+
+                <div>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <input
+                      type="checkbox"
+                      id="assigneeEnabled"
+                      checked={batchEdit.assigneeEnabled}
+                      onChange={(e) => setBatchEdit(prev => ({ ...prev, assigneeEnabled: e.target.checked }))}
+                      className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    />
+                    <label htmlFor="assigneeEnabled" className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer">
+                      Change Assignee
+                    </label>
+                  </div>
+                  {batchEdit.assigneeEnabled && (
+                    <input
+                      type="text"
+                      value={batchEdit.assignee}
+                      onChange={(e) => setBatchEdit(prev => ({ ...prev, assignee: e.target.value }))}
+                      placeholder="Enter assignee name (blank to clear)"
+                      className="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-blue-500"
+                    />
+                  )}
+                </div>
+
+                <div>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <input
+                      type="checkbox"
+                      id="locationEnabled"
+                      checked={batchEdit.locationEnabled}
+                      onChange={(e) => setBatchEdit(prev => ({ ...prev, locationEnabled: e.target.checked }))}
+                      className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    />
+                    <label htmlFor="locationEnabled" className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer">
+                      Change Location
+                    </label>
+                  </div>
+                  {batchEdit.locationEnabled && (
+                    <input
+                      type="text"
+                      value={batchEdit.location}
+                      onChange={(e) => setBatchEdit(prev => ({ ...prev, location: e.target.value }))}
+                      placeholder="Enter location (blank to clear)"
+                      className="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-blue-500"
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex gap-3 rounded-b-xl">
+              <button
+                onClick={handleBatchEdit}
+                disabled={saving}
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-lg font-bold text-sm bg-blue-600 hover:bg-blue-700 text-white disabled:bg-slate-300 dark:disabled:bg-slate-700 transition-all shadow-md"
+              >
+                <Save className="w-4 h-4" />
+                {saving ? 'Updating...' : `Apply to ${selectedIds.size} LST${selectedIds.size > 1 ? 's' : ''}`}
+              </button>
+              <button
+                onClick={() => setIsBatchEditOpen(false)}
+                className="px-6 py-3 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 font-bold rounded-lg transition-all text-sm"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
