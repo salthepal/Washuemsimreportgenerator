@@ -85,7 +85,7 @@ lstsRouter.put('/:id', verifyAdmin, async (c) => {
   }
 });
 
-lstsRouter.post('/add', verifyTurnstile, async (c) => {
+lstsRouter.post('/add', verifyAdmin, async (c) => {
   try {
     const rawLst = await c.req.json();
     const parseResult = lstSchema.safeParse(rawLst);
