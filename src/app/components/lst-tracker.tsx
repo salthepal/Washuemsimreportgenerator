@@ -221,13 +221,17 @@ export function LSTTracker({ selectedSite }: LSTTrackerProps) {
       confirmText: 'Delete',
       onConfirm: async () => {
         setSaving(true);
+        const idsToDelete = Array.from(selectedIds);
         try {
-          for (const id of Array.from(selectedIds)) {
-            await deleteLstMutation.mutateAsync(id);
-          }
-          toast.success(`${selectedIds.size} LST${selectedIds.size > 1 ? 's' : ''} deleted`);
+          // Clear selection immediately for instant UI feedback
           setSelectedIds(new Set());
+          
+          // Execute in parallel
+          await Promise.all(idsToDelete.map(id => deleteLstMutation.mutateAsync(id)));
+          
+          toast.success(`${idsToDelete.length} LST${idsToDelete.length > 1 ? 's' : ''} deleted`);
         } catch (error) {
+          console.error('Delete error:', error);
           toast.error('Failed to delete some LSTs');
         } finally {
           setSaving(false);
@@ -243,11 +247,13 @@ export function LSTTracker({ selectedSite }: LSTTrackerProps) {
       toast.error('No changes selected');
       return;
     }
+    const idsToUpdate = Array.from(selectedIds);
     setSaving(true);
     try {
-      for (const id of Array.from(selectedIds)) {
+      setSelectedIds(new Set());
+      await Promise.all(idsToUpdate.map(async (id) => {
         const lst = lsts.find((l: LST) => l.id === id);
-        if (!lst) continue;
+        if (!lst) return;
         const payload: Partial<LST> = { ...lst };
         if (batchEdit.status) payload.status = batchEdit.status;
         if (batchEdit.severity) payload.severity = batchEdit.severity;
@@ -258,12 +264,12 @@ export function LSTTracker({ selectedSite }: LSTTrackerProps) {
           payload.resolvedDate = new Date().toISOString();
         }
         await updateLstMutation.mutateAsync({ id, payload });
-      }
-      toast.success(`Updated ${selectedIds.size} LST${selectedIds.size > 1 ? 's' : ''}`);
+      }));
+      toast.success(`Updated ${idsToUpdate.length} LST${idsToUpdate.length > 1 ? 's' : ''}`);
       setIsBatchEditOpen(false);
       setBatchEdit({ status: '', severity: '', category: '', assigneeEnabled: false, assignee: '', locationEnabled: false, location: '' });
-      setSelectedIds(new Set());
     } catch (error) {
+      console.error('Batch update error:', error);
       toast.error('Failed to update some LSTs');
     } finally {
       setSaving(false);

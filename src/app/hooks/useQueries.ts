@@ -34,7 +34,20 @@ export function useUpdateLST() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, payload }: { id: string, payload: Partial<LST> }) => updateLst(id, payload),
-    onSuccess: () => {
+    onMutate: async ({ id, payload }) => {
+      await queryClient.cancelQueries({ queryKey: ['lsts'] });
+      const previousLsts = queryClient.getQueryData(['lsts']);
+      queryClient.setQueryData(['lsts'], (old: LST[] | undefined) => 
+        old ? old.map(l => l.id === id ? { ...l, ...payload } : l) : []
+      );
+      return { previousLsts };
+    },
+    onError: (err, variables, context) => {
+      if (context?.previousLsts) {
+        queryClient.setQueryData(['lsts'], context.previousLsts);
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['lsts'] });
     },
   });
@@ -54,7 +67,20 @@ export function useDeleteLST() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteLst(id),
-    onSuccess: () => {
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ['lsts'] });
+      const previousLsts = queryClient.getQueryData(['lsts']);
+      queryClient.setQueryData(['lsts'], (old: LST[] | undefined) => 
+        old ? old.filter(l => l.id !== id) : []
+      );
+      return { previousLsts };
+    },
+    onError: (err, id, context) => {
+      if (context?.previousLsts) {
+        queryClient.setQueryData(['lsts'], context.previousLsts);
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['lsts'] });
     },
   });
@@ -64,7 +90,20 @@ export function useMergeLSTs() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ ids, mergedLST }: { ids: string[], mergedLST: Partial<LST> }) => mergeLsts(ids, mergedLST),
-    onSuccess: () => {
+    onMutate: async ({ ids }) => {
+      await queryClient.cancelQueries({ queryKey: ['lsts'] });
+      const previousLsts = queryClient.getQueryData(['lsts']);
+      queryClient.setQueryData(['lsts'], (old: LST[] | undefined) => 
+        old ? old.filter(l => !ids.includes(l.id)) : []
+      );
+      return { previousLsts };
+    },
+    onError: (err, variables, context) => {
+      if (context?.previousLsts) {
+        queryClient.setQueryData(['lsts'], context.previousLsts);
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['lsts'] });
     },
   });
