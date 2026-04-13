@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Report, SessionNote, CaseFile } from '../types';
 import { API_BASE, getApiHeaders, updateReport, updateNote } from '../api';
 import { ReportViewer } from './report-viewer';
