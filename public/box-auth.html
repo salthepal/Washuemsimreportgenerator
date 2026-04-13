@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Box Authentication Callback</title>
+</head>
+<body>
+    <p>Authenticating with Box...</p>
+    <script>
+        // Box implicit grant returns the access token in the URL hash
+        if (window.location.hash.includes('access_token')) {
+            // Remove the leading '#' so URLSearchParams can parse it
+            const hashString = window.location.hash.substring(1);
+            const params = new URLSearchParams(hashString);
+            const token = params.get('access_token');
+            
+            if (token && window.opener) {
+                // Send the token back to the main React application window securely
+                window.opener.postMessage(
+                    { type: 'BOX_AUTH_SUCCESS', token: token }, 
+                    window.location.origin
+                );
+                // Close the popup window
+                window.close();
+            }
+        } else {
+            document.body.innerHTML = '<p>Authentication failed. You can close this window.</p>';
+        }
+    </script>
+</body>
+</html>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Sparkles, CheckCircle2, AlertCircle, Download, Copy, Lightbulb, Target, FolderOpen, Search, Edit3, FileText } from 'lucide-react';
+import { Sparkles, CheckCircle2, AlertCircle, Download, Copy, Lightbulb, Target, FolderOpen, Search, Edit3, FileText, UploadCloud, X, Image as ImageIcon } from 'lucide-react';
 import { Report, SessionNote, CaseFile } from '../types';
 import { API_BASE, getApiHeaders, streamGenerateReport } from '../api';
 import { toast } from 'sonner';
@@ -11,6 +11,7 @@ import jsPDF from 'jspdf';
 import { useReports, useNotes, useCaseFiles } from '../hooks/useQueries';
 import { Turnstile } from './ui/turnstile';
 import { LayoutGrid, Cpu } from 'lucide-react';
+import { compressImage } from '../../utils/image';
 
 interface GenerateReportProps {
   selectedSite?: string;
@@ -30,6 +31,11 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
   const [selectedModel, setSelectedModel] = useState<string>('gemini-flash-latest');
   const [loadingModel, setLoadingModel] = useState(false);
   
+  // Media Attachments & Box Integration
+  const [attachedImages, setAttachedImages] = useState<string[]>([]);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [boxToken, setBoxToken] = useState<string | null>(null);
+  
   // Draft Persistence: Use localStorage to persist generated report
   const [generatedReport, setGeneratedReport] = useLocalStorage<string | null>('generatedReportDraft', null);
   
@@ -46,6 +52,19 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
   // Filtered lists based on search — useEffect to decouple from render cycle
   const [filteredReports, setFilteredReports] = useState<Report[]>(reports);
   const [filteredNotes, setFilteredNotes] = useState<SessionNote[]>(sessionNotes);
+
+  // Box Auth Callback Listener
+  useEffect(() => {
+    const handleMessage = (e: MessageEvent) => {
+      if (e.origin !== window.location.origin) return;
+      if (e.data?.type === 'BOX_AUTH_SUCCESS' && e.data.token) {
+         setBoxToken(e.data.token);
+         toast.success('Successfully linked to Box');
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
 
   useEffect(() => {
     if (!debouncedReportSearch) {
@@ -145,6 +164,65 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
     }
   };
 
+  // Box Picker Initialization
+  useEffect(() => {
+    if (!boxToken) return;
+    const BoxPicker = (window as any).Box?.FilePicker;
+    if (!BoxPicker) return;
+    const picker = new BoxPicker();
+    picker.show('0', boxToken, {
+        container: '.box-picker-wrapper',
+        maxSelectable: 10,
+        canUpload: false,
+        extensions: ['jpg', 'jpeg', 'png', 'webp', 'heic'],
+        logoUrl: 'box'
+    });
+    
+    picker.addListener('choose', async (items: any[]) => {
+        setBoxToken(null); // Hide picker on selection
+        setUploadingImage(true);
+        try {
+          const newUrls = [];
+          for (const item of items) {
+            if (item.type !== 'file') continue;
+            const res = await fetch(`https://api.box.com/2.0/files/${item.id}/content`, {
+                headers: { Authorization: `Bearer ${boxToken}` }
+            });
+            if (!res.ok) {
+              toast.error(`Failed to download ${item.name} from Box`);
+              continue;
+            }
+            const blob = await res.blob();
+            const file = new File([blob], item.name, { type: blob.type });
+            const compressed = await compressImage(file);
+            
+            const formData = new FormData();
+            formData.append('file', compressed);
+            formData.append('turnstileToken', turnstileToken || '');
+            
+            const uploadRes = await fetch(`${API_BASE}/upload-file`, {
+              method: 'POST',
+              body: formData
+            });
+            
+            if (uploadRes.ok) {
+              const data = await uploadRes.json();
+              newUrls.push(`${API_BASE}${data.url}`);
+            }
+          }
+          setAttachedImages(prev => [...prev, ...newUrls]);
+          if (newUrls.length > 0) toast.success(`Attached ${newUrls.length} images from Box`);
+        } catch (err) {
+           console.error(err);
+           toast.error('Error importing from Box');
+        } finally {
+          setUploadingImage(false);
+        }
+    });
+    
+    return () => { picker.hide(); };
+  }, [boxToken, turnstileToken]);
+
   const handleGenerate = async () => {
     if (reportSelection.selected.length === 0) {
       toast.error('Please select at least one prior report for style reference');
@@ -175,6 +253,13 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
       
       for await (const chunk of stream) {
         fullContent += chunk;
+        setGeneratedReport(fullContent);
+      }
+
+      // Append images if there are any
+      if (attachedImages.length > 0) {
+        const imageMarkdown = '\n\n### Session Photos\n\n' + attachedImages.map(url => `![Session Photo](${url})`).join('\n\n');
+        fullContent += imageMarkdown;
         setGeneratedReport(fullContent);
       }
 
@@ -237,22 +322,69 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
       const margin = 20;
       const maxWidth = pageWidth - (margin * 2);
       
-      // Split text into lines that fit the page width
-      const lines = doc.splitTextToSize(generatedReport, maxWidth);
+      // Split text by actual newlines to process paragraphs and images independently
+      const rawLines = generatedReport.split('\n');
       
-      // Add text to PDF with pagination
       let y = margin;
       const lineHeight = 7;
-      
       doc.setFontSize(11);
       
-      for (let i = 0; i < lines.length; i++) {
-        if (y + lineHeight > pageHeight - margin) {
-          doc.addPage();
-          y = margin;
+      for (let i = 0; i < rawLines.length; i++) {
+        const rawLine = rawLines[i].trim();
+        if (!rawLine) {
+          y += lineHeight;
+          continue;
         }
-        doc.text(lines[i], margin, y);
-        y += lineHeight;
+
+        // Check if paragraph is an image
+        if (rawLine.match(/^!\[.*?\]\((.*?)\)$/)) {
+          const match = rawLine.match(/^!\[.*?\]\((.*?)\)$/);
+          const url = match ? match[1] : null;
+
+          if (url) {
+            try {
+              // Fetch and convert image to base64
+              const response = await fetch(url);
+              const blob = await response.blob();
+              const base64 = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result as string);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+              });
+
+              // Assuming standard width of 120 and height of 90 (4:3 ratio) for the PDF
+              const imgWidth = 120;
+              const imgHeight = 90;
+              
+              // Add a new page if the image would bleed off the bottom
+              if (y + imgHeight + margin > pageHeight - margin) {
+                doc.addPage();
+                y = margin;
+              }
+
+              doc.addImage(base64, 'JPEG', margin, y, imgWidth, imgHeight);
+              y += imgHeight + 10; // Add padding below image
+            } catch (err) {
+              console.warn("PDF Image Load Failed:", url);
+              doc.text(`[Image unable to load: ${url}]`, margin, y);
+              y += lineHeight;
+            }
+          }
+          continue;
+        }
+
+        // If not an image, safely wrap the text string to fit the page width
+        const wrappedLines = doc.splitTextToSize(rawLine, maxWidth);
+        
+        for (let j = 0; j < wrappedLines.length; j++) {
+          if (y + lineHeight > pageHeight - margin) {
+            doc.addPage();
+            y = margin;
+          }
+          doc.text(wrappedLines[j], margin, y);
+          y += lineHeight;
+        }
       }
       
       doc.save(`post-session-report-${new Date().toISOString().split('T')[0]}.pdf`);
@@ -489,6 +621,139 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
               </div>
             </div>
           )}
+
+          {/* Media Attachments Zone */}
+          <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-5 border border-slate-200 dark:border-slate-700">
+            <div className="flex items-start gap-3 mb-4">
+              <ImageIcon className="w-6 h-6 text-indigo-600 dark:text-indigo-400 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="font-semibold text-slate-900 dark:text-slate-100 flex items-center justify-between">
+                  <span>Session Photos (Optional)</span>
+                  <span className="text-sm font-normal text-slate-600 dark:text-slate-400">
+                    {attachedImages.length} attached
+                  </span>
+                </h3>
+                <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                  Upload photos of the simulation to be appended to the end of the report, or import them directly from your WashU Box account.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium disabled:bg-blue-400"
+                disabled={uploadingImage}
+                onClick={() => {
+                  const clientId = 'ejgxkpscehlcd3kkre9u1s2x7t6mip6n';
+                  const redirectUri = encodeURIComponent(`${window.location.origin}/box-auth.html`);
+                  const authUrl = `https://account.box.com/api/oauth2/authorize?response_type=token&client_id=${clientId}&redirect_uri=${redirectUri}`;
+                  window.open(authUrl, 'BoxAuth', 'width=500,height=600');
+                }}
+              >
+                Import from Box
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {boxToken && (
+                <div className="p-4 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div className="flex justify-between items-center mb-3">
+                    <h4 className="font-semibold text-sm">Select files from Box</h4>
+                    <button onClick={() => setBoxToken(null)} className="text-xs text-red-500 hover:text-red-700">Cancel</button>
+                  </div>
+                  <div className="box-picker-wrapper h-[400px] w-full border rounded"></div>
+                </div>
+              )}
+
+              {attachedImages.length > 0 && (                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                  {attachedImages.map((url, idx) => (
+                    <div key={idx} className="relative aspect-square rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden group">
+                      <img src={url} alt={`Attachment ${idx + 1}`} className="w-full h-full object-cover" />
+                      <button
+                        onClick={() => setAttachedImages(prev => prev.filter((_, i) => i !== idx))}
+                        className="absolute top-1 right-1 p-1 bg-black/50 hover:bg-red-600 text-white rounded-full transition-colors opacity-0 group-hover:opacity-100"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <label className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
+                uploadingImage 
+                  ? 'bg-slate-100 dark:bg-slate-800 border-slate-400 dark:border-slate-600'
+                  : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 hover:border-indigo-400 dark:hover:border-indigo-500'
+              }`}>
+                <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                  {uploadingImage ? (
+                    <div className="flex flex-col items-center">
+                      <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-2" />
+                      <p className="text-sm text-slate-500 dark:text-slate-400">Compressing & Uploading...</p>
+                    </div>
+                  ) : (
+                    <>
+                      <UploadCloud className="w-8 h-8 mb-3 text-slate-400" />
+                      <p className="mb-2 text-sm text-slate-500 dark:text-slate-400">
+                        <span className="font-semibold text-indigo-600 dark:text-indigo-400">Click to upload</span> or drag and drop
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">SVG, PNG, JPG or WEBP</p>
+                    </>
+                  )}
+                </div>
+                <input 
+                  type="file" 
+                  className="hidden" 
+                  accept="image/*"
+                  multiple
+                  disabled={uploadingImage}
+                  onChange={async (e) => {
+                    const files = e.target.files;
+                    if (!files || files.length === 0) return;
+                    
+                    setUploadingImage(true);
+                    try {
+                      const newUrls = [];
+                      for (let i = 0; i < files.length; i++) {
+                        // 1. Compress image in browser
+                        const compressed = await compressImage(files[i]);
+                        
+                        // 2. Upload to Cloudflare worker
+                        const formData = new FormData();
+                        formData.append('file', compressed);
+                        formData.append('turnstileToken', turnstileToken || '');
+                        
+                        const response = await fetch(`${API_BASE}/upload-file`, {
+                          method: 'POST',
+                          body: formData
+                        });
+                        
+                        if (response.ok) {
+                          const data = await response.json();
+                          // Construct full URL using our custom R2.dev domain or worker route
+                          // The endpoint returns url: '/files/xyz'
+                          const fileUrl = `${API_BASE}${data.url}`;
+                          newUrls.push(fileUrl);
+                        } else {
+                          toast.error(`Failed to upload ${files[i].name}`);
+                        }
+                      }
+                      
+                      setAttachedImages(prev => [...prev, ...newUrls]);
+                      if (newUrls.length > 0) {
+                        toast.success(`Successfully attached ${newUrls.length} image(s)`);
+                      }
+                    } catch (err) {
+                      console.error('Upload error:', err);
+                      toast.error('An error occurred during upload');
+                    } finally {
+                      setUploadingImage(false);
+                      // Clear the input
+                      e.target.value = '';
+                    }
+                  }}
+                />
+              </label>
+            </div>
+          </div>
 
           {/* Generate Button */}
           <div className="space-y-3">

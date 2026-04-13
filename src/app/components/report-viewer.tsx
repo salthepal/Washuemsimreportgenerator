@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Download, Eye, X, Edit, Save, CheckCircle, XCircle, Tag as TagIcon } from 'lucide-react';
 import { Report, API_BASE, getApiHeaders } from '../App';
 import { toast } from 'sonner';
-import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
+import { downloadDocxFromMarkdown } from '../utils/docx';
 
 interface ReportViewerProps {
   report: Report;
@@ -63,99 +63,9 @@ export function ReportViewer({ report, onClose, onUpdate }: ReportViewerProps) {
     setDownloading(true);
     try {
       const content = editedContent || report.content;
-      const lines = content.split('\n');
-      const children: any[] = [];
-
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
-        
-        if (!line) {
-          children.push(new Paragraph({ text: '' }));
-          continue;
-        }
-
-        if (line === line.toUpperCase() && line.length > 3 && line.length < 100) {
-          children.push(
-            new Paragraph({
-              text: line,
-              heading: HeadingLevel.HEADING_1,
-              spacing: { before: 240, after: 120 },
-            })
-          );
-        } else if (line.endsWith(':') && !line.includes('  ')) {
-          children.push(
-            new Paragraph({
-              text: line,
-              heading: HeadingLevel.HEADING_2,
-              spacing: { before: 200, after: 100 },
-            })
-          );
-        } else if (line.match(/^[•\-\*]\s+/)) {
-          children.push(
-            new Paragraph({
-              text: line.replace(/^[•\-\*]\s+/, ''),
-              bullet: { level: 0 },
-            })
-          );
-        } else if (line.match(/^\d+[\.\)]\s+/)) {
-          children.push(
-            new Paragraph({
-              text: line.replace(/^\d+[\.\)]\s+/, ''),
-              numbering: { reference: 'default-numbering', level: 0 },
-            })
-          );
-        } else {
-          children.push(
-            new Paragraph({
-              children: [new TextRun(line)],
-              spacing: { after: 120 },
-            })
-          );
-        }
-      }
-
-      const doc = new Document({
-        numbering: {
-          config: [
-            {
-              reference: 'default-numbering',
-              levels: [
-                {
-                  level: 0,
-                  format: 'decimal',
-                  text: '%1.',
-                  alignment: 'start',
-                },
-              ],
-            },
-          ],
-        },
-        sections: [
-          {
-            properties: {
-              page: {
-                margin: {
-                  top: 1440,
-                  right: 1440,
-                  bottom: 1440,
-                  left: 1440,
-                },
-              },
-            },
-            children,
-          },
-        ],
+      await downloadDocxFromMarkdown(content, {
+        filename: `${report.title.replace(/[^a-z0-9]/gi, '_')}.docx`,
       });
-
-      const blob = await Packer.toBlob(doc);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${report.title.replace(/[^a-z0-9]/gi, '_')}.docx`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
       toast.success('Report downloaded as DOCX');
     } catch (error) {
       console.error('Error generating DOCX:', error);

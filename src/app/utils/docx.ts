@@ -2,7 +2,7 @@
  * DOCX generation utilities
  * Converts Markdown-formatted text to properly structured Word documents
  */
-import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, ImageRun } from 'docx';
 
 export interface DocxGenerationOptions {
   filename?: string;
@@ -52,7 +52,7 @@ function parseInlineFormatting(text: string): TextRun[] {
 /**
  * Converts Markdown-formatted text to DOCX paragraphs
  */
-function markdownToDocxParagraphs(markdown: string): Paragraph[] {
+async function markdownToDocxParagraphs(markdown: string): Promise<Paragraph[]> {
   const lines = markdown.split('\n');
   const children: Paragraph[] = [];
   let currentFindingLevel = 0; // Track if we're in a ### subsection for indentation
@@ -121,6 +121,34 @@ function markdownToDocxParagraphs(markdown: string): Paragraph[] {
         })
       );
     }
+    // Image tags ![alt](url)
+    else if (trimmedLine.match(/^!\[.*?\]\((.*?)\)$/)) {
+      const match = trimmedLine.match(/^!\[.*?\]\((.*?)\)$/);
+      const url = match ? match[1] : null;
+      if (url) {
+        try {
+          const response = await fetch(url);
+          const arrayBuffer = await response.arrayBuffer();
+          children.push(
+            new Paragraph({
+              children: [
+                new ImageRun({
+                  data: arrayBuffer,
+                  transformation: {
+                    width: 500,
+                    height: 350, // Scaled roughly 4:3 for typical session photos
+                  },
+                }),
+              ],
+              spacing: { before: 120, after: 120 },
+            })
+          );
+        } catch (err) {
+          console.warn("Failed to embed image in DOCX:", url);
+          children.push(new Paragraph({ text: `[Image unable to load: ${url}]`, italics: true }));
+        }
+      }
+    }
     // Regular paragraphs with inline formatting
     else {
       const textRuns = parseInlineFormatting(trimmedLine);
@@ -148,7 +176,7 @@ export async function generateDocxFromMarkdown(
   markdown: string, 
   options: DocxGenerationOptions = {}
 ): Promise<Blob> {
-  const paragraphs = markdownToDocxParagraphs(markdown);
+  const paragraphs = await markdownToDocxParagraphs(markdown);
   
   const doc = new Document({
     numbering: {

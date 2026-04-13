@@ -21,6 +21,7 @@ export interface Report {
     facilitators?: string[];
     observers?: string[];
     relatedReports?: string[];
+    images?: string[];
   };
 }
 
