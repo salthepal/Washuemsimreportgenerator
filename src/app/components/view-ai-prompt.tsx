@@ -21,6 +21,7 @@ export function ViewAIPrompt() {
     try {
       const response = await fetch(`${API_BASE}/prompt-template`, {
         headers: getApiHeaders(),
+        cache: 'no-store',
       });
 
       if (response.ok) {
@@ -43,6 +44,7 @@ export function ViewAIPrompt() {
     try {
       const response = await fetch(`${API_BASE}/model-preference`, {
         headers: getApiHeaders(),
+        cache: 'no-store',
       });
 
       if (response.ok) {
