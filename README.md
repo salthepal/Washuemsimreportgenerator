@@ -1,6 +1,6 @@
 # WashU Sim Intelligence
 
-**WashU Sim Intelligence** (v3.5.0) is a simulation-driven Safety & Learning Intelligence System developed for the **Washington University School of Medicine, Department of Emergency Medicine**.
+**WashU Sim Intelligence** (v3.6.0) is a simulation-driven Safety & Learning Intelligence System developed for the **Washington University School of Medicine, Department of Emergency Medicine**.
 
 The platform streamlines the transition from high-fidelity clinical simulations to actionable safety insights by automating report generation, providing instant RAG-powered clinical search, and tracking system-level vulnerabilities.
 
@@ -17,6 +17,9 @@ WashU Sim Intelligence is specialized for clinical simulation programs, prioriti
 *   **⚡ AI-Powered Synthesis**: Generate professional simulation reports using models tailored to clinical safety and "Just Culture" frameworks.
 *   **🏥 LST Audit Tracking**: Centralized site-specific management of **Latent Safety Threats** (LSTs) with automated AI scoring and revision history.
 *   **📦 Continuous Indexing**: Auto-mirrors all reports to **Cloudflare R2** as markdown, ensuring the AI Search index is always synchronized with the clinical library.
+*   **📸 Media & Photo Attachments**: Seamlessly attach simulation photos via local upload with automatic high-efficiency **WebP compression**.
+*   **🖼️ Automated Collage Embedding**: Exported DOCX and PDF reports programmatically generate and embed session photo collages directly into the final documents for offline portability.
+*   **🎨 Institutional Branding**: High-contrast dark mode and UI components optimized for the official **WashU Red (#A51417)** and Zinc-charcoal color palette.
 *   **💧 Atomic Hydration**: High-speed edge API that populates all core safety datasets in a single network request.
 
 ---
