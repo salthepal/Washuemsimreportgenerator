@@ -376,55 +376,111 @@ app.post('/ask', rateLimit, async (c) => {
     }
     const { query, stream: doStream } = parseResult.data;
 
-    if (!c.env.AI) {
-      return c.json({ error: 'AI binding not configured' }, 503);
+    if (!c.env.AI || !c.env.VECTORIZE || !c.env.GEMINI_API_KEY) {
+      return c.json({ error: 'AI/VECTORIZE bindings or GEMINI_API_KEY not configured' }, 503);
     }
 
+    // 1. Convert query to vector
+    const aiOutput = await c.env.AI.run('@cf/baai/bge-small-en-v1.5', { text: [query] });
+    const vector = Array.isArray(aiOutput) ? aiOutput[0] : aiOutput.data?.[0];
+    
+    // 2. Search Vectorize
+    const matches = await c.env.VECTORIZE.query(vector, { topK: 5, returnMetadata: true });
+    
+    let contextTexts = '';
+    const sources = matches.matches.map(m => {
+      const title = m.metadata?.title as string || 'Unknown Document';
+      contextTexts += `--- Document: ${title} ---\n`;
+      return { filename: title, score: m.score, excerpt: title.substring(0, 300) };
+    });
+
+    const prompt = `Role: You are an intelligent clinical safety assistant for WashU Emergency Medicine.
+Task: Answer the query accurately and professionally based ONLY on the provided context. If the context lacks the answer, state that you cannot answer based on current documents.
+
+Context:
+${contextTexts}
+
+User Query: ${query}
+`;
+
+    // 3. Generate Answer (Streaming via Gemini)
     if (doStream) {
-      // Streaming response — for the live "typing" effect in the UI
       return streamText(c, async (stream) => {
         try {
-          const result = await c.env.AI.autorag('washu-sim-ssearch').aiSearch({
-            query,
-            rewrite_query: true,
-            max_num_results: 5,
-            ranking_options: { score_threshold: 0.2 },
-            reranking: { enabled: true, model: '@cf/baai/bge-reranker-base' },
-            stream: true,
-          });
+          const geminiRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:streamGenerateContent?key=${c.env.GEMINI_API_KEY}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+            }
+          );
           
-          // Forward the stream chunks to the client
-          for await (const chunk of result as AsyncIterable<any>) {
-            const text = chunk?.response ?? chunk?.text ?? '';
-            if (text) await stream.write(text);
+          if (!geminiRes.ok) {
+            await stream.write(`\n\n[Search Error: Gateway rejected connection]`);
+            return;
+          }
+          
+          // Basic chunk parser to extract text from Server-Sent Events from Google
+          const reader = geminiRes.body?.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+          
+          if (reader) {
+             while (true) {
+               const { value, done } = await reader.read();
+               if (done) break;
+               buffer += decoder.decode(value, { stream: true });
+               
+               // Read JSON array structures (Gemini chunk format)
+               const parts = buffer.split('\n,\n');
+               buffer = parts.pop() || '';
+               for (const part of parts) {
+                  try {
+                    const cleanPart = part.replace(/^\[\n/, '').replace(/\n\]$/, '').trim();
+                    if (!cleanPart) continue;
+                    const chunkData = JSON.parse(cleanPart.startsWith(',') ? cleanPart.substring(1) : cleanPart);
+                    const text = chunkData?.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (text) await stream.write(text);
+                  } catch (e) {}
+               }
+             }
+             // flush buffer
+             try {
+               const cleanPart = buffer.replace(/^\[\n/, '').replace(/\n\]$/, '').trim();
+               if (cleanPart) {
+                 const chunkData = JSON.parse(cleanPart.startsWith(',') ? cleanPart.substring(1) : cleanPart);
+                 const text = chunkData?.candidates?.[0]?.content?.parts?.[0]?.text;
+                 if (text) await stream.write(text);
+               }
+             } catch (e) {}
           }
         } catch (err: any) {
-          await stream.write(`\n\n[AI Search Error: ${err.message}]`);
+          await stream.write(`\n\n[AI Streaming Error: ${err.message}]`);
         }
       });
     } else {
-      // Non-streaming — returns full answer + sources
-      const result = await c.env.AI.autorag('washu-sim-ssearch').aiSearch({
-        query,
-        rewrite_query: true,
-        max_num_results: 5,
-        ranking_options: { score_threshold: 0.2 },
-        reranking: { enabled: true, model: '@cf/baai/bge-reranker-base' },
-        stream: false,
-      });
-
+      // Non-streaming via Gemini
+      const geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${c.env.GEMINI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        }
+      );
+      
+      const data = await geminiRes.json() as any;
+      const answer = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'No answer generated.';
+      
       return c.json({
-        answer: result.response,
-        sources: (result.data || []).map((d: any) => ({
-          filename: d.filename,
-          score: d.score,
-          excerpt: d.content?.[0]?.text?.substring(0, 300) ?? '',
-        })),
-        search_query: result.search_query,
+        answer,
+        sources,
+        search_query: query,
       });
     }
   } catch (error: any) {
-    console.error('[ASK] AI Search error:', error);
+    console.error('[ASK] Search error:', error);
     return c.json({ error: error.message }, 500);
   }
 });

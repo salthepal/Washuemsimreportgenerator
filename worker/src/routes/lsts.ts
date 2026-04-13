@@ -113,7 +113,7 @@ lstsRouter.post('/merge', verifyAdmin, async (c) => {
       return c.json({ error: 'At least 2 IDs required for merge' }, 400);
     }
 
-    const id = `lst_${crypto.randomUUID()}`;
+    const id = mergedLST.id || `lst_${crypto.randomUUID()}`;
     await c.env.DB.prepare(
       'INSERT INTO lsts (id, title, description, recommendation, severity, status, category, location, identified_date, last_seen_date, recurrence_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     ).bind(
@@ -127,12 +127,11 @@ lstsRouter.post('/merge', verifyAdmin, async (c) => {
       mergedLST.location || '',
       mergedLST.identifiedDate || new Date().toISOString(),
       mergedLST.lastSeenDate || new Date().toISOString(),
-      1
+      ids.length
     ).run();
 
-    for (const origId of ids) {
-      await c.env.DB.prepare('DELETE FROM lsts WHERE id = ?').bind(origId).run();
-    }
+    const placeholders = ids.map(() => '?').join(',');
+    await c.env.DB.prepare(`DELETE FROM lsts WHERE id IN (${placeholders})`).bind(...ids).run();
 
     await logAudit(c.env.DB, 'merge', 'lst', `Merged ${ids.length} LSTs into "${mergedLST.title}"`, id);
     return c.json({ success: true, id });
