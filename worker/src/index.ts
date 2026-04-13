@@ -368,7 +368,7 @@ app.get('/files/:path{.+}', async (c) => {
   object.writeHttpMetadata(headers);
   headers.set('etag', object.httpEtag);
 
-  return new Response(object.body, { headers });
+  return c.body(object.body, { headers });
 });
 
 // AI Search (RAG) — Powered by Cloudflare AI Search (AutoRAG)
