@@ -46,8 +46,9 @@ function ChartContainer({
     typeof RechartsPrimitive.ResponsiveContainer
   >["children"];
 }) {
-  const uniqueId = React.useId();
-  const chartId = `chart-${id || uniqueId.replace(/:/g, "")}`;
+  // Sanitize ID to prevent XSS/Injection in style tags
+  const safeId = React.useMemo(() => (id || uniqueId).replace(/[^a-zA-Z0-9-]/g, ""), [id, uniqueId]);
+  const chartId = `chart-${safeId}`;
 
   return (
     <ChartContext.Provider value={{ config }}>
@@ -85,14 +86,15 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
           .map(
             ([theme, prefix]) => `
 ${prefix} [data-chart=${id}] {
-${colorConfig
-  .map(([key, itemConfig]) => {
-    const color =
-      itemConfig.theme?.[theme as keyof typeof itemConfig.theme] ||
-      itemConfig.color;
-    return color ? `  --color-${key}: ${color};` : null;
-  })
-  .join("\n")}
+    ${colorConfig
+      .map(([key, itemConfig]) => {
+        const safeKey = key.replace(/[^a-zA-Z0-9-]/g, "");
+        const color =
+          itemConfig.theme?.[theme as keyof typeof itemConfig.theme] ||
+          itemConfig.color;
+        return color ? `  --color-${safeKey}: ${color};` : null;
+      })
+      .join("\n")}
 }
 `,
           )
