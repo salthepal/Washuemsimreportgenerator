@@ -169,7 +169,7 @@ export function Dashboard({ reports, sessionNotes, generatedReports, lsts, isLoa
           )}
           <input
             type="text"
-            placeholder="Search clinical library — keyword + AI semantic search..."
+            placeholder="Search clinical library"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             className="flex-1 bg-transparent text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 outline-none"
