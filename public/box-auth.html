@@ -35,13 +35,37 @@
             const params = new URLSearchParams(window.location.search || window.location.hash.substring(1));
             const error = params.get('error') || 'unknown_error';
             const description = params.get('error_description') || 'No additional details provided.';
-            
-            statusDiv.innerHTML = `
-                <p class="error">Authentication Failed</p>
-                <p style="font-size: 0.9rem; color: #64748b;">${description}</p>
-                <div class="code">Error Code: ${error}</div>
-                <button onclick="window.close()" style="margin-top: 1.5rem; padding: 0.5rem 1rem; background: #1e293b; color: white; border: none; border-radius: 0.5rem; cursor: pointer;">Close Window</button>
-            `;
+
+            statusDiv.innerHTML = '';
+
+            const title = document.createElement('p');
+            title.className = 'error';
+            title.textContent = 'Authentication Failed';
+
+            const details = document.createElement('p');
+            details.style.fontSize = '0.9rem';
+            details.style.color = '#64748b';
+            details.textContent = description;
+
+            const code = document.createElement('div');
+            code.className = 'code';
+            code.textContent = `Error Code: ${error}`;
+
+            const closeButton = document.createElement('button');
+            closeButton.textContent = 'Close Window';
+            closeButton.style.marginTop = '1.5rem';
+            closeButton.style.padding = '0.5rem 1rem';
+            closeButton.style.background = '#1e293b';
+            closeButton.style.color = 'white';
+            closeButton.style.border = 'none';
+            closeButton.style.borderRadius = '0.5rem';
+            closeButton.style.cursor = 'pointer';
+            closeButton.addEventListener('click', () => window.close());
+
+            statusDiv.appendChild(title);
+            statusDiv.appendChild(details);
+            statusDiv.appendChild(code);
+            statusDiv.appendChild(closeButton);
         }
     </script>
 </body>
