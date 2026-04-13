@@ -19,7 +19,7 @@ export function ViewAIPrompt() {
   const fetchPromptTemplate = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE}/prompt-template`, {
+      const response = await fetch(`${API_BASE}/prompt-template?t=${Date.now()}`, {
         headers: getApiHeaders(),
         cache: 'no-store',
       });
@@ -42,7 +42,7 @@ export function ViewAIPrompt() {
 
   const fetchModelPreference = async () => {
     try {
-      const response = await fetch(`${API_BASE}/model-preference`, {
+      const response = await fetch(`${API_BASE}/model-preference?t=${Date.now()}`, {
         headers: getApiHeaders(),
         cache: 'no-store',
       });
