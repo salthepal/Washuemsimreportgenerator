@@ -359,14 +359,26 @@ app.post('/upload-file', verifyTurnstile, async (c) => {
 });
 
 app.get('/files/:path{.+}', async (c) => {
-  const path = c.req.param('path');
+  const rawPath = c.req.param('path');
+  const path = decodeURIComponent(rawPath);
   const object = await c.env.BUCKET.get(path);
 
-  if (!object) return c.json({ error: 'File not found' }, 404);
+  if (!object) {
+    console.error(`File not found in R2: ${path}`);
+    return c.json({ error: 'File not found' }, 404);
+  }
 
   const headers = new Headers();
   object.writeHttpMetadata(headers);
   headers.set('etag', object.httpEtag);
+  
+  // Ensure we have a valid image content type if R2 metadata is missing
+  if (!headers.has('content-type')) {
+    headers.set('content-type', 'image/webp');
+  }
+
+  // Force allow-origin on direct file access to prevent browser blocking
+  headers.set('Access-Control-Allow-Origin', '*');
 
   return c.body(object.body, { headers });
 });
