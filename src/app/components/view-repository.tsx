@@ -9,7 +9,7 @@ import { useDebounce } from '../hooks/useDebounce';
 import { Skeleton } from './ui/skeleton';
 import { toast } from 'sonner';
 import { formatDate } from '../utils/document';
-import { Edit2 } from 'lucide-react';
+import { Edit2, Users, Sparkles, FileText, ChevronUp, ChevronDown, Calendar, GitCompare, Trash2, Eye, Search, Filter } from 'lucide-react';
 
 interface ViewRepositoryProps {
   reports: Report[];

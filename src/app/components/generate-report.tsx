@@ -53,19 +53,6 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
   const [filteredReports, setFilteredReports] = useState<Report[]>(reports);
   const [filteredNotes, setFilteredNotes] = useState<SessionNote[]>(sessionNotes);
 
-  // Box Auth Callback Listener
-  useEffect(() => {
-    const handleMessage = (e: MessageEvent) => {
-      if (e.origin !== window.location.origin) return;
-      if (e.data?.type === 'BOX_AUTH_SUCCESS' && e.data.token) {
-         setBoxToken(e.data.token);
-         toast.success('Successfully linked to Box');
-      }
-    };
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, []);
-
   useEffect(() => {
     if (!debouncedReportSearch) {
       setFilteredReports(reports);
@@ -163,65 +150,6 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
       toast.error('Failed to sync model selection');
     }
   };
-
-  // Box Picker Initialization
-  useEffect(() => {
-    if (!boxToken) return;
-    const BoxPicker = (window as any).Box?.FilePicker;
-    if (!BoxPicker) return;
-    const picker = new BoxPicker();
-    picker.show('0', boxToken, {
-        container: '.box-picker-wrapper',
-        maxSelectable: 10,
-        canUpload: false,
-        extensions: ['jpg', 'jpeg', 'png', 'webp', 'heic'],
-        logoUrl: 'box'
-    });
-    
-    picker.addListener('choose', async (items: any[]) => {
-        setBoxToken(null); // Hide picker on selection
-        setUploadingImage(true);
-        try {
-          const newUrls = [];
-          for (const item of items) {
-            if (item.type !== 'file') continue;
-            const res = await fetch(`https://api.box.com/2.0/files/${item.id}/content`, {
-                headers: { Authorization: `Bearer ${boxToken}` }
-            });
-            if (!res.ok) {
-              toast.error(`Failed to download ${item.name} from Box`);
-              continue;
-            }
-            const blob = await res.blob();
-            const file = new File([blob], item.name, { type: blob.type });
-            const compressed = await compressImage(file);
-            
-            const formData = new FormData();
-            formData.append('file', compressed);
-            formData.append('turnstileToken', turnstileToken || '');
-            
-            const uploadRes = await fetch(`${API_BASE}/upload-file`, {
-              method: 'POST',
-              body: formData
-            });
-            
-            if (uploadRes.ok) {
-              const data = await uploadRes.json();
-              newUrls.push(`${API_BASE}${data.url}`);
-            }
-          }
-          setAttachedImages(prev => [...prev, ...newUrls]);
-          if (newUrls.length > 0) toast.success(`Attached ${newUrls.length} images from Box`);
-        } catch (err) {
-           console.error(err);
-           toast.error('Error importing from Box');
-        } finally {
-          setUploadingImage(false);
-        }
-    });
-    
-    return () => { picker.hide(); };
-  }, [boxToken, turnstileToken]);
 
   const handleGenerate = async () => {
     if (reportSelection.selected.length === 0) {
@@ -634,36 +562,14 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
                   </span>
                 </h3>
                 <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                  Upload photos of the simulation to be appended to the end of the report, or import them directly from your WashU Box account.
+                  Upload photos of the simulation to be appended to the end of the report. Box support coming soon.
                 </p>
               </div>
-              <button
-                type="button"
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium disabled:bg-blue-400"
-                disabled={uploadingImage}
-                onClick={() => {
-                  const clientId = 'ejgxkpscehlcd3kkre9u1s2x7t6mip6n';
-                  const redirectUri = encodeURIComponent(`${window.location.origin}/box-auth.html`);
-                  const authUrl = `https://account.box.com/api/oauth2/authorize?response_type=token&client_id=${clientId}&redirect_uri=${redirectUri}`;
-                  window.open(authUrl, 'BoxAuth', 'width=500,height=600');
-                }}
-              >
-                Import from Box
-              </button>
             </div>
 
             <div className="space-y-4">
-              {boxToken && (
-                <div className="p-4 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-                  <div className="flex justify-between items-center mb-3">
-                    <h4 className="font-semibold text-sm">Select files from Box</h4>
-                    <button onClick={() => setBoxToken(null)} className="text-xs text-red-500 hover:text-red-700">Cancel</button>
-                  </div>
-                  <div className="box-picker-wrapper h-[400px] w-full border rounded"></div>
-                </div>
-              )}
-
-              {attachedImages.length > 0 && (                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
+              {attachedImages.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
                   {attachedImages.map((url, idx) => (
                     <div key={idx} className="relative aspect-square rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden group">
                       <img src={url} alt={`Attachment ${idx + 1}`} className="w-full h-full object-cover" />
