@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Upload, Trash2, Calendar, Eye, FolderOpen, User, CheckCircle, Save } from 'lucide-react';
-import { API_BASE, getApiHeaders } from '../App';
+import { SessionNote, CaseFile, API_BASE, getApiHeaders, updateCaseFile } from '../api';
 import { toast } from 'sonner';
 import { useConfirmDialog } from './ui/confirm-dialog';
 import { DocumentPreviewModal } from './document-preview-modal';
@@ -10,6 +10,8 @@ import { processDocxFile, formatDate } from '../utils/document';
 import { validateDocxFile } from '../utils/validation';
 import { sanitizeJSON } from '../utils/sanitize';
 import { Turnstile } from './ui/turnstile';
+import { MetadataEditModal } from './metadata-edit-modal';
+import { Edit2 } from 'lucide-react';
 
 export interface CaseFile {
   id: string;
@@ -47,6 +49,8 @@ export function CaseFiles({ caseFiles, onRefresh }: CaseFilesProps) {
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [autoSaving, setAutoSaving] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [editingDoc, setEditingDoc] = useState<CaseFile | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const { confirm, dialog } = useConfirmDialog();
 
   // Auto-save to localStorage
@@ -273,6 +277,18 @@ export function CaseFiles({ caseFiles, onRefresh }: CaseFilesProps) {
     setPreviewOpen(true);
   };
 
+  const handleUpdateMetadata = async (id: string, payload: any) => {
+    try {
+      await updateCaseFile(id, payload);
+      toast.success('Case file metadata updated');
+      setIsEditModalOpen(false);
+      onRefresh();
+    } catch (error) {
+      console.error('Update metadata error:', error);
+      toast.error('Failed to update metadata');
+    }
+  };
+
   return (
     <div className="space-y-4 md:space-y-6 p-2 md:p-0">
       {dialog}
@@ -469,21 +485,43 @@ export function CaseFiles({ caseFiles, onRefresh }: CaseFilesProps) {
                       {caseFile.content.substring(0, 150)}...
                     </p>
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(caseFile.id, caseFile.title);
-                    }}
-                    className="ml-2 text-red-600 hover:text-red-700 p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors flex-shrink-0"
-                  >
-                    <Trash2 className="w-4 h-4 md:w-5 md:h-5" />
-                  </button>
+                  <div className="flex flex-col gap-1">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingDoc(caseFile);
+                        setIsEditModalOpen(true);
+                      }}
+                      className="text-indigo-600 hover:text-indigo-700 p-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors flex-shrink-0"
+                      title="Edit Metadata"
+                    >
+                      <Edit2 className="w-4 h-4 md:w-5 md:h-5" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(caseFile.id, caseFile.title);
+                      }}
+                      className="text-red-600 hover:text-red-700 p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors flex-shrink-0"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-4 h-4 md:w-5 md:h-5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))
           )}
         </div>
       </div>
+      {/* Metadata Edit Modal */}
+      <MetadataEditModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        onSave={handleUpdateMetadata}
+        document={editingDoc as any}
+        type="case"
+      />
     </div>
   );
 }

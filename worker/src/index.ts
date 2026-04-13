@@ -862,6 +862,29 @@ app.delete('/reports/:id', verifyAdmin, async (c) => {
   }
 });
 
+app.put('/reports/:id', verifyAdmin, async (c) => {
+  try {
+    const id = c.req.param('id');
+    const { title, created_at, type, metadata } = await c.req.json();
+    
+    await c.env.DB.prepare(`
+      UPDATE reports SET 
+        title = COALESCE(?, title),
+        created_at = COALESCE(?, created_at),
+        type = COALESCE(?, type),
+        metadata = COALESCE(?, metadata)
+      WHERE id = ?
+    `)
+    .bind(title, created_at, type, metadata ? JSON.stringify(metadata) : null, id)
+    .run();
+
+    await logAudit(c.env.DB, 'update', 'report', `Updated report ${title || id}`, id);
+    return c.json({ success: true });
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500);
+  }
+});
+
 // Prompt Template (Official WashU EM Simulation Version)
 const PROMPT_TEMPLATE = `Role: You are an expert Medical Simulation Specialist and Education Consultant for the Washington University Department of Emergency Medicine. Your goal is to generate professional, actionable Post-Session Reports that prioritize psychological safety and a "Just Culture" framework.
 
@@ -1022,6 +1045,29 @@ app.delete('/case-files/:id', verifyAdmin, async (c) => {
     }
     
     await logAudit(c.env.DB, 'delete', 'case_file', `Deleted case file ${id}`, id);
+    return c.json({ success: true });
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+app.put('/case-files/:id', verifyAdmin, async (c) => {
+  try {
+    const id = c.req.param('id');
+    const { title, date, uploader_name, case_type } = await c.req.json();
+    
+    await c.env.DB.prepare(`
+      UPDATE case_files SET 
+        title = COALESCE(?, title),
+        date = COALESCE(?, date),
+        uploader_name = COALESCE(?, uploader_name),
+        case_type = COALESCE(?, case_type)
+      WHERE id = ?
+    `)
+    .bind(title, date, uploader_name, case_type, id)
+    .run();
+
+    await logAudit(c.env.DB, 'update', 'case_file', `Updated case file ${title || id}`, id);
     return c.json({ success: true });
   } catch (error: any) {
     return c.json({ error: error.message }, 500);

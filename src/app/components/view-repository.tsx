@@ -1,13 +1,14 @@
-import { useState, useMemo, useEffect } from 'react';
-import { FileText, Calendar, Users, Sparkles, ChevronDown, ChevronUp, Eye, Trash2, Search, Filter, Download, X, GitCompare, CheckCircle2 } from 'lucide-react';
-import { Report, SessionNote, API_BASE, getApiHeaders } from '../App';
+import { Report, SessionNote, CaseFile } from '../types';
+import { API_BASE, getApiHeaders, updateReport, updateNote } from '../api';
 import { ReportViewer } from './report-viewer';
 import { ComparisonView } from './comparison-view';
 import { BulkExportModal } from './bulk-export-modal';
+import { MetadataEditModal } from './metadata-edit-modal';
 import { useDebounce } from '../hooks/useDebounce';
 import { Skeleton } from './ui/skeleton';
 import { toast } from 'sonner';
 import { formatDate } from '../utils/document';
+import { Edit2 } from 'lucide-react';
 
 interface ViewRepositoryProps {
   reports: Report[];
@@ -50,6 +51,9 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
   const [showBulkExport, setShowBulkExport] = useState(false);
   const [comparingReports, setComparingReports] = useState<Report[]>([]);
   const [hybridResults, setHybridResults] = useState<any[] | null>(null);
+  const [editingDoc, setEditingDoc] = useState<Report | SessionNote | CaseFile | null>(null);
+  const [editingType, setEditingType] = useState<'report' | 'note' | 'case'>('report');
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   useEffect(() => {
     const performSearch = async () => {
@@ -202,6 +206,21 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
     } else {
       setComparingReports(prev => [...prev, report]);
       toast.success('Added to comparison');
+    }
+  };
+
+  const handleUpdateMetadata = async (id: string, payload: any) => {
+    try {
+      if (editingType === 'report' || editingType === 'case') {
+        await updateReport(id, payload);
+      } else if (editingType === 'note') {
+        await updateNote(id, payload);
+      }
+      toast.success('Metadata updated successfully');
+      setIsEditModalOpen(false);
+      onRefresh();
+    } catch (error) {
+      toast.error('Failed to update metadata');
     }
   };
 
@@ -573,6 +592,17 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
                         <Trash2 className="w-4 h-4" />
                         Delete
                       </button>
+                      <button
+                        onClick={() => {
+                          setEditingDoc(report);
+                          setEditingType('report');
+                          setIsEditModalOpen(true);
+                        }}
+                        className="bg-indigo-100 dark:bg-indigo-900/30 hover:bg-indigo-200 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                        Edit Metadata
+                      </button>
                     </div>
                     <pre className="whitespace-pre-wrap font-sans text-sm text-slate-800 dark:text-slate-200 leading-relaxed max-h-96 overflow-y-auto">
                       {report.content.substring(0, 500)}...
@@ -680,6 +710,17 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
                         <Trash2 className="w-4 h-4" />
                         Delete
                       </button>
+                      <button
+                        onClick={() => {
+                          setEditingDoc(report);
+                          setEditingType('report');
+                          setIsEditModalOpen(true);
+                        }}
+                        className="bg-indigo-100 dark:bg-indigo-900/30 hover:bg-indigo-200 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                        Edit Metadata
+                      </button>
                     </div>
                     <pre className="whitespace-pre-wrap font-sans text-sm text-slate-800 dark:text-slate-200 leading-relaxed">
                       {report.content}
@@ -778,6 +819,17 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
                       <Trash2 className="w-4 h-4" />
                       Delete
                     </button>
+                    <button
+                      onClick={() => {
+                        setEditingDoc(note);
+                        setEditingType('note');
+                        setIsEditModalOpen(true);
+                      }}
+                      className="mb-3 bg-indigo-100 dark:bg-indigo-900/30 hover:bg-indigo-200 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                      Edit Metadata
+                    </button>
                     <pre className="whitespace-pre-wrap font-sans text-sm text-slate-800 dark:text-slate-200 leading-relaxed">
                       {note.notes}
                     </pre>
@@ -806,6 +858,14 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
           onClose={() => setShowBulkExport(false)}
         />
       )}
+      {/* Metadata Edit Modal */}
+      <MetadataEditModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        onSave={handleUpdateMetadata}
+        document={editingDoc}
+        type={editingType}
+      />
       </>
       )}
     </div>

@@ -62,6 +62,36 @@ export async function fetchCaseFiles(): Promise<CaseFile[]> {
   return Array.isArray(data) ? data : (data.caseFiles || []);
 }
 
+export async function updateReport(id: string, payload: Partial<Report>): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE}/reports/${id}`, {
+    method: 'PUT',
+    headers: getApiHeaders(),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error('Failed to update report');
+  return res.json();
+}
+
+export async function updateCaseFile(id: string, payload: Partial<CaseFile>): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE}/case-files/${id}`, {
+    method: 'PUT',
+    headers: getApiHeaders(),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error('Failed to update case file');
+  return res.json();
+}
+
+export async function updateNote(id: string, payload: Partial<SessionNote>): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE}/notes/${id}`, {
+    method: 'PUT',
+    headers: getApiHeaders(),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error('Failed to update note');
+  return res.json();
+}
+
 export async function fetchLSTs(): Promise<LST[]> {
   const res = await fetch(`${API_BASE}/lsts`, { headers: getApiHeaders() });
   if (!res.ok) throw new Error('Failed to fetch LSTs');

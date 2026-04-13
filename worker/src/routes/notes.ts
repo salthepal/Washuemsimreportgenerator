@@ -71,3 +71,34 @@ notesRouter.delete('/:id', verifyAdmin, async (c) => {
     return c.json({ error: error.message }, 500);
   }
 });
+
+notesRouter.put('/:id', verifyAdmin, async (c) => {
+  try {
+    const id = c.req.param('id');
+    const { sessionName, created_at, participants, tags, metadata } = await c.req.json();
+    
+    await c.env.DB.prepare(`
+      UPDATE session_notes SET 
+        session_name = COALESCE(?, session_name),
+        created_at = COALESCE(?, created_at),
+        participants = COALESCE(?, participants),
+        tags = COALESCE(?, tags),
+        metadata = COALESCE(?, metadata)
+      WHERE id = ?
+    `)
+    .bind(
+      sessionName, 
+      created_at, 
+      participants ? JSON.stringify(participants) : null,
+      tags ? JSON.stringify(tags) : null,
+      metadata ? JSON.stringify(metadata) : null,
+      id
+    )
+    .run();
+
+    await logAudit(c.env.DB, 'update', 'session_notes', `Updated note ${sessionName || id}`, id);
+    return c.json({ success: true });
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500);
+  }
+});

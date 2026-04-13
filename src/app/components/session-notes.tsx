@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Trash2, Users, Calendar, User, Save, Eye } from 'lucide-react';
-import { SessionNote, API_BASE, getApiHeaders } from '../App';
+import { Plus, Trash2, Users, Calendar, User, Save, Eye, Edit2 } from 'lucide-react';
+import { SessionNote, API_BASE, getApiHeaders, updateNote } from '../api';
 import { toast } from 'sonner';
 import { useConfirmDialog } from './ui/confirm-dialog';
 import { DocumentPreviewModal } from './document-preview-modal';
@@ -10,6 +10,7 @@ import { sanitizeJSON } from '../utils/sanitize';
 import { validateMinLength } from '../utils/validation';
 import { formatDate } from '../utils/document';
 import { Turnstile } from './ui/turnstile';
+import { MetadataEditModal } from './metadata-edit-modal';
 
 interface SessionNotesProps {
   sessionNotes: SessionNote[];
@@ -30,6 +31,8 @@ export function SessionNotes({ sessionNotes, onRefresh }: SessionNotesProps) {
   const [previewDocument, setPreviewDocument] = useState<SessionNote | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [editingDoc, setEditingDoc] = useState<SessionNote | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const { confirm, dialog } = useConfirmDialog();
 
   // Calculate word and character counts
@@ -195,6 +198,18 @@ export function SessionNotes({ sessionNotes, onRefresh }: SessionNotesProps) {
   const handleManualSave = () => {
     saveToLocalStorage();
     toast.success('Draft saved manually');
+  };
+
+  const handleUpdateMetadata = async (id: string, payload: any) => {
+    try {
+      await updateNote(id, payload);
+      toast.success('Session notes metadata updated');
+      setIsEditModalOpen(false);
+      onRefresh();
+    } catch (error) {
+      console.error('Update metadata error:', error);
+      toast.error('Failed to update metadata');
+    }
   };
 
   return (
@@ -388,6 +403,17 @@ export function SessionNotes({ sessionNotes, onRefresh }: SessionNotesProps) {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
+                          setEditingDoc(note);
+                          setIsEditModalOpen(true);
+                        }}
+                        className="text-indigo-600 hover:text-indigo-700 p-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors flex-shrink-0"
+                        title="Edit Metadata"
+                      >
+                        <Edit2 className="w-4 h-4 md:w-5 md:h-5" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
                           handleDelete(note.id, note.sessionName);
                         }}
                         className="text-red-600 hover:text-red-700 p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors flex-shrink-0"
@@ -403,6 +429,14 @@ export function SessionNotes({ sessionNotes, onRefresh }: SessionNotesProps) {
           )}
         </div>
       </div>
+      {/* Metadata Edit Modal */}
+      <MetadataEditModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        onSave={handleUpdateMetadata}
+        document={editingDoc as any}
+        type="note"
+      />
     </div>
   );
 }

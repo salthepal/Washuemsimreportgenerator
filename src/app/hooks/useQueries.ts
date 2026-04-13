@@ -130,6 +130,40 @@ export function useDeleteReport() {
   });
 }
 
+export function useUpdateReport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string, payload: Partial<Report> }) => updateReport(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reports'] });
+      queryClient.invalidateQueries({ queryKey: ['generatedReports'] });
+      queryClient.invalidateQueries({ queryKey: ['hydration'] });
+    },
+  });
+}
+
+export function useUpdateCaseFile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string, payload: Partial<CaseFile> }) => updateCaseFile(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['caseFiles'] });
+      queryClient.invalidateQueries({ queryKey: ['hydration'] });
+    },
+  });
+}
+
+export function useUpdateNote() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string, payload: Partial<SessionNote> }) => updateNote(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notes'] });
+      queryClient.invalidateQueries({ queryKey: ['hydration'] });
+    },
+  });
+}
+
 export function useErrorLog() {
   return useQuery({ 
     queryKey: ['errorLog'], 

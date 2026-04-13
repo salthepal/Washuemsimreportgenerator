@@ -10,6 +10,7 @@ import { useDebounce } from 'use-debounce';
 import jsPDF from 'jspdf';
 import { useReports, useNotes, useCaseFiles } from '../hooks/useQueries';
 import { Turnstile } from './ui/turnstile';
+import { LayoutGrid, Cpu } from 'lucide-react';
 
 interface GenerateReportProps {
   selectedSite?: string;
@@ -26,6 +27,8 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
   const [generating, setGenerating] = useState(false);
   const [extractLST, setExtractLST] = useState(true);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState<string>('gemini-flash-latest');
+  const [loadingModel, setLoadingModel] = useState(false);
   
   // Draft Persistence: Use localStorage to persist generated report
   const [generatedReport, setGeneratedReport] = useLocalStorage<string | null>('generatedReportDraft', null);
@@ -105,6 +108,42 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
     };
     loadRecommendations();
   }, [noteSelection.selected]);
+
+  // Sync model preference
+  useEffect(() => {
+    const fetchModel = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/model-preference?t=${Date.now()}`, {
+          headers: getApiHeaders(),
+          cache: 'no-store',
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setSelectedModel(data.model);
+        }
+      } catch (e) {
+        console.error('Error fetching model:', e);
+      }
+    };
+    fetchModel();
+  }, []);
+
+  const handleModelChange = async (newModel: string) => {
+    const previousModel = selectedModel;
+    setSelectedModel(newModel);
+    try {
+      const response = await fetch(`${API_BASE}/model-preference`, {
+        method: 'POST',
+        headers: getApiHeaders(),
+        body: JSON.stringify({ model: newModel }),
+      });
+      if (!response.ok) throw new Error();
+      toast.success(`Active logic model: ${newModel.replace('gemini-', '').replace('-latest', '').toUpperCase()}`);
+    } catch (e) {
+      setSelectedModel(previousModel);
+      toast.error('Failed to sync model selection');
+    }
+  };
 
   const handleGenerate = async () => {
     if (reportSelection.selected.length === 0) {
@@ -490,6 +529,37 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
                   <strong>Intelligence Active:</strong> Gemini 3.1 Flash Lite will scan this report for clinical gaps, equipment failures, and process errors.
                 </div>
               )}
+            </div>
+
+            {/* Compact Model Selector */}
+            <div className="bg-white dark:bg-slate-900/50 p-3 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                    <Cpu className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                  </div>
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-tight">Active Engine</span>
+                </div>
+                <div className="flex gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                  {[
+                    { id: 'gemini-flash-lite-latest', label: 'Lite', color: 'bg-green-600 text-white border-green-600', hover: 'hover:bg-green-50 text-green-700' },
+                    { id: 'gemini-flash-latest', label: 'Flash', color: 'bg-blue-600 text-white border-blue-600', hover: 'hover:bg-blue-50 text-blue-700' },
+                    { id: 'gemini-pro-latest', label: 'Pro', color: 'bg-indigo-600 text-white border-indigo-600', hover: 'hover:bg-indigo-50 text-indigo-700' },
+                  ].map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => handleModelChange(m.id)}
+                      className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
+                        selectedModel === m.id
+                          ? `${m.color} shadow-lg shadow-current/20 scale-105`
+                          : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-100'
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
             <Turnstile onVerify={setTurnstileToken} />
