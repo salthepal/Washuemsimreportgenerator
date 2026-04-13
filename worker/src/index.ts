@@ -163,10 +163,16 @@ async function verifyTurnstile(c: any, next: any) {
 
   if (!token) {
     try {
-      const body = await c.req.raw.clone().json();
-      token = body.turnstileToken;
+      const contentType = c.req.header('Content-Type') || '';
+      if (contentType.includes('application/json')) {
+        const body = await c.req.raw.clone().json();
+        token = body.turnstileToken;
+      } else if (contentType.includes('multipart/form-data')) {
+        const formData = await c.req.raw.clone().formData();
+        token = formData.get('turnstileToken') as string;
+      }
     } catch (e) {
-      // Body might not be JSON or might be missing turnstileToken
+      // Body might not be valid or might be missing turnstileToken
     }
   }
 

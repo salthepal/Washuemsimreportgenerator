@@ -629,6 +629,9 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
                         
                         const response = await fetch(`${API_BASE}/upload-file`, {
                           method: 'POST',
+                          headers: {
+                            'X-Turnstile-Token': turnstileToken || '',
+                          },
                           body: formData
                         });
                         
