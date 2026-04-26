@@ -130,6 +130,31 @@ function SiteSelector({ selectedSite, onSiteChange, availableSites, collapsed }:
   );
 }
 
+function SidebarWordmark({ collapsed }: { collapsed: boolean }) {
+  if (collapsed) {
+    return (
+      <div
+        className="w-8 h-8 rounded-md flex items-center justify-center bg-primary flex-shrink-0"
+        role="img"
+        aria-label="WashU Sim Intelligence"
+      >
+        <span className="text-white text-xs font-black tracking-tight" aria-hidden="true">W</span>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2.5">
+      <div className="w-9 h-9 rounded-md flex items-center justify-center bg-primary flex-shrink-0" aria-hidden="true">
+        <span className="text-white text-sm font-black tracking-tight">W</span>
+      </div>
+      <div className="leading-tight font-mono min-w-0">
+        <div className="text-[9px] font-normal text-slate-400 dark:text-slate-500 uppercase tracking-widest">WashU EM</div>
+        <div className="text-[13px] font-semibold text-primary tracking-wide">SIM INTEL</div>
+      </div>
+    </div>
+  );
+}
+
 export function AppSidebar({ collapsed, onCollapsedChange, mobile, open, onClose, selectedSite, onSiteChange, availableSites }: AppSidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -143,6 +168,16 @@ export function AppSidebar({ collapsed, onCollapsedChange, mobile, open, onClose
 
   const sidebarContent = (
     <nav className="flex flex-col gap-1 p-3">
+      {/* Logo / Wordmark header — desktop only; mobile shows it in the drawer header */}
+      {!mobile && (
+        <div className={cn(
+          "flex items-center mb-3 pb-3 border-b border-slate-200 dark:border-slate-700",
+          collapsed ? "justify-center" : "px-1"
+        )}>
+          <SidebarWordmark collapsed={collapsed} />
+        </div>
+      )}
+
       <div className={cn("flex items-center mb-2", collapsed ? "justify-center" : "justify-between px-2")}>
         {!collapsed && <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Navigation</span>}
         {!mobile && (
@@ -177,7 +212,7 @@ export function AppSidebar({ collapsed, onCollapsedChange, mobile, open, onClose
               item.className,
               collapsed && !mobile && 'justify-center px-2',
               isActive
-                ? 'bg-[#A51417] text-white shadow-sm dark:bg-slate-700 dark:text-white'
+                ? 'bg-primary text-white shadow-sm'
                 : 'text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700/50'
             )}
             title={collapsed ? item.label : undefined}
@@ -231,7 +266,7 @@ export function AppSidebar({ collapsed, onCollapsedChange, mobile, open, onClose
           )}
         >
           <div className="p-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-            <span className="font-semibold text-slate-900 dark:text-slate-100 text-sm">Menu</span>
+            <SidebarWordmark collapsed={false} />
             <button onClick={onClose} className="p-1.5 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500">
               <PanelLeftClose className="w-4 h-4" />
             </button>
