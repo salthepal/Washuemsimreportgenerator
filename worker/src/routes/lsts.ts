@@ -24,7 +24,7 @@ const lstSchema = z.object({
 export const lstsRouter = new Hono<{ Bindings: Bindings }>();
 
 // LST Extraction Tracker
-lstsRouter.get('/', async (c) => {
+lstsRouter.get('/', verifyAdmin, async (c) => {
   try {
     const limit = Math.min(Number(c.req.query('limit') || 100), 500);
     const offset = Number(c.req.query('offset') || 0);
@@ -151,7 +151,7 @@ lstsRouter.delete('/:id', verifyAdmin, async (c) => {
   }
 });
 
-lstsRouter.get('/:id/history', async (c) => {
+lstsRouter.get('/:id/history', verifyAdmin, async (c) => {
   try {
     const id = c.req.param('id');
     const { results } = await c.env.DB.prepare('SELECT * FROM lst_history WHERE lst_id = ? ORDER BY created_at DESC')

@@ -38,25 +38,39 @@ Return ONLY a valid JSON array of objects. No preamble.
 Format: [{"title": "...", "description": "...", "recommendation": "...", "severity": "...", "category": "..."}]
 `;
 
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${geminiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
-        }),
+    const lstCtrl = new AbortController();
+    const lstTimeout = setTimeout(() => lstCtrl.abort(), 30_000);
+    let data: any;
+    try {
+      const geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${geminiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
+          }),
+          signal: lstCtrl.signal,
+        }
+      );
+      if (!geminiRes.ok) {
+        const errText = await geminiRes.text();
+        await logError(db, 'AI_LST_FETCH', new Error(`Gemini API returned ${geminiRes.status}: ${errText}`), { reportId });
+        return;
       }
-    );
-
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text();
-      await logError(db, 'AI_LST_FETCH', new Error(`Gemini API returned ${geminiRes.status}: ${errText}`), { reportId });
-      return;
+      data = await geminiRes.json() as any;
+    } finally {
+      clearTimeout(lstTimeout);
     }
-    const data = await geminiRes.json() as any;
-    
+
+    console.log(JSON.stringify({
+      event: 'gemini_call', endpoint: 'extractAndScoreLSTs',
+      finishReason: data?.candidates?.[0]?.finishReason,
+      promptTokens: data?.usageMetadata?.promptTokenCount,
+      completionTokens: data?.usageMetadata?.candidatesTokenCount,
+    }));
+
     if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
       await logError(db, 'AI_LST_PARSE', new Error('Empty Gemini response'), { data, reportId });
       return;
