@@ -1,7 +1,7 @@
 {
   "name": "washu-em-sim-safety-intelligence",
   "private": true,
-  "version": "3.6.0",
+  "version": "3.7.0",
   "type": "module",
   "description": "WashU Emergency Medicine Simulation & Safety Intelligence Platform - AI-powered post-session report generation and LST tracking",
   "author": "Washington University School of Medicine - Emergency Medicine",
