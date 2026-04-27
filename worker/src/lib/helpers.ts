@@ -57,10 +57,10 @@ export async function verifyTurnstile(c: any, next: any) {
     try {
       const contentType = c.req.header('Content-Type') || '';
       if (contentType.includes('multipart/form-data')) {
-        const formData = await c.req.raw.clone().formData();
+        const formData = await c.req.formData();
         token = formData.get('turnstileToken') as string;
       } else {
-        const body = await c.req.raw.clone().json();
+        const body = await c.req.json();
         token = body.turnstileToken;
       }
     } catch (e) {}

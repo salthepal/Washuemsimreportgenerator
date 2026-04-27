@@ -50,6 +50,13 @@ type Bindings = {
   VECTORIZE: VectorizeIndex;
 };
 
+const ALLOWED_ORIGINS = [
+  'https://washusimintelligence.pages.dev',
+  'https://washu-em-sim-intelligence.sphadnisuf.workers.dev',
+  'http://localhost:5173',
+  'http://localhost:8787',
+];
+
 const app = new Hono<{ Bindings: Bindings }>();
 
 // 1. Security Headers Middleware
@@ -58,12 +65,7 @@ app.use('*', secureHeaders());
 // 2. Base Middlewares
 app.use('*', honoLogger());
 app.use('*', cors({
-  origin: [
-    'https://washusimintelligence.pages.dev',
-    'https://washu-em-sim-intelligence.sphadnisuf.workers.dev',
-    'http://localhost:5173',
-    'http://localhost:8787',
-  ],
+  origin: ALLOWED_ORIGINS,
   allowHeaders: ['Content-Type', 'X-Turnstile-Token', 'Authorization', 'X-Admin-Token'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true,
@@ -230,13 +232,7 @@ app.get('/files/:path{.+}', async (c) => {
   }
 
   const requestOrigin = c.req.header('Origin') || '';
-  const allowedOrigins = [
-    'https://washusimintelligence.pages.dev',
-    'https://washu-em-sim-intelligence.sphadnisuf.workers.dev',
-    'http://localhost:5173',
-    'http://localhost:8787',
-  ];
-  if (allowedOrigins.includes(requestOrigin)) {
+  if (ALLOWED_ORIGINS.includes(requestOrigin)) {
     headers.set('Access-Control-Allow-Origin', requestOrigin);
   }
 
