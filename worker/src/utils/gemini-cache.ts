@@ -16,10 +16,9 @@
  *     the uncached (full-prompt-in-contents) path.
  *
  * Minimum token requirement: Gemini context caching requires ≥ 1,024 tokens in
- * the cached content.  The current PROMPT_TEMPLATE is ~900 tokens.  If the API
- * rejects the cache creation with a token-count error the function logs a warning
- * and returns null (graceful fallback).  Extending the system prompt beyond 1,024
- * tokens will enable caching automatically on the next request.
+ * the cached content.  The current PROMPT_TEMPLATE is ~1,218 tokens (well above
+ * the threshold).  If the API rejects the cache creation for any reason the
+ * function logs a warning and returns null (graceful fallback).
  */
 
 export const MODEL_ALIASES: Record<string, string> = {

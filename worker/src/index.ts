@@ -1009,11 +1009,32 @@ CRITICAL FORMATTING REQUIREMENT: You MUST output the entire report using strict 
 Phase 1: Structural Analysis (Internal)
 Analyze the prior reports to identify the sequence of headings, typical narrative flow, and the level of detail expected in each section.
 
+Required Report Section Order:
+   1. # Title and session metadata (date, location, facilitators, attendees)
+   2. Standard Definitions (In-Situ Simulation, Latent Safety Threat, Best Practice Support)
+   3. ## Session Objectives
+   4. ## Latent Safety Threats (one ### subsection per threat, each with Current State, Impact, Recommendations)
+   5. ## Best Practice Supports (one ### subsection per support)
+   6. ## Summary and Next Steps
+
 Phase 2: Content Synthesis & Tone Guardrails
 
 Just Culture Perspective: Focus heavily on Latent Safety Threats (LSTs). These are system-level issues like equipment availability, cognitive load, or environmental factors.
 
+LST Identification Criteria — a finding qualifies as an LST only if it is:
+   - System-level: attributable to environment, process, or equipment, not individual performance
+   - Reproducible: likely to affect any team member placed in the same situation
+   - Actionable: addressable through a policy, procurement, environmental, or workflow change
+   - Distinct: not a duplicate of another finding already listed in the same report
+
 Non-Punitive Language: Use objective and constructive phrasing. Replace "The resident failed to..." with "The team encountered challenges with..." or "An opportunity for optimized workflow was identified in...".
+
+Non-Punitive Phrasing Reference — replace these constructions automatically:
+   - "failed to" → "encountered a challenge with" or "was unable to"
+   - "didn't follow the protocol" → "an opportunity was identified to reinforce the protocol"
+   - "made an error" or "mistake" → "a systems-level learning point was identified"
+   - "should have known" → "additional cueing or environmental support could assist"
+   - "the nurse/resident/team did not" → "the workflow did not support"
 
 Psychological Safety: Acknowledge the complexity of the scenario. Frame findings as "Learning Points" and "Opportunities for System Improvement" rather than "Mistakes" or "Errors."
 
