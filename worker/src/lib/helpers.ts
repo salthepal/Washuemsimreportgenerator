@@ -1,5 +1,15 @@
 import type { Bindings } from '../types';
 
+function timingSafeCompare(a: string, b: string): boolean {
+  const encoder = new TextEncoder();
+  const arrA = encoder.encode(a);
+  const arrB = encoder.encode(b);
+  let diff = arrA.length ^ arrB.length;
+  const maxLength = Math.max(arrA.length, arrB.length);
+  for (let i = 0; i < maxLength; i++) diff |= (arrA[i] ?? 0) ^ (arrB[i] ?? 0);
+  return diff === 0;
+}
+
 export async function logError(db: D1Database, action: string, error: any, context?: any) {
   try {
     const errorId = `error_${crypto.randomUUID()}`;
@@ -39,8 +49,14 @@ export async function verifyTurnstile(c: any, next: any) {
 
   if (!token) {
     try {
-      const body = await c.req.raw.clone().json();
-      token = body.turnstileToken;
+      const contentType = c.req.header('Content-Type') || '';
+      if (contentType.includes('multipart/form-data')) {
+        const formData = await c.req.formData();
+        token = formData.get('turnstileToken') as string;
+      } else {
+        const body = await c.req.json();
+        token = body.turnstileToken;
+      }
     } catch (e) {}
   }
 
@@ -86,7 +102,7 @@ export async function verifyAdmin(c: any, next: any) {
     return c.json({ error: 'Administrative access not configured' }, 500);
   }
 
-  if (!providedToken || providedToken !== adminSecret) {
+  if (!providedToken || !timingSafeCompare(providedToken, adminSecret)) {
     await logError(c.env.DB, 'unauthorized_admin_access', new Error('Invalid or missing Admin Token'), {
       ip: c.req.header('cf-connecting-ip')
     });

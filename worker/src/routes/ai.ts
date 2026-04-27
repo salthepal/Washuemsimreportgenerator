@@ -105,7 +105,8 @@ ${query}
              } catch (e) {}
           }
         } catch (err: any) {
-          await stream.write(`\n\n[AI Streaming Error: ${err.message}]`);
+          console.error('[AI Streaming Error]', err);
+          await stream.write(`\n\n[AI Streaming Error: service unavailable]`);
         } finally {
           clearTimeout(aiRouterTimeout);
         }
@@ -138,7 +139,7 @@ ${query}
     }
   } catch (error: any) {
     console.error('[ASK] Search error:', error);
-    return c.json({ error: error.message }, 500);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });
 
@@ -190,6 +191,7 @@ aiRouter.get('/search', async (c) => {
     const [ftsResults, vectorResults] = await Promise.all([ftsPromise, vectorPromise]);
     return c.json({ fts: ftsResults, vector: vectorResults });
   } catch (error: any) {
-    return c.json({ error: error.message }, 500);
+    console.error(error);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });

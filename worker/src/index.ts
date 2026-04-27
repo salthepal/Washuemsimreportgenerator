@@ -11,7 +11,7 @@ import { cache } from 'hono/cache';
 import { z } from 'zod';
 import { extractAndScoreLSTs } from './utils/ai';
 import { resolveModelId, getOrRefreshSystemCache } from './utils/gemini-cache';
-import { indexDocumentVector } from './lib/helpers';
+import { indexDocumentVector, logError, logAudit, verifyTurnstile, verifyAdmin, rateLimit } from './lib/helpers';
 
 const reportUploadSchema = z.object({
   id: z.string().optional(),
@@ -50,6 +50,13 @@ type Bindings = {
   VECTORIZE: VectorizeIndex;
 };
 
+const ALLOWED_ORIGINS = [
+  'https://washusimintelligence.pages.dev',
+  'https://washu-em-sim-intelligence.sphadnisuf.workers.dev',
+  'http://localhost:5173',
+  'http://localhost:8787',
+];
+
 const app = new Hono<{ Bindings: Bindings }>();
 
 // 1. Security Headers Middleware
@@ -58,12 +65,7 @@ app.use('*', secureHeaders());
 // 2. Base Middlewares
 app.use('*', honoLogger());
 app.use('*', cors({
-  origin: [
-    'https://washusimintelligence.pages.dev',
-    'https://washu-em-sim-intelligence.sphadnisuf.workers.dev',
-    'http://localhost:5173',
-    'http://localhost:8787',
-  ],
+  origin: ALLOWED_ORIGINS,
   allowHeaders: ['Content-Type', 'X-Turnstile-Token', 'Authorization', 'X-Admin-Token'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true,
@@ -119,136 +121,10 @@ app.get('/hydrate', verifyAdmin, async (c) => {
       }))
     });
   } catch (error: any) {
-    return c.json({ error: error.message }, 500);
+    console.error(error);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });
-
-// Error logging helper for Cloudflare
-async function logError(db: D1Database, action: string, error: any, context?: any) {
-  try {
-    const errorId = `error_${crypto.randomUUID()}`;
-    const entry = {
-      id: errorId,
-      action,
-      message: error?.message || String(error),
-      stack: error?.stack,
-      context: context ? JSON.stringify(context) : null,
-      timestamp: new Date().toISOString()
-    };
-    
-    await db.prepare('INSERT INTO error_logs (id, action, message, stack, context, timestamp) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(entry.id, entry.action, entry.message, entry.stack, entry.context, entry.timestamp)
-      .run();
-      
-    console.log(`[ERROR LOGGED] ${action}: ${entry.message}`);
-  } catch (logErr) {
-    console.log(`CRITICAL: Failed to log error: ${logErr}`);
-  }
-}
-
-// Audit logging helper
-async function logAudit(db: D1Database, action: string, type: string, target: string, id: string) {
-  try {
-    const auditId = `audit_${crypto.randomUUID()}`;
-    await db.prepare('INSERT INTO audit_logs (id, action, type, target, target_id, timestamp) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(auditId, action, type, target, id, new Date().toISOString())
-      .run();
-  } catch (error) {
-    console.log(`Error logging audit: ${error}`);
-  }
-}
-
-// Turnstile Verification Middleware
-async function verifyTurnstile(c: any, next: any) {
-  const headerToken = c.req.header('X-Turnstile-Token');
-  let token = headerToken;
-
-  if (!token) {
-    try {
-      const contentType = c.req.header('Content-Type') || '';
-      if (contentType.includes('application/json')) {
-        const body = await c.req.raw.clone().json();
-        token = body.turnstileToken;
-      } else if (contentType.includes('multipart/form-data')) {
-        const formData = await c.req.raw.clone().formData();
-        token = formData.get('turnstileToken') as string;
-      }
-    } catch (e) {
-      // Body might not be valid or might be missing turnstileToken
-    }
-  }
-
-  const secret = c.env.TURNSTILE_SECRET_KEY;
-
-  if (!secret) {
-    console.error('[AUTH ERROR] TURNSTILE_SECRET_KEY is missing from environment. Rejecting for security.');
-    return c.json({ error: 'Server configuration error' }, 500);
-  }
-
-  if (!token) {
-    return c.json({ error: 'Security verification failed: Missing token' }, 403);
-  }
-
-  try {
-    const formData = new FormData();
-    formData.append('secret', secret);
-    formData.append('response', token);
-
-    const result = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-      body: formData,
-      method: 'POST',
-    });
-
-    const outcome: any = await result.json();
-    if (!outcome.success) {
-      return c.json({ error: 'Security verification failed: Invalid token' }, 403);
-    }
-
-    await next();
-  } catch (err: any) {
-    console.error('Turnstile verification error:', err);
-    return c.json({ error: 'Verification service unreachable' }, 503);
-  }
-}
-
-// Admin Authorization Middleware
-async function verifyAdmin(c: any, next: any) {
-  const adminSecret = c.env.ADMIN_TOKEN;
-  const providedToken = c.req.header('X-Admin-Token');
-
-  if (!adminSecret) {
-    console.error('[AUTH ERROR] ADMIN_TOKEN is missing from environment. Rejecting access.');
-    return c.json({ error: 'Administrative access not configured' }, 500);
-  }
-
-  if (!providedToken || providedToken !== adminSecret) {
-    await logError(c.env.DB, 'unauthorized_admin_access', new Error('Invalid or missing Admin Token'), {
-      ip: c.req.header('cf-connecting-ip')
-    });
-    return c.json({ error: 'Unauthorized: Admin Token required' }, 401);
-  }
-
-  await next();
-}
-
-// Rate Limiting Middleware
-async function rateLimit(c: any, next: any) {
-  const ip = c.req.header('cf-connecting-ip') || 'unknown';
-  const key = `rl_${ip}`;
-  const limit = 5; // 5 reports per minute per IP
-  const window = 60; // 60 seconds
-
-  const current = await c.env.RATELIMIT.get(key);
-  const count = current ? parseInt(current) : 0;
-
-  if (count >= limit) {
-    await logError(c.env.DB, 'rate_limit_exceeded', new Error(`IP ${ip} exceeded rate limit`), { ip, count });
-    return c.json({ error: 'Too many requests. Please try again in a minute.' }, 429);
-  }
-
-  await c.env.RATELIMIT.put(key, (count + 1).toString(), { expirationTtl: window });
-  return next();
-}
 
 // LST Extraction Helper
 async function extractLSTs(db: D1Database, reportContent: string, reportId: string) {
@@ -297,7 +173,7 @@ async function extractLSTs(db: D1Database, reportContent: string, reportId: stri
 app.onError((err, c) => {
   console.error('Server error:', err);
   logError(c.env.DB, 'global_unhandled', err);
-  return c.json({ error: err.message || 'Internal server error' }, 500);
+  return c.json({ error: 'Internal server error' }, 500);
 });
 
 // --- API Endpoints ---
@@ -328,7 +204,8 @@ app.post('/upload-file', verifyTurnstile, async (c) => {
     await logAudit(c.env.DB, 'upload', 'file', name, key);
     return c.json({ success: true, key, url: `/files/${key}` });
   } catch (error: any) {
-    return c.json({ error: error.message }, 500);
+    console.error(error);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });
 
@@ -354,8 +231,11 @@ app.get('/files/:path{.+}', async (c) => {
     headers.set('content-type', 'image/webp');
   }
 
-  // Force allow-origin on direct file access to prevent browser blocking
-  headers.set('Access-Control-Allow-Origin', '*');
+  const requestOrigin = c.req.header('Origin') || '';
+  if (ALLOWED_ORIGINS.includes(requestOrigin)) {
+    headers.set('Access-Control-Allow-Origin', requestOrigin);
+    headers.set('Vary', 'Origin');
+  }
 
   return c.body(object.body, { headers });
 });
@@ -458,7 +338,8 @@ ${query}
              } catch (e) {}
           }
         } catch (err: any) {
-          await stream.write(`\n\n[AI Streaming Error: ${err.message}]`);
+          console.error('[AI Streaming Error]', err);
+          await stream.write(`\n\n[AI Streaming Error: service unavailable]`);
         } finally {
           clearTimeout(askStreamTimeout);
         }
@@ -501,7 +382,7 @@ ${query}
     }
   } catch (error: any) {
     console.error('[ASK] Search error:', error);
-    return c.json({ error: error.message }, 500);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });
 
@@ -612,7 +493,7 @@ app.get('/search', verifyAdmin, rateLimit, async (c) => {
 
   } catch (error: any) {
     console.error('Hybrid Search Failure:', error);
-    return c.json({ error: error.message }, 500);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });
 
@@ -836,7 +717,7 @@ ${caseFilesContext}
     });
   } catch (error: any) {
     await logError(c.env.DB, 'streaming_report', error);
-    return c.json({ error: error.message }, 500);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });
 
@@ -858,7 +739,8 @@ app.get('/reports', verifyAdmin, async (c) => {
       }))
     });
   } catch (error: any) {
-    return c.json({ error: error.message }, 500);
+    console.error(error);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });
 
@@ -879,7 +761,8 @@ app.get('/reports/generated', verifyAdmin, async (c) => {
       }))
     });
   } catch (error: any) {
-    return c.json({ error: error.message }, 500);
+    console.error(error);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });
 
@@ -916,7 +799,8 @@ app.post('/reports/upload', verifyTurnstile, async (c) => {
     return c.json({ success: true, report: reportData });
   } catch (error: any) {
     await logError(c.env.DB, 'report_upload', error);
-    return c.json({ error: error.message }, 500);
+    console.error(error);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });
 
@@ -928,7 +812,8 @@ app.delete('/reports/:id', verifyAdmin, async (c) => {
     return c.json({ success: true });
   } catch (error: any) {
     await logError(c.env.DB, 'report_delete', error);
-    return c.json({ error: error.message }, 500);
+    console.error(error);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });
 
@@ -951,7 +836,8 @@ app.put('/reports/:id', verifyAdmin, async (c) => {
     await logAudit(c.env.DB, 'update', 'report', `Updated report ${title || id}`, id);
     return c.json({ success: true });
   } catch (error: any) {
-    return c.json({ error: error.message }, 500);
+    console.error(error);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });
 
@@ -1059,7 +945,8 @@ app.post('/model-preference', verifyAdmin, async (c) => {
     await logAudit(c.env.DB, 'update', 'settings', `Changed AI model to ${model}`, 'settings');
     return c.json({ success: true, model });
   } catch (error: any) {
-    return c.json({ error: error.message }, 500);
+    console.error(error);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });
 
@@ -1118,7 +1005,8 @@ app.post('/case-files/upload', verifyTurnstile, async (c) => {
     return c.json({ success: true, id });
   } catch (error: any) {
     await logError(c.env.DB, 'case_file_upload', error);
-    return c.json({ error: error.message }, 500);
+    console.error(error);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });
 
@@ -1138,7 +1026,8 @@ app.delete('/case-files/:id', verifyAdmin, async (c) => {
     await logAudit(c.env.DB, 'delete', 'case_file', `Deleted case file ${id}`, id);
     return c.json({ success: true });
   } catch (error: any) {
-    return c.json({ error: error.message }, 500);
+    console.error(error);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });
 
@@ -1161,7 +1050,8 @@ app.put('/case-files/:id', verifyAdmin, async (c) => {
     await logAudit(c.env.DB, 'update', 'case_file', `Updated case file ${title || id}`, id);
     return c.json({ success: true });
   } catch (error: any) {
-    return c.json({ error: error.message }, 500);
+    console.error(error);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });
 
@@ -1174,7 +1064,8 @@ app.get('/error-log', verifyAdmin, async (c) => {
       context: r.context ? JSON.parse(r.context) : null
     })));
   } catch (error: any) {
-    return c.json({ error: error.message }, 500);
+    console.error(error);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });
 
@@ -1184,7 +1075,8 @@ app.delete('/error-log', verifyAdmin, async (c) => {
     await logAudit(c.env.DB, 'clear', 'system', 'Error Log Cleared', 'error-log');
     return c.json({ success: true });
   } catch (error: any) {
-    return c.json({ error: error.message }, 500);
+    console.error(error);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });
 
@@ -1210,7 +1102,8 @@ app.get('/backup', verifyAdmin, async (c) => {
     await logAudit(c.env.DB, 'export', 'backup', 'Full System Backup (Cloudflare)', 'backup');
     return c.json(backup);
   } catch (error: any) {
-    return c.json({ error: error.message }, 500);
+    console.error(error);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });
 
@@ -1273,7 +1166,7 @@ app.post('/admin/reindex', verifyAdmin, async (c) => {
     return c.json({ success: true, indexed: count });
   } catch (error: any) {
     console.error('Re-index administrative failure:', error);
-    return c.json({ error: error.message }, 500);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });
 
