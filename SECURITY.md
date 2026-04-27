@@ -15,7 +15,7 @@ We take the security of this platform and its clinical data seriously. If you fi
 
 ### Preferred Method
 Please use the following email address for all security-related reports:
-**sim-security@wustl.edu** (Placeholder: Update with official departmental contact)
+**sim-security@wustl.edu**
 
 ### What to Include
 When reporting a vulnerability, please include:
