@@ -6,40 +6,37 @@ Welcome to the WashU Emergency Medicine Simulation & Safety Intelligence Platfor
 
 ### Getting Started
 - **[README.md](../README.md)** - Main project documentation, installation, and usage guide
-- **[DEPLOYMENT.md](../DEPLOYMENT.md)** - Comprehensive deployment guide for GitHub Pages
+- **[DEPLOYMENT.md](../DEPLOYMENT.md)** - Comprehensive Cloudflare deployment guide
 - **[CONTRIBUTING.md](../CONTRIBUTING.md)** - Guidelines for contributing to the project
 - **[CHANGELOG.md](../CHANGELOG.md)** - Version history and release notes
 
-### Legal
-- **[LICENSE.md](../LICENSE.md)** - Proprietary license terms and conditions
-- **[ATTRIBUTIONS.md](../ATTRIBUTIONS.md)** - Third-party licenses and acknowledgments
+### Legal & Security
+- **[LICENSE.md](../LICENSE.md)** - GNU General Public License v3.0 terms
+- **[SECURITY.md](../SECURITY.md)** - Security policy and vulnerability reporting
 
 ## 🚀 Quick Links
 
 ### For Users
-- [Installation Guide](../README.md#-installation)
-- [Usage Guide](../README.md#-usage-guide)
-- [Keyboard Shortcuts](../README.md#️-keyboard-shortcuts)
-- [Known Limitations](../README.md#-known-limitations)
+- [Installation Guide](../README.md#getting-started)
+- [System Architecture](../README.md#system-architecture)
 
 ### For Developers
-- [Development Setup](../CONTRIBUTING.md#-getting-started)
-- [Code Style Guidelines](../CONTRIBUTING.md#-development-guidelines)
-- [Testing Checklist](../CONTRIBUTING.md#-testing)
-- [Pull Request Process](../CONTRIBUTING.md#-pull-request-process)
+- [Development Setup](../CONTRIBUTING.md#development-environment)
+- [Branching Strategy](../CONTRIBUTING.md#branching--versioning)
+- [Testing Protocol](../CONTRIBUTING.md#testing-protocol)
+- [Pull Request Process](../CONTRIBUTING.md#contribution-guidelines)
 
 ### For DevOps
-- [GitHub Actions Deployment](../DEPLOYMENT.md#method-1-automated-deployment-with-github-actions-recommended)
-- [Manual Deployment](../DEPLOYMENT.md#method-2-manual-deployment-with-gh-pages)
-- [Troubleshooting](../DEPLOYMENT.md#-troubleshooting)
-- [Environment Configuration](../DEPLOYMENT.md#-environment-configuration)
+- [Frontend Deployment (Cloudflare Pages)](../DEPLOYMENT.md#1-frontend-deployment-cloudflare-pages)
+- [Backend Deployment (Cloudflare Workers)](../DEPLOYMENT.md#2-backend-deployment-cloudflare-workers)
+- [Environment Variables & Secrets](../DEPLOYMENT.md#3-environment-variables--secrets)
 
 ## 🎯 Feature Documentation
 
 ### Core Features
 
 #### 1. AI-Powered Report Generation
-Generate professional post-session reports using Google Gemini 3.0 Flash Experimental.
+Generate professional post-session reports using Google Gemini Flash.
 
 **Key capabilities:**
 - Style guide training from past reports
@@ -47,8 +44,7 @@ Generate professional post-session reports using Google Gemini 3.0 Flash Experim
 - Editable generated content
 - Three export formats (Copy, DOCX, PDF)
 
-**Location:** Generate tab  
-**Documentation:** [Usage Guide - Generate Reports](../README.md#4-generate-reports)
+**Location:** Generate tab
 
 #### 2. Latent Safety Threat (LST) Tracking
 Comprehensive system for identifying, managing, and resolving safety threats.
@@ -60,8 +56,7 @@ Comprehensive system for identifying, managing, and resolving safety threats.
 - Recurrence detection
 - Resolution notes
 
-**Location:** LST Tracker tab  
-**Documentation:** [Usage Guide - Track LSTs](../README.md#5-track-lsts)
+**Location:** LST Tracker tab
 
 #### 3. Dashboard Analytics
 Real-time metrics and insights into documentation and safety trends.
@@ -73,8 +68,7 @@ Real-time metrics and insights into documentation and safety trends.
 - LST distribution by status and severity
 - Document trend analysis
 
-**Location:** Dashboard tab (default)  
-**Documentation:** [Usage Guide - Dashboard Analytics](../README.md#6-dashboard-analytics)
+**Location:** Dashboard tab (default)
 
 #### 4. Document Repository
 Centralized storage and management for all generated reports.
@@ -84,10 +78,8 @@ Centralized storage and management for all generated reports.
 - Tag-based organization
 - Bulk operations
 - Document comparison view
-- Version history
 
-**Location:** Repository tab  
-**Documentation:** [Usage Guide - Repository Management](../README.md#7-repository-management)
+**Location:** Repository tab
 
 #### 5. Style Guide Upload
 Train the AI by uploading past reports as examples.
@@ -97,8 +89,7 @@ Train the AI by uploading past reports as examples.
 - DOCX (Microsoft Word) documents
 - Text extraction and analysis
 
-**Location:** Upload tab  
-**Documentation:** [Usage Guide - Upload Past Reports](../README.md#1-upload-past-reports-style-guides)
+**Location:** Upload tab
 
 #### 6. Session Notes Management
 Document simulation sessions with rich metadata.
@@ -110,8 +101,7 @@ Document simulation sessions with rich metadata.
 - Observation notes
 - Debriefing comments
 
-**Location:** Session Notes tab  
-**Documentation:** [Usage Guide - Add Session Notes](../README.md#2-add-session-notes)
+**Location:** Session Notes tab
 
 #### 7. Case File Management
 Store simulation case information for reference.
@@ -122,8 +112,7 @@ Store simulation case information for reference.
 - Participant roles
 - Scenario details
 
-**Location:** Cases tab  
-**Documentation:** [Usage Guide - Manage Case Files](../README.md#3-manage-case-files)
+**Location:** Cases tab
 
 ## 🛠️ Technical Documentation
 
@@ -132,22 +121,25 @@ Store simulation case information for reference.
 #### Frontend Stack
 - **Framework:** React 18.3.1 with TypeScript
 - **Styling:** Tailwind CSS v4 + Radix UI
-- **Routing:** React Router (HashRouter Mode)
-- **Build Tool:** Vite 6.3.5
-- **State Management:** TanStack React Query + local storage
+- **Routing:** React Router
+- **Build Tool:** Vite 6.4.2
+- **State Management:** TanStack React Query
 
 #### Backend Stack
-- **Platform:** Supabase
-- **Runtime:** Deno (Edge Functions)
+- **Platform:** Cloudflare Workers
+- **Runtime:** Node.js-compatible (V8 isolates)
 - **Web Server:** Hono
-- **Database:** PostgreSQL with KV Store
-- **AI Integration:** Google Gemini API
+- **Database:** Cloudflare D1 (SQLite with FTS5)
+- **Object Storage:** Cloudflare R2
+- **Metadata Cache:** Cloudflare KV (rate limiting & auth)
+- **Vector Search:** Cloudflare Vectorize + Workers AI
+- **AI Search:** Custom RAG (Vectorize + Workers AI)
+- **Generative AI:** Google Gemini Flash
 
 #### Key Technologies
 - **Document Processing:** docx, jsPDF, mammoth
 - **Charts:** Recharts
 - **Forms:** React Hook Form
-- **Animations:** Motion (formerly Framer Motion)
 - **UI Components:** Radix UI primitives
 
 ### Project Structure
@@ -156,11 +148,14 @@ Store simulation case information for reference.
 washusimintelligence/
 ├── .github/
 │   ├── workflows/
-│   │   └── deploy.yml           # GitHub Actions deployment
+│   │   ├── deploy-worker.yml    # Cloudflare Worker CI/CD
+│   │   └── release-please.yml  # Automated semantic releases
 │   ├── ISSUE_TEMPLATE/
-│   │   ├── bug_report.md        # Bug report template
-│   │   └── feature_request.md   # Feature request template
-│   └── PULL_REQUEST_TEMPLATE.md # PR template
+│   │   ├── bug_report.yml
+│   │   └── feature_request.yml
+│   ├── CODE_OF_CONDUCT.md
+│   ├── PULL_REQUEST_TEMPLATE.md
+│   └── dependabot.yml
 ├── src/
 │   ├── app/
 │   │   ├── components/          # React components
@@ -170,23 +165,30 @@ washusimintelligence/
 │   │   │   ├── lst-tracker.tsx
 │   │   │   └── ...
 │   │   ├── hooks/              # Custom React hooks
-│   │   ├── utils/              # Utility functions
+│   │   ├── utils/              # API client, sanitization, document utilities
+│   │   ├── api.ts              # Unified API layer
+│   │   ├── types.ts            # TypeScript type definitions
 │   │   └── App.tsx             # Main application
 │   ├── styles/                 # CSS files
 │   │   ├── index.css
 │   │   ├── theme.css           # Theme variables
-│   │   └── fonts.css           # Font imports
-│   └── imports/                # Assets (if any)
-├── supabase/
-│   └── functions/
-│       └── server/
-│           ├── index.tsx       # Hono web server
-│           ├── kv_store.tsx    # KV store utilities
-│           └── text-sanitizer.tsx
-├── utils/
-│   └── supabase/
-│       └── info.tsx            # Supabase config
+│   │   └── fonts.css
+│   └── main.tsx               # Vite entry point
+├── worker/
+│   ├── src/
+│   │   ├── index.ts            # Hono entry point
+│   │   ├── types.ts            # Backend types
+│   │   ├── routes/             # API routes (reports, lsts, notes, case-files, ai)
+│   │   ├── utils/              # AI integration, Gemini caching
+│   │   └── lib/                # Helpers (vectorization, auditing, rate limiting)
+│   ├── schema.sql              # D1 database schema
+│   ├── fts_setup.sql           # Full-text search setup
+│   ├── wrangler.toml           # Cloudflare bindings (D1, R2, KV, Vectorize, AI)
+│   └── package.json
+├── functions/
+│   └── api/[[path]].ts         # Cloudflare Pages proxy to Worker
 ├── docs/                       # Documentation
+├── public/                     # Static assets
 ├── CHANGELOG.md
 ├── CONTRIBUTING.md
 ├── DEPLOYMENT.md
@@ -198,35 +200,36 @@ washusimintelligence/
 
 ### Configuration Files
 
-- **vite.config.ts** - Vite build configuration with GitHub Pages base path
-- **package.json** - Dependencies and npm scripts
-- **.gitignore** - Git ignore rules
-- **postcss.config.mjs** - PostCSS configuration for Tailwind
+- **vite.config.ts** - Vite build configuration
+- **worker/wrangler.toml** - Cloudflare Worker bindings and deployment config
+- **package.json** - Frontend dependencies and npm scripts
+- **.gitignore** - Excludes node_modules, dist, .wrangler, .dev.vars, secrets
 
 ## 🔧 Development Guides
 
 ### Setting Up Development Environment
 
 1. **Prerequisites**
-   - Node.js 18+
+   - Node.js 20+
    - Git
-   - Code editor (VS Code recommended)
-   - Supabase account
+   - Cloudflare account (D1, R2, Vectorize, KV, AI Search)
    - Google Gemini API key
+   - Wrangler CLI (`npm install -g wrangler`)
 
-2. **Installation Steps**
+2. **Frontend Setup**
    ```bash
-   git clone https://github.com/yourusername/washusimintelligence.git
-   cd washusimintelligence
+   git clone https://github.com/salthepal/WashUSimIntelligence.git
+   cd WashUSimIntelligence
    npm install
    npm run dev
    ```
 
-3. **Supabase Configuration**
-   - Create project
-   - Run SQL migrations
-   - Configure environment variables
-   - Deploy Edge Functions
+3. **Backend Setup**
+   ```bash
+   cd worker
+   npm install
+   npx wrangler dev
+   ```
 
 ### Common Development Tasks
 
@@ -240,14 +243,14 @@ export function MyComponent() {
 }
 ```
 
-#### Adding a New Route
-Update `/src/app/routes.tsx` with React Router configuration.
+#### Adding a New API Route
+Add a new route file under `worker/src/routes/` and register it in `worker/src/index.ts`.
 
 #### Styling Components
 Use Tailwind utility classes and theme variables from `/src/styles/theme.css`.
 
 #### Accessing the Database
-Use KV store utilities from `/supabase/functions/server/kv_store.tsx`.
+Use the D1 binding available on the Hono context (`c.env.DB`) within worker route handlers.
 
 ## 🐛 Troubleshooting
 
@@ -255,13 +258,13 @@ Use KV store utilities from `/supabase/functions/server/kv_store.tsx`.
 
 #### Build Errors
 - Clear node_modules and reinstall: `rm -rf node_modules && npm install`
-- Check Node version: `node --version` (must be 18+)
-- Verify all dependencies are installed
+- Check Node version: `node --version` (must be 20+)
+- Verify all dependencies are installed in both root and `worker/`
 
 #### API Connection Issues
-- Verify Supabase credentials in app settings
-- Check CORS configuration in Edge Functions
-- Ensure Edge Functions are deployed
+- Confirm the Worker is running: `cd worker && npx wrangler dev`
+- Check Cloudflare binding IDs in `worker/wrangler.toml`
+- Verify secrets are set: `npx wrangler secret list`
 
 #### Dark Mode Issues
 - Check theme provider wraps entire app
@@ -269,15 +272,14 @@ Use KV store utilities from `/supabase/functions/server/kv_store.tsx`.
 - Test theme toggle functionality
 
 #### Deployment Issues
-- Verify base path matches repository name
-- Check GitHub Pages is enabled
-- Review GitHub Actions logs for errors
+- Ensure Wrangler is authenticated: `npx wrangler login`
+- Verify D1 database ID matches `wrangler.toml`
+- Review Cloudflare Pages build logs
 
 ### Getting Help
 
-- **GitHub Issues:** [Report bugs or request features](https://github.com/yourusername/washusimintelligence/issues)
+- **GitHub Issues:** [Report bugs or request features](https://github.com/salthepal/WashUSimIntelligence/issues)
 - **Development Team:** Contact WashU EM for technical support
-- **Documentation:** Review relevant documentation sections
 
 ## 📊 Performance Optimization
 
@@ -288,14 +290,13 @@ Use KV store utilities from `/supabase/functions/server/kv_store.tsx`.
    - Use dynamic imports for large dependencies
 
 2. **Asset Optimization**
-   - Compress images before upload
-   - Use WebP format where supported
+   - Compress images before upload (WebP preferred)
    - Minimize SVG files
 
 3. **Database Queries**
-   - Use efficient KV store queries
+   - Use D1 prepared statements for repeated queries
    - Implement pagination for large datasets
-   - Cache frequently accessed data
+   - Leverage FTS5 indexes for full-text search
 
 4. **Bundle Size**
    - Analyze bundle with `npm run build`
@@ -305,22 +306,22 @@ Use KV store utilities from `/supabase/functions/server/kv_store.tsx`.
 ## 🔒 Security Best Practices
 
 ### Frontend Security
-- Never expose API keys or secrets
-- Sanitize all user input
+- Never expose API keys or secrets in client-side code
+- Sanitize all user input (DOMPurify is pre-configured)
 - Use HTTPS for all API calls
 - Implement proper CORS policies
 
 ### Backend Security
-- Service role key stays in backend
-- Validate all incoming requests
-- Use parameterized queries
-- Log security-relevant events
+- Secrets managed via `npx wrangler secret put`
+- Validate all incoming requests with Zod schemas
+- Use parameterized D1 queries to prevent SQL injection
+- Log security-relevant events to the audit_logs table
 
 ### Data Privacy
-- De-identify patient data
-- Follow HIPAA compliance
-- Secure credential storage
+- De-identify patient data before entry
+- Follow HIPAA compliance guidelines
 - Regular security audits
+- Base64 image data stripped before SQL persistence
 
 ## 📝 Maintenance
 
@@ -332,9 +333,9 @@ Use KV store utilities from `/supabase/functions/server/kv_store.tsx`.
 - Check for security updates
 
 #### Monthly
-- Update dependencies
+- Update dependencies (Dependabot PRs)
 - Review audit logs
-- Backup database
+- Backup D1 database
 
 #### Quarterly
 - Major version updates
@@ -345,34 +346,26 @@ Use KV store utilities from `/supabase/functions/server/kv_store.tsx`.
 ## 🎓 Training Resources
 
 ### For End Users
-- Interactive tour (press 'T' in app)
-- Keyboard shortcuts reference
-- Video tutorials (if available)
+- Keyboard shortcuts reference (see README)
 - User manual sections in README
 
 ### For Developers
-- Contributing guidelines
-- Code review checklist
-- Architecture decision records
-- API documentation
+- Contributing guidelines (CONTRIBUTING.md)
+- Cloudflare Workers docs: https://developers.cloudflare.com/workers/
+- Hono docs: https://hono.dev/
+- Wrangler CLI reference: https://developers.cloudflare.com/workers/wrangler/
 
 ## 📞 Contact & Support
 
 ### Support Channels
 - **Technical Issues:** GitHub Issues
 - **Feature Requests:** GitHub Discussions
-- **Security Concerns:** Direct contact with dev team
+- **Security Concerns:** See [SECURITY.md](../SECURITY.md)
 - **General Questions:** WashU EM development team
-
-### Team Contacts
-- **Development Team:** WashU EM
-- **Project Lead:** [Contact info]
-- **Tech Support:** [Contact info]
 
 ---
 
-**Last Updated:** April 2, 2026  
-**Documentation Version:** 1.0.0  
-**Project Version:** 1.0.0
+**Last Updated:** April 27, 2026  
+**Project Version:** 3.8.0
 
 For the most up-to-date information, always refer to the [README.md](../README.md) and [CHANGELOG.md](../CHANGELOG.md).
