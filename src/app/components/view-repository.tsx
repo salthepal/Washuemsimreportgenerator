@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Report, SessionNote, CaseFile } from '../types';
 import { API_BASE, getApiHeaders, updateReport, updateNote } from '../api';
 import { ReportViewer } from './report-viewer';
@@ -38,6 +39,7 @@ const HighlightText = ({ text }: { text: string }) => {
 };
 
 export function ViewRepository({ reports, sessionNotes, generatedReports, onRefresh, isLoading, selectedSite }: ViewRepositoryProps) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [expandedReport, setExpandedReport] = useState<string | null>(null);
   const [expandedNote, setExpandedNote] = useState<string | null>(null);
   const [expandedGenerated, setExpandedGenerated] = useState<string | null>(null);
@@ -79,6 +81,18 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
     };
     performSearch();
   }, [debouncedSearch]);
+
+  useEffect(() => {
+    const openId = searchParams.get('open');
+    if (!openId) return;
+    const allDocs = [...reports, ...sessionNotes, ...generatedReports];
+    const doc = allDocs.find(d => d.id === openId);
+    if (doc) {
+      if ('title' in doc) setViewingReport(doc as Report);
+      else setExpandedNote(doc.id);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, reports, sessionNotes, generatedReports]);
 
   const toggleReport = (id: string) => {
     setExpandedReport(expandedReport === id ? null : id);
