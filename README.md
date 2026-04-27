@@ -46,7 +46,7 @@ Built on a globally distributed Cloudflare-native stack for maximum reliability:
 - **Cloudflare Account**: With access to D1, R2, Vectorize, and AI Search.
 - **Secrets**: 
   - `GEMINI_API_KEY`: For report generation.
-  - `AI_SEARCH_TOKEN`: For the RAG assistant.
+  - `TURNSTILE_SECRET_KEY`: For spam protection on generation endpoints.
 
 ### Local Development
 
