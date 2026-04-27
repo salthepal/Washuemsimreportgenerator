@@ -206,11 +206,21 @@ export function Dashboard({ reports, sessionNotes, generatedReports, lsts, isLoa
                 {searchResults.map(result => (
                   <div
                     key={result.id}
+                    role="button"
+                    tabIndex={0}
                     className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors"
                     onClick={() => {
                       setSearchQuery('');
                       setSearchResults(null);
-                      navigate(`/repository?open=${result.id}`);
+                      navigate(`/repository?open=${encodeURIComponent(result.id)}`);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setSearchQuery('');
+                        setSearchResults(null);
+                        navigate(`/repository?open=${encodeURIComponent(result.id)}`);
+                      }
                     }}
                   >
                     <div className={`mt-0.5 p-1.5 rounded-lg shrink-0 ${result.matchType === 'semantic' ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'}`}>

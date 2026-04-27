@@ -85,14 +85,25 @@ export function ViewRepository({ reports, sessionNotes, generatedReports, onRefr
   useEffect(() => {
     const openId = searchParams.get('open');
     if (!openId) return;
+
     const allDocs = [...reports, ...sessionNotes, ...generatedReports];
     const doc = allDocs.find(d => d.id === openId);
+
     if (doc) {
       if ('title' in doc) setViewingReport(doc as Report);
-      else setExpandedNote(doc.id);
-      setSearchParams({}, { replace: true });
+      else {
+        setExpandedNote(doc.id);
+        setSelectedTags([]);
+        setDateRange('all');
+      }
     }
-  }, [searchParams, reports, sessionNotes, generatedReports]);
+
+    if (doc || !isLoading) {
+      const params = new URLSearchParams(searchParams);
+      params.delete('open');
+      setSearchParams(params, { replace: true });
+    }
+  }, [searchParams, reports, sessionNotes, generatedReports, isLoading, setSearchParams]);
 
   const toggleReport = (id: string) => {
     setExpandedReport(expandedReport === id ? null : id);
