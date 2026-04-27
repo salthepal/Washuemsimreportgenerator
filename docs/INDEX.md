@@ -17,19 +17,19 @@ Welcome to the WashU Emergency Medicine Simulation & Safety Intelligence Platfor
 ## 🚀 Quick Links
 
 ### For Users
-- [Installation Guide](../README.md#-getting-started)
-- [System Architecture](../README.md#️-system-architecture)
+- [Installation Guide](../README.md#getting-started)
+- [System Architecture](../README.md#system-architecture)
 
 ### For Developers
-- [Development Setup](../CONTRIBUTING.md#-development-environment)
-- [Branching Strategy](../CONTRIBUTING.md#-branching--versioning)
-- [Testing Protocol](../CONTRIBUTING.md#-testing-protocol)
-- [Pull Request Process](../CONTRIBUTING.md#-contribution-guidelines)
+- [Development Setup](../CONTRIBUTING.md#development-environment)
+- [Branching Strategy](../CONTRIBUTING.md#branching--versioning)
+- [Testing Protocol](../CONTRIBUTING.md#testing-protocol)
+- [Pull Request Process](../CONTRIBUTING.md#contribution-guidelines)
 
 ### For DevOps
-- [Frontend Deployment (Cloudflare Pages)](../DEPLOYMENT.md#-1-frontend-deployment-cloudflare-pages)
-- [Backend Deployment (Cloudflare Workers)](../DEPLOYMENT.md#-2-backend-deployment-cloudflare-workers)
-- [Environment Variables & Secrets](../DEPLOYMENT.md#-3-environment-variables--secrets)
+- [Frontend Deployment (Cloudflare Pages)](../DEPLOYMENT.md#1-frontend-deployment-cloudflare-pages)
+- [Backend Deployment (Cloudflare Workers)](../DEPLOYMENT.md#2-backend-deployment-cloudflare-workers)
+- [Environment Variables & Secrets](../DEPLOYMENT.md#3-environment-variables--secrets)
 
 ## 🎯 Feature Documentation
 
