@@ -128,17 +128,48 @@ async function markdownToDocxParagraphs(markdown: string): Promise<Paragraph[]> 
       if (url) {
         try {
           const response = await fetch(url);
-          const arrayBuffer = await response.arrayBuffer();
+          const mimeType = response.headers.get('content-type')?.split(';')[0].trim() ?? 'image/jpeg';
+
+          let arrayBuffer: ArrayBuffer;
+          let docxType: 'jpg' | 'png';
+
+          if (mimeType === 'image/png') {
+            arrayBuffer = await response.arrayBuffer();
+            docxType = 'png';
+          } else if (mimeType === 'image/jpeg' || mimeType === 'image/jpg') {
+            arrayBuffer = await response.arrayBuffer();
+            docxType = 'jpg';
+          } else {
+            // Convert unsupported formats (e.g. legacy WebP) to JPEG via canvas
+            const blob = await response.blob();
+            const objectUrl = URL.createObjectURL(blob);
+            try {
+              const jpegBlob = await new Promise<Blob>((res, rej) => {
+                const img = new Image();
+                img.onload = () => {
+                  const canvas = document.createElement('canvas');
+                  canvas.width = img.naturalWidth;
+                  canvas.height = img.naturalHeight;
+                  canvas.getContext('2d')?.drawImage(img, 0, 0);
+                  canvas.toBlob((b) => b ? res(b) : rej(new Error('toBlob failed')), 'image/jpeg', 0.9);
+                };
+                img.onerror = rej;
+                img.src = objectUrl;
+              });
+              arrayBuffer = await jpegBlob.arrayBuffer();
+            } finally {
+              URL.revokeObjectURL(objectUrl);
+            }
+            docxType = 'jpg';
+          }
+
           children.push(
             new Paragraph({
               children: [
                 new ImageRun({
                   data: arrayBuffer,
-                  type: 'jpg',
-                  transformation: {
-                    width: 500,
-                    height: 350,
-                  },
+                  type: docxType,
+                  transformation: { width: 500, height: 350 },
                 }),
               ],
               spacing: { before: 120, after: 120 },

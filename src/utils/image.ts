@@ -16,7 +16,7 @@ export async function compressImage(file: File, maxWidth = 1024, quality = 0.8):
     const heic2any = (await import('heic2any')).default;
     const converted = await heic2any({ blob: file, toType: 'image/jpeg', quality });
     const blob = Array.isArray(converted) ? converted[0] : converted;
-    const jpegName = file.name.replace(/\.(heic|heif)$/i, '.jpg');
+    const jpegName = file.name.replace(/\.[^/.]+$/, '') + '.jpg';
     processedFile = new File([blob], jpegName, { type: 'image/jpeg', lastModified: Date.now() });
   }
 

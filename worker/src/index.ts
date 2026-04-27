@@ -226,9 +226,15 @@ app.get('/files/:path{.+}', async (c) => {
   object.writeHttpMetadata(headers);
   headers.set('etag', object.httpEtag);
   
-  // Ensure we have a valid image content type if R2 metadata is missing
+  // Infer content-type from file extension when R2 metadata is missing
   if (!headers.has('content-type')) {
-    headers.set('content-type', 'image/jpeg');
+    const ext = path.split('.').pop()?.toLowerCase() ?? '';
+    const extMime: Record<string, string> = {
+      jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+      gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
+      pdf: 'application/pdf', txt: 'text/plain', md: 'text/markdown',
+    };
+    headers.set('content-type', extMime[ext] ?? 'application/octet-stream');
   }
 
   const requestOrigin = c.req.header('Origin') || '';
@@ -659,11 +665,14 @@ ${caseFilesContext}
       // Flush any remaining buffer content
       if (buffer.trim().startsWith('data: ')) {
         try {
-          const json = JSON.parse(buffer.trim().slice(6));
-          const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (text) {
-            fullReport += text;
-            await stream.write(text);
+          const jsonStr = buffer.trim().slice(6);
+          if (jsonStr && jsonStr !== '[DONE]') {
+            const json = JSON.parse(jsonStr);
+            const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (text) {
+              fullReport += text;
+              await stream.write(text);
+            }
           }
         } catch (e) {}
       }
