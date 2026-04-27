@@ -60,7 +60,7 @@ caseFilesRouter.post('/upload', verifyTurnstile, async (c) => {
 caseFilesRouter.post('/storage-upload', verifyAdmin, async (c) => {
   try {
     const formData = await c.req.formData();
-    const file = formData.get('file') as File;
+    const file = formData.get('file') as unknown as File;
     if (!file) return c.json({ error: 'No file uploaded' }, 400);
 
     const name = (formData.get('name') as string) || file.name;

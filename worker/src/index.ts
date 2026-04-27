@@ -11,6 +11,7 @@ import { cache } from 'hono/cache';
 import { z } from 'zod';
 import { extractAndScoreLSTs } from './utils/ai';
 import { resolveModelId, getOrRefreshSystemCache } from './utils/gemini-cache';
+import { indexDocumentVector } from './lib/helpers';
 
 const reportUploadSchema = z.object({
   id: z.string().optional(),
@@ -247,34 +248,6 @@ async function rateLimit(c: any, next: any) {
 
   await c.env.RATELIMIT.put(key, (count + 1).toString(), { expirationTtl: window });
   return next();
-}
-
-async function indexDocumentVector(env: Bindings, id: string, title: string, content: string, type: string) {
-  if (!env.AI || !env.VECTORIZE) {
-     throw new Error('Infrastructure bindings missing (AI/VECTORIZE)');
-  }
-
-  try {
-    const textToEmbed = `${title}\n\n${content}`.substring(0, 1000); 
-    const aiOutput = await env.AI.run('@cf/baai/bge-small-en-v1.5', {
-      text: [textToEmbed]
-    });
-    
-    // Workers AI might return direct data or { data: [] } depending on version/types
-    const values = Array.isArray(aiOutput) ? aiOutput[0] : aiOutput.data?.[0];
-    if (!values) throw new Error(`AI generated no embeddings for ${id}`);
-
-    await env.VECTORIZE.upsert([
-      {
-        id: id,
-        values: values,
-        metadata: { title, type, timestamp: new Date().toISOString() }
-      }
-    ]);
-  } catch (err: any) {
-    console.error(`[VECTOR ERROR] ${id}:`, err);
-    throw err; // RE-THROW so the loop can identify a failure
-  }
 }
 
 // LST Extraction Helper
