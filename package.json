@@ -28,7 +28,9 @@
     "build": "vite build",
     "dev": "vite",
     "preview": "vite preview",
-    "version:sync": "node utils/sync-version.js"
+    "version:sync": "node utils/sync-version.js",
+    "typecheck": "tsc --noEmit",
+    "test": "cd worker && npm test"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
@@ -110,7 +112,7 @@
     "@types/react-dom": "^18.2.19",
     "@vitejs/plugin-react": "4.7.0",
     "tailwindcss": "4.2.2",
-    "typescript": "^6.0.2",
+    "typescript": "^5.8.2",
     "vite": "^6.4.2"
   }
 }

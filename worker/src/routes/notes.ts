@@ -14,7 +14,7 @@ const noteSchema = z.object({
 
 export const notesRouter = new Hono<{ Bindings: Bindings }>();
 
-notesRouter.get('/', async (c) => {
+notesRouter.get('/', verifyAdmin, async (c) => {
   try {
     const limit = Math.min(Number(c.req.query('limit') || 100), 500);
     const offset = Number(c.req.query('offset') || 0);

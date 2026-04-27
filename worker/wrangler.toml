@@ -7,7 +7,7 @@ workers_dev = true
 crons = ["0 0 * * *"]
 
 [observability]
-enabled = false
+enabled = true
 head_sampling_rate = 1
 
 [observability.logs]
