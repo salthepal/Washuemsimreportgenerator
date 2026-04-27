@@ -139,7 +139,6 @@ ${query}
     }
   } catch (error: any) {
     console.error('[ASK] Search error:', error);
-    console.error(error);
     return c.json({ error: 'Internal server error' }, 500);
   }
 });

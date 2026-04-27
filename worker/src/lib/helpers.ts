@@ -1,18 +1,12 @@
 import type { Bindings } from '../types';
 
-async function timingSafeCompare(a: string, b: string): Promise<boolean> {
+function timingSafeCompare(a: string, b: string): boolean {
   const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    'raw', new Uint8Array(32), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
-  );
-  const [sigA, sigB] = await Promise.all([
-    crypto.subtle.sign('HMAC', key, encoder.encode(a)),
-    crypto.subtle.sign('HMAC', key, encoder.encode(b)),
-  ]);
-  const arrA = new Uint8Array(sigA);
-  const arrB = new Uint8Array(sigB);
-  let diff = 0;
-  for (let i = 0; i < arrA.length; i++) diff |= arrA[i] ^ arrB[i];
+  const arrA = encoder.encode(a);
+  const arrB = encoder.encode(b);
+  let diff = arrA.length ^ arrB.length;
+  const maxLength = Math.max(arrA.length, arrB.length);
+  for (let i = 0; i < maxLength; i++) diff |= (arrA[i] ?? 0) ^ (arrB[i] ?? 0);
   return diff === 0;
 }
 
@@ -108,7 +102,7 @@ export async function verifyAdmin(c: any, next: any) {
     return c.json({ error: 'Administrative access not configured' }, 500);
   }
 
-  if (!providedToken || !(await timingSafeCompare(providedToken, adminSecret))) {
+  if (!providedToken || !timingSafeCompare(providedToken, adminSecret)) {
     await logError(c.env.DB, 'unauthorized_admin_access', new Error('Invalid or missing Admin Token'), {
       ip: c.req.header('cf-connecting-ip')
     });

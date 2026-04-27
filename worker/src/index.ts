@@ -234,6 +234,7 @@ app.get('/files/:path{.+}', async (c) => {
   const requestOrigin = c.req.header('Origin') || '';
   if (ALLOWED_ORIGINS.includes(requestOrigin)) {
     headers.set('Access-Control-Allow-Origin', requestOrigin);
+    headers.set('Vary', 'Origin');
   }
 
   return c.body(object.body, { headers });
@@ -381,7 +382,6 @@ ${query}
     }
   } catch (error: any) {
     console.error('[ASK] Search error:', error);
-    console.error(error);
     return c.json({ error: 'Internal server error' }, 500);
   }
 });
@@ -493,7 +493,6 @@ app.get('/search', verifyAdmin, rateLimit, async (c) => {
 
   } catch (error: any) {
     console.error('Hybrid Search Failure:', error);
-    console.error(error);
     return c.json({ error: 'Internal server error' }, 500);
   }
 });
@@ -718,7 +717,6 @@ ${caseFilesContext}
     });
   } catch (error: any) {
     await logError(c.env.DB, 'streaming_report', error);
-    console.error(error);
     return c.json({ error: 'Internal server error' }, 500);
   }
 });
@@ -1168,7 +1166,6 @@ app.post('/admin/reindex', verifyAdmin, async (c) => {
     return c.json({ success: true, indexed: count });
   } catch (error: any) {
     console.error('Re-index administrative failure:', error);
-    console.error(error);
     return c.json({ error: 'Internal server error' }, 500);
   }
 });
