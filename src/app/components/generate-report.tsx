@@ -178,10 +178,14 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
 
       let fullContent = '';
       const stream = streamGenerateReport(payload, turnstileToken || '');
-      
+
       for await (const chunk of stream) {
         fullContent += chunk;
         setGeneratedReport(fullContent);
+      }
+
+      if (!fullContent.trim()) {
+        throw new Error('No content was returned. Please try again.');
       }
 
       // Append images if there are any

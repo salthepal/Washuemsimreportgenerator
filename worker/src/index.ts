@@ -603,7 +603,7 @@ ${caseFilesContext}
       let geminiRes: Response;
       try {
         geminiRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${pinnedModel}:streamGenerateContent?key=${geminiApiKey}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/${pinnedModel}:streamGenerateContent?key=${geminiApiKey}&alt=sse`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -633,48 +633,37 @@ ${caseFilesContext}
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        
-        // Gemini streaming JSON often comes as elements in an array: [{}, {}, ...]
-        // We need to parse individual JSON objects from the stream.
-        // It's safer to split by something identifiable or accumulate until a valid JSON object is found.
-        
-        let boundary = buffer.indexOf('}\n,');
-        if (boundary === -1) boundary = buffer.indexOf('}]'); // End of stream
-        
-        while (boundary !== -1) {
-          let part = buffer.substring(0, boundary + 1).trim();
-          // Remove leading array bracket or comma
-          if (part.startsWith('[')) part = part.substring(1);
-          if (part.startsWith(',')) part = part.substring(1);
-          
+
+        // SSE format: each event is "data: {...}\n\n"
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('data: ')) continue;
+          const jsonStr = trimmed.slice(6);
+          if (!jsonStr || jsonStr === '[DONE]') continue;
           try {
-            const json = JSON.parse(part);
-            if (json.candidates?.[0]?.content?.parts?.[0]?.text) {
-              const text = json.candidates[0].content.parts[0].text;
+            const json = JSON.parse(jsonStr);
+            const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (text) {
               fullReport += text;
               await stream.write(text);
             }
           } catch (e) {
-            console.error('Partial JSON parse failed:', e, part);
+            console.error('SSE JSON parse failed:', e, jsonStr);
           }
-          
-          buffer = buffer.substring(boundary + 2);
-          boundary = buffer.indexOf('}\n,');
-          if (boundary === -1) boundary = buffer.indexOf('}]');
         }
       }
 
-      // Final attempt for anything remaining in buffer
-      if (buffer.trim()) {
+      // Flush any remaining buffer content
+      if (buffer.trim().startsWith('data: ')) {
         try {
-          let lastPart = buffer.trim();
-          if (lastPart.endsWith(']')) lastPart = lastPart.slice(0, -1);
-          if (lastPart.startsWith(',')) lastPart = lastPart.substring(1);
-          const json = JSON.parse(lastPart);
-          if (json.candidates?.[0]?.content?.parts?.[0]?.text) {
-             const text = json.candidates[0].content.parts[0].text;
-             fullReport += text;
-             await stream.write(text);
+          const json = JSON.parse(buffer.trim().slice(6));
+          const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (text) {
+            fullReport += text;
+            await stream.write(text);
           }
         } catch (e) {}
       }
