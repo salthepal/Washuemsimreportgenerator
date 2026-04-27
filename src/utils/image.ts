@@ -1,22 +1,33 @@
-/**
- * Automatically compresses an image file using the HTML5 Canvas API in the browser.
- * Reduces the file size significantly before uploading to save storage quotas and bandwidth.
- */
 export async function compressImage(file: File, maxWidth = 1024, quality = 0.8): Promise<File> {
-  // If not an image (e.g., already compressed or different format), return as is
   if (!file.type.startsWith('image/')) {
     return file;
   }
 
+  // HEIC/HEIF files cannot be decoded by the Canvas API on non-Safari browsers.
+  // Convert to JPEG first using heic2any before passing to canvas.
+  const isHeic =
+    file.type === 'image/heic' ||
+    file.type === 'image/heif' ||
+    /\.heic$/i.test(file.name) ||
+    /\.heif$/i.test(file.name);
+
+  let processedFile = file;
+  if (isHeic) {
+    const heic2any = (await import('heic2any')).default;
+    const converted = await heic2any({ blob: file, toType: 'image/jpeg', quality });
+    const blob = Array.isArray(converted) ? converted[0] : converted;
+    const jpegName = file.name.replace(/\.[^/.]+$/, '') + '.jpg';
+    processedFile = new File([blob], jpegName, { type: 'image/jpeg', lastModified: Date.now() });
+  }
+
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(processedFile);
     reader.onload = (event) => {
       const img = new Image();
       img.src = event.target?.result as string;
-      
+
       img.onload = () => {
-        // Calculate new dimensions
         let width = img.width;
         let height = img.height;
 
@@ -25,12 +36,10 @@ export async function compressImage(file: File, maxWidth = 1024, quality = 0.8):
           width = maxWidth;
         }
 
-        // Create canvas
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
 
-        // Draw image directly onto canvas
         const ctx = canvas.getContext('2d');
         if (!ctx) {
           reject(new Error('Failed to get canvas context'));
@@ -38,28 +47,24 @@ export async function compressImage(file: File, maxWidth = 1024, quality = 0.8):
         }
         ctx.drawImage(img, 0, 0, width, height);
 
-        // Convert canvas back to a compressed File object (WebP is very efficient)
-        // Fallback to JPEG if WebP isn't supported, but modern browsers all support it
+        // Output as JPEG for universal compatibility (DOCX, PDF, browsers)
         canvas.toBlob(
           (blob) => {
             if (blob) {
-              const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, '.webp'), {
-                type: 'image/webp',
-                lastModified: Date.now(),
-              });
-              resolve(compressedFile);
+              const jpgName = processedFile.name.replace(/\.[^/.]+$/, '.jpg');
+              resolve(new File([blob], jpgName, { type: 'image/jpeg', lastModified: Date.now() }));
             } else {
               reject(new Error('Canvas to Blob failed'));
             }
           },
-          'image/webp',
+          'image/jpeg',
           quality
         );
       };
-      
+
       img.onerror = (error) => reject(error);
     };
-    
+
     reader.onerror = (error) => reject(error);
   });
 }

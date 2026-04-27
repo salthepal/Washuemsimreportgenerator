@@ -178,10 +178,14 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
 
       let fullContent = '';
       const stream = streamGenerateReport(payload, turnstileToken || '');
-      
+
       for await (const chunk of stream) {
         fullContent += chunk;
         setGeneratedReport(fullContent);
+      }
+
+      if (!fullContent.trim()) {
+        throw new Error('No content was returned. Please try again.');
       }
 
       // Append images if there are any
@@ -291,7 +295,9 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
                 y = margin;
               }
 
-              doc.addImage(base64, 'JPEG', margin, y, imgWidth, imgHeight);
+              const mimeMatch = base64.match(/^data:image\/(\w+);base64,/);
+              const imgFormat = (mimeMatch?.[1] ?? 'jpeg').toUpperCase().replace('JPG', 'JPEG');
+              doc.addImage(base64, imgFormat as any, margin, y, imgWidth, imgHeight);
               y += imgHeight + 10; // Add padding below image
             } catch (err) {
               console.warn("PDF Image Load Failed:", url);
@@ -601,7 +607,7 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
                       <p className="mb-2 text-sm text-slate-500 dark:text-slate-400">
                         <span className="font-semibold text-indigo-600 dark:text-indigo-400">Click to upload</span> or drag and drop
                       </p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">SVG, PNG, JPG or WEBP</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">PNG, JPG, WEBP or HEIC</p>
                     </>
                   )}
                 </div>
