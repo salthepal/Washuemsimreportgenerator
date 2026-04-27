@@ -602,6 +602,10 @@ ${caseFilesContext}
           generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
         };
 
+    // Audit the attempt before streaming starts so failures are always recorded
+    const attemptId = `report_${crypto.randomUUID()}`;
+    await logAudit(c.env.DB, 'generate_attempt', 'report', `Generation started`, attemptId);
+
     // Start streaming
     return streamText(c, async (stream) => {
       const genCtrl = new AbortController();
@@ -685,31 +689,31 @@ ${caseFilesContext}
       }));
 
       // After stream completes, save the full report to D1 (fire and forget)
-      const reportId = `report_${crypto.randomUUID()}`;
       c.executionCtx.waitUntil((async () => {
          try {
            const reportTitle = `AI Created - ${new Date().toLocaleDateString()}`;
            await c.env.DB.prepare('INSERT INTO reports (id, title, content, type, metadata) VALUES (?, ?, ?, ?, ?)')
-             .bind(reportId, reportTitle, fullReport, 'generated_report', JSON.stringify({ createdAt: new Date().toISOString() }))
+             .bind(attemptId, reportTitle, fullReport, 'generated_report', JSON.stringify({ createdAt: new Date().toISOString() }))
              .run();
-           
+
            // Write to R2 as markdown so Cloudflare AI Search can index it
-           const r2Key = `reports/generated/${reportId}.md`;
+           const r2Key = `reports/generated/${attemptId}.md`;
            const markdownContent = `# ${reportTitle}\n\nGenerated: ${new Date().toISOString()}\n\n${fullReport}`;
            await c.env.BUCKET.put(r2Key, markdownContent, {
              httpMetadata: { contentType: 'text/markdown' },
-             customMetadata: { reportId, type: 'generated_report', title: reportTitle }
+             customMetadata: { reportId: attemptId, type: 'generated_report', title: reportTitle }
            });
-           
+
            // AUTO-EXTRACT LSTS (AI POWERED) - Conditioned by user toggle
            if (extractLST !== false) {
-             await extractAndScoreLSTs(c.env.DB, fullReport, reportId, c.env.GEMINI_API_KEY);
+             await extractAndScoreLSTs(c.env.DB, fullReport, attemptId, c.env.GEMINI_API_KEY);
            }
-           
-           c.executionCtx.waitUntil(indexDocumentVector(c.env, reportId, reportTitle, fullReport, 'report'));
-           await logAudit(c.env.DB, 'generate', 'report', `Streaming report complete`, reportId);
+
+           c.executionCtx.waitUntil(indexDocumentVector(c.env, attemptId, reportTitle, fullReport, 'report'));
+           await logAudit(c.env.DB, 'generate', 'report', `Streaming report saved`, attemptId);
          } catch (dbErr) {
            console.error('Failed to save generated report:', dbErr);
+           await logAudit(c.env.DB, 'generate_failed', 'report', `Save failed after stream`, attemptId);
          }
       })());
     });
@@ -843,6 +847,8 @@ app.put('/reports/:id', verifyAdmin, async (c) => {
 const PROMPT_TEMPLATE = `Role: You are an expert Medical Simulation Specialist and Education Consultant for the Washington University Department of Emergency Medicine. Your goal is to generate professional, actionable Post-Session Reports that prioritize psychological safety and a "Just Culture" framework.
 
 Objective: Generate a Post-Session Report based on the provided session notes and case files that mirrors the structure of the prior reports while maintaining a supportive, growth-oriented tone.
+
+MULTI-SITE REPORTING: When session notes from more than one site are provided, generate a single combined report. If any site provided limited notes, synthesize what is available rather than omitting that site. Use a shared findings structure with site-specific callouts (e.g., "Site A:", "Site B:") within each section only when the sites differ meaningfully. Conclude with a unified Summary and Next Steps that addresses cross-site patterns and shared improvement opportunities.
 
 CRITICAL FORMATTING REQUIREMENT: You MUST output the entire report using strict Markdown formatting. Follow these rules exactly:
 
@@ -1072,6 +1078,20 @@ app.delete('/error-log', verifyAdmin, async (c) => {
     await c.env.DB.prepare('DELETE FROM error_logs').run();
     await logAudit(c.env.DB, 'clear', 'system', 'Error Log Cleared', 'error-log');
     return c.json({ success: true });
+  } catch (error: any) {
+    console.error(error);
+    return c.json({ error: 'Internal server error' }, 500);
+  }
+});
+
+// Audit Log
+app.get('/audit-log', verifyAdmin, async (c) => {
+  try {
+    const limit = Math.min(Number(c.req.query('limit') || 100), 500);
+    const { results } = await c.env.DB.prepare('SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT ?')
+      .bind(limit)
+      .all();
+    return c.json({ entries: results });
   } catch (error: any) {
     console.error(error);
     return c.json({ error: 'Internal server error' }, 500);
