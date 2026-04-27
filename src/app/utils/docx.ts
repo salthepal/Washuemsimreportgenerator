@@ -134,9 +134,10 @@ async function markdownToDocxParagraphs(markdown: string): Promise<Paragraph[]> 
               children: [
                 new ImageRun({
                   data: arrayBuffer,
+                  type: 'jpg',
                   transformation: {
                     width: 500,
-                    height: 350, // Scaled roughly 4:3 for typical session photos
+                    height: 350,
                   },
                 }),
               ],

@@ -228,7 +228,7 @@ app.get('/files/:path{.+}', async (c) => {
   
   // Ensure we have a valid image content type if R2 metadata is missing
   if (!headers.has('content-type')) {
-    headers.set('content-type', 'image/webp');
+    headers.set('content-type', 'image/jpeg');
   }
 
   const requestOrigin = c.req.header('Origin') || '';
