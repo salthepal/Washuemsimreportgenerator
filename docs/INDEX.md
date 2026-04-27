@@ -24,7 +24,7 @@ Welcome to the WashU Emergency Medicine Simulation & Safety Intelligence Platfor
 - [Development Setup](../CONTRIBUTING.md#-development-environment)
 - [Branching Strategy](../CONTRIBUTING.md#-branching--versioning)
 - [Testing Protocol](../CONTRIBUTING.md#-testing-protocol)
-- [Pull Request Process](../.github/PULL_REQUEST_TEMPLATE.md)
+- [Pull Request Process](../CONTRIBUTING.md#-contribution-guidelines)
 
 ### For DevOps
 - [Frontend Deployment (Cloudflare Pages)](../DEPLOYMENT.md#-1-frontend-deployment-cloudflare-pages)
@@ -133,7 +133,7 @@ Store simulation case information for reference.
 - **Object Storage:** Cloudflare R2
 - **Metadata Cache:** Cloudflare KV (rate limiting & auth)
 - **Vector Search:** Cloudflare Vectorize + Workers AI
-- **AI Search:** Cloudflare AI Search (AutoRAG)
+- **AI Search:** Custom RAG (Vectorize + Workers AI)
 - **Generative AI:** Google Gemini Flash
 
 #### Key Technologies
