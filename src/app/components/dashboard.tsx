@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Report, SessionNote, LST } from '../App';
 import { ShieldAlert, CheckCircle2, FileText, Users, Sparkles, Calendar, Search, Brain, X, Send, ExternalLink } from 'lucide-react';
 import { Skeleton } from './ui/skeleton';
@@ -35,6 +36,7 @@ interface SearchResult {
 }
 
 export function Dashboard({ reports, sessionNotes, generatedReports, lsts, isLoading, selectedSite, onNavigate }: DashboardProps) {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch] = useDebounce(searchQuery, 400);
   const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null);
@@ -202,7 +204,25 @@ export function Dashboard({ reports, sessionNotes, generatedReports, lsts, isLoa
                   )}
                 </div>
                 {searchResults.map(result => (
-                  <div key={result.id} className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors">
+                  <div
+                    key={result.id}
+                    role="button"
+                    tabIndex={0}
+                    className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setSearchResults(null);
+                      navigate(`/repository?open=${encodeURIComponent(result.id)}`);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setSearchQuery('');
+                        setSearchResults(null);
+                        navigate(`/repository?open=${encodeURIComponent(result.id)}`);
+                      }
+                    }}
+                  >
                     <div className={`mt-0.5 p-1.5 rounded-lg shrink-0 ${result.matchType === 'semantic' ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'}`}>
                       {result.matchType === 'semantic' ? <Sparkles className="w-3.5 h-3.5" /> : <Search className="w-3.5 h-3.5" />}
                     </div>
