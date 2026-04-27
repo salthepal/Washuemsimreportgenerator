@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": [],
+    "lib": ["ESNext", "DOM"]
+  },
+  "include": ["src/tests/**/*.ts", "src/utils/gemini-cache.ts"]
+}
