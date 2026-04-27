@@ -34,7 +34,8 @@ notesRouter.get('/', verifyAdmin, async (c) => {
       }))
     });
   } catch (error: any) {
-    return c.json({ error: error.message }, 500);
+    console.error(error);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });
 
@@ -56,7 +57,8 @@ notesRouter.post('/add', verifyTurnstile, async (c) => {
     return c.json({ success: true, notes: { ...note, id } });
   } catch (error: any) {
     await logError(c.env.DB, 'note_upload', error);
-    return c.json({ error: error.message }, 500);
+    console.error(error);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });
 
@@ -68,7 +70,8 @@ notesRouter.delete('/:id', verifyAdmin, async (c) => {
     return c.json({ success: true });
   } catch (error: any) {
     await logError(c.env.DB, 'note_delete', error);
-    return c.json({ error: error.message }, 500);
+    console.error(error);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });
 
@@ -99,6 +102,7 @@ notesRouter.put('/:id', verifyAdmin, async (c) => {
     await logAudit(c.env.DB, 'update', 'session_notes', `Updated note ${sessionName || id}`, id);
     return c.json({ success: true });
   } catch (error: any) {
-    return c.json({ error: error.message }, 500);
+    console.error(error);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });

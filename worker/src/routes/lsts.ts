@@ -47,7 +47,8 @@ lstsRouter.get('/', verifyAdmin, async (c) => {
       }))
     });
   } catch (error: any) {
-    return c.json({ error: error.message }, 500);
+    console.error(error);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });
 
@@ -81,7 +82,8 @@ lstsRouter.put('/:id', verifyAdmin, async (c) => {
     
     return c.json({ success: true });
   } catch (error: any) {
-    return c.json({ error: error.message }, 500);
+    console.error(error);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });
 
@@ -102,7 +104,8 @@ lstsRouter.post('/add', verifyAdmin, async (c) => {
     await logAudit(c.env.DB, 'create', 'lst', lst.title || 'Untitled LST', id);
     return c.json({ success: true, id });
   } catch (error: any) {
-    return c.json({ error: error.message }, 500);
+    console.error(error);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });
 
@@ -136,7 +139,8 @@ lstsRouter.post('/merge', verifyAdmin, async (c) => {
     await logAudit(c.env.DB, 'merge', 'lst', `Merged ${ids.length} LSTs into "${mergedLST.title}"`, id);
     return c.json({ success: true, id });
   } catch (error: any) {
-    return c.json({ error: error.message }, 500);
+    console.error(error);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });
 
@@ -147,7 +151,8 @@ lstsRouter.delete('/:id', verifyAdmin, async (c) => {
     await logAudit(c.env.DB, 'delete', 'lst', `Deleted LST ${id}`, id);
     return c.json({ success: true });
   } catch (error: any) {
-    return c.json({ error: error.message }, 500);
+    console.error(error);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });
 
@@ -159,6 +164,7 @@ lstsRouter.get('/:id/history', verifyAdmin, async (c) => {
       .all();
     return c.json(results);
   } catch (error: any) {
-    return c.json({ error: error.message }, 500);
+    console.error(error);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });

@@ -29,7 +29,8 @@ caseFilesRouter.get('/', async (c) => {
       createdAt: cf.created_at || cf.date
     })));
   } catch (error: any) {
-    return c.json({ error: error.message }, 500);
+    console.error(error);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });
 
@@ -53,7 +54,8 @@ caseFilesRouter.post('/upload', verifyTurnstile, async (c) => {
     await logAudit(c.env.DB, 'upload', 'case_file', title, id);
     return c.json({ success: true, id });
   } catch (error: any) {
-    return c.json({ error: error.message }, 500);
+    console.error(error);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });
 
@@ -74,6 +76,7 @@ caseFilesRouter.post('/storage-upload', verifyAdmin, async (c) => {
     await logAudit(c.env.DB, 'upload', 'file', name, key);
     return c.json({ success: true, key, url: `/files/${key}` });
   } catch (error: any) {
-    return c.json({ error: error.message }, 500);
+    console.error(error);
+    return c.json({ error: 'Internal server error' }, 500);
   }
 });
