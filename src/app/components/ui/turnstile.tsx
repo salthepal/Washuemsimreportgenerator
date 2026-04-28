@@ -2,10 +2,11 @@ import { useEffect, useRef } from 'react';
 
 interface TurnstileProps {
   onVerify: (token: string) => void;
+  onExpire?: () => void;
   siteKey?: string;
 }
 
-export function Turnstile({ onVerify, siteKey }: TurnstileProps) {
+export function Turnstile({ onVerify, onExpire, siteKey }: TurnstileProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
 
@@ -22,6 +23,12 @@ export function Turnstile({ onVerify, siteKey }: TurnstileProps) {
           sitekey: siteKey || defaultSiteKey,
           callback: (token: string) => {
             onVerify(token);
+          },
+          'expired-callback': () => {
+            if (onExpire) onExpire();
+          },
+          'error-callback': () => {
+            if (onExpire) onExpire();
           },
         });
       }
@@ -40,12 +47,12 @@ export function Turnstile({ onVerify, siteKey }: TurnstileProps) {
     }
 
     return () => {
-      // Cleanup widget on unmount if possible
       if (widgetIdRef.current && window.turnstile) {
-        // window.turnstile.remove(widgetIdRef.current);
+        window.turnstile.remove(widgetIdRef.current);
+        widgetIdRef.current = null;
       }
     };
-  }, [onVerify, siteKey]);
+  }, [onVerify, onExpire, siteKey]);
 
   return <div ref={containerRef} className="my-4" />;
 }
@@ -55,6 +62,7 @@ declare global {
     turnstile: {
       render: (container: HTMLElement, options: any) => string;
       remove: (id: string) => void;
+      reset: (id: string) => void;
     };
   }
 }

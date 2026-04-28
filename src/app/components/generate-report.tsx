@@ -28,6 +28,7 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
   const [generating, setGenerating] = useState(false);
   const [extractLST, setExtractLST] = useState(true);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [turnstileKey, setTurnstileKey] = useState(0);
   const [selectedModel, setSelectedModel] = useState<string>('gemini-flash-latest');
   const [loadingModel, setLoadingModel] = useState(false);
   
@@ -205,6 +206,9 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
       });
     } finally {
       setGenerating(false);
+      // Consume the used token; the widget will re-challenge and call onVerify with a fresh one
+      setTurnstileToken(null);
+      setTurnstileKey(k => k + 1);
     }
   };
 
@@ -742,7 +746,7 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
               </div>
             </div>
 
-            <Turnstile onVerify={setTurnstileToken} />
+            <Turnstile key={turnstileKey} onVerify={setTurnstileToken} onExpire={() => setTurnstileToken(null)} />
 
             <button
               onClick={handleGenerate}

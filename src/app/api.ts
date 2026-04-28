@@ -241,7 +241,10 @@ export async function* streamGenerateReport(payload: any, token?: string): Async
     body: JSON.stringify(payload),
   });
 
-  if (!response.ok) throw new Error('Generation failed');
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({}));
+    throw new Error((errData as any).error || `Generation failed (${response.status})`);
+  }
   const reader = response.body?.getReader();
   if (!reader) throw new Error('No stream reader');
 
