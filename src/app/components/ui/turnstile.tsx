@@ -52,7 +52,7 @@ export function Turnstile({ onVerify, onExpire, siteKey }: TurnstileProps) {
         widgetIdRef.current = null;
       }
     };
-  }, [onVerify, siteKey]);
+  }, [onVerify, onExpire, siteKey]);
 
   return <div ref={containerRef} className="my-4" />;
 }
