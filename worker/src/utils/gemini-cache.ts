@@ -24,7 +24,7 @@
 export const MODEL_ALIASES: Record<string, string> = {
   'gemini-flash-latest': 'gemini-2.0-flash-001',
   'gemini-flash-lite-latest': 'gemini-2.0-flash-lite-001',
-  'gemini-pro-latest': 'gemini-1.5-pro-001',
+  // Pro is NOT pinned — let the Gemini API resolve 'gemini-pro-latest' dynamically
 };
 
 /** Resolve a possibly-aliased model name to a pinned, versioned model ID. */
