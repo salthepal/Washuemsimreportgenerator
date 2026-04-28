@@ -608,6 +608,7 @@ ${caseFilesContext}
 
     // Start streaming
     return streamText(c, async (stream) => {
+     try {
       const genCtrl = new AbortController();
       const genTimeout = setTimeout(() => genCtrl.abort(), 120_000);
       let geminiRes: Response | undefined;
@@ -648,6 +649,7 @@ ${caseFilesContext}
       let fullReport = '';
       const decoder = new TextDecoder();
       let buffer = '';
+      let lastGeminiError = '';
 
       while (true) {
         const { done, value } = await reader.read();
@@ -666,7 +668,22 @@ ${caseFilesContext}
           if (!jsonStr || jsonStr === '[DONE]') continue;
           try {
             const json = JSON.parse(jsonStr);
-            const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
+
+            // Check for Gemini API error embedded in SSE event
+            if (json.error) {
+              lastGeminiError = json.error.message || JSON.stringify(json.error);
+              console.error('[GENERATE] Gemini SSE error event:', lastGeminiError);
+              continue;
+            }
+
+            // Check for blocked/stopped responses
+            const candidate = json.candidates?.[0];
+            if (candidate?.finishReason && candidate.finishReason !== 'STOP' && candidate.finishReason !== 'MAX_TOKENS') {
+              lastGeminiError = `Generation blocked: ${candidate.finishReason}`;
+              console.error('[GENERATE]', lastGeminiError);
+            }
+
+            const text = candidate?.content?.parts?.[0]?.text;
             if (text) {
               fullReport += text;
               await stream.write(text);
@@ -683,6 +700,9 @@ ${caseFilesContext}
           const jsonStr = buffer.trim().slice(6);
           if (jsonStr && jsonStr !== '[DONE]') {
             const json = JSON.parse(jsonStr);
+            if (json.error) {
+              lastGeminiError = json.error.message || JSON.stringify(json.error);
+            }
             const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
             if (text) {
               fullReport += text;
@@ -690,6 +710,14 @@ ${caseFilesContext}
             }
           }
         } catch (e) {}
+      }
+
+      // If the stream produced no text at all, surface the error
+      if (!fullReport.trim()) {
+        const errMsg = lastGeminiError || 'Gemini returned an empty response. The model may be unavailable or the request was blocked.';
+        console.error('[GENERATE] Empty stream. Last error:', errMsg);
+        await stream.write(`__GENERATION_ERROR__: ${errMsg}`);
+        return;
       }
 
       console.log(JSON.stringify({
@@ -727,6 +755,10 @@ ${caseFilesContext}
            await logAudit(c.env.DB, 'generate_failed', 'report', `Save failed after stream`, attemptId);
          }
       })());
+     } catch (streamErr: any) {
+       console.error('[GENERATE] Unhandled stream error:', streamErr);
+       await stream.write(`__GENERATION_ERROR__: ${streamErr?.message || 'Unexpected error during generation'}`);
+     }
     });
   } catch (error: any) {
     await logError(c.env.DB, 'streaming_report', error);
