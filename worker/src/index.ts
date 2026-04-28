@@ -1091,7 +1091,7 @@ app.get('/audit-log', verifyAdmin, async (c) => {
     const { results } = await c.env.DB.prepare('SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT ?')
       .bind(limit)
       .all();
-    return c.json({ entries: results });
+    return c.json(results);
   } catch (error: any) {
     console.error(error);
     return c.json({ error: 'Internal server error' }, 500);
