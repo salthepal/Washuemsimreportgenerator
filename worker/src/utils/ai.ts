@@ -1,3 +1,5 @@
+import { LIGHTWEIGHT_TASK_MODEL } from './models';
+
 export interface LSTPayload {
   title: string;
   description: string;
@@ -45,7 +47,7 @@ Format: [{"title": "...", "description": "...", "recommendation": "...", "severi
     let data: any;
     try {
       const geminiRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${geminiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${LIGHTWEIGHT_TASK_MODEL}:generateContent?key=${geminiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

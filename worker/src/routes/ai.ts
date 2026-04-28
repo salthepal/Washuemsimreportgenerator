@@ -3,6 +3,7 @@ import { streamText } from 'hono/streaming';
 import { z } from 'zod';
 import type { Bindings } from '../types';
 import { rateLimit } from '../lib/helpers';
+import { LIGHTWEIGHT_TASK_MODEL } from '../utils/models';
 
 const askSchema = z.object({
   query: z.string().min(1, "Query is required"),
@@ -59,7 +60,7 @@ ${query}
         const aiRouterTimeout = setTimeout(() => aiRouterCtrl.abort(), 30_000);
         try {
           const geminiRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:streamGenerateContent?key=${c.env.GEMINI_API_KEY}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/${LIGHTWEIGHT_TASK_MODEL}:streamGenerateContent?key=${c.env.GEMINI_API_KEY}`,
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -117,7 +118,7 @@ ${query}
       let data: any;
       try {
         const geminiRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${c.env.GEMINI_API_KEY}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/${LIGHTWEIGHT_TASK_MODEL}:generateContent?key=${c.env.GEMINI_API_KEY}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

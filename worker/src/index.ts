@@ -10,7 +10,8 @@ import { secureHeaders } from 'hono/secure-headers';
 import { cache } from 'hono/cache';
 import { z } from 'zod';
 import { extractAndScoreLSTs } from './utils/ai';
-import { resolveModelId, getOrRefreshSystemCache } from './utils/gemini-cache';
+import { resolveModelId, getOrRefreshSystemCache, CACHE_SETTINGS_KEY } from './utils/gemini-cache';
+import { DEFAULT_MODEL, LIGHTWEIGHT_TASK_MODEL } from './utils/models';
 import { indexDocumentVector, logError, logAudit, verifyTurnstile, verifyAdmin, rateLimit } from './lib/helpers';
 
 const reportUploadSchema = z.object({
@@ -295,7 +296,7 @@ ${query}
         const askStreamTimeout = setTimeout(() => askStreamCtrl.abort(), 30_000);
         try {
           const geminiRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:streamGenerateContent?key=${c.env.GEMINI_API_KEY}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/${LIGHTWEIGHT_TASK_MODEL}:streamGenerateContent?key=${c.env.GEMINI_API_KEY}`,
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -357,7 +358,7 @@ ${query}
       let askData: any;
       try {
         const geminiRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${c.env.GEMINI_API_KEY}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/${LIGHTWEIGHT_TASK_MODEL}:generateContent?key=${c.env.GEMINI_API_KEY}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -519,7 +520,7 @@ app.post('/generate-report', verifyTurnstile, rateLimit, async (c) => {
 
     // Get the user's preferred model
     const { results: modelRes } = await c.env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('ai_model_preference').all();
-    let modelPreference = 'gemini-flash-latest';
+    let modelPreference: string = DEFAULT_MODEL;
     if (modelRes[0]) {
       const val = modelRes[0].value as string;
       try {
@@ -609,120 +610,160 @@ ${caseFilesContext}
     // Start streaming
     return streamText(c, async (stream) => {
      try {
-      const genCtrl = new AbortController();
-      const genTimeout = setTimeout(() => genCtrl.abort(), 120_000);
-      let geminiRes: Response | undefined;
-      try {
-        geminiRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${pinnedModel}:streamGenerateContent?key=${geminiApiKey}&alt=sse`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(geminiBody),
-            signal: genCtrl.signal,
-          }
-        );
-      } catch (fetchErr: any) {
-        clearTimeout(genTimeout);
-        console.error('[GENERATE] Gemini fetch error:', fetchErr);
-        await stream.write(`__GENERATION_ERROR__: ${fetchErr?.message || 'Failed to reach Gemini API'}`);
-        return;
-      } finally {
-        clearTimeout(genTimeout);
-      }
-      const genStart = Date.now();
-
-      if (!geminiRes.ok) {
-        const errorData: any = await geminiRes.json().catch(() => ({}));
-        const errMsg = errorData.error?.message || `Gemini API error: ${geminiRes.status}`;
-        console.error('[GENERATE] Gemini API error:', errMsg);
-        await stream.write(`__GENERATION_ERROR__: ${errMsg}`);
-        return;
-      }
-
-      const reader = geminiRes.body?.getReader();
-      if (!reader) {
-        await stream.write(`__GENERATION_ERROR__: Failed to get stream reader from Gemini response`);
-        return;
-      }
-
       let fullReport = '';
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let lastGeminiError = '';
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-
-        // SSE format: each event is "data: {...}\n\n"
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith('data: ')) continue;
-          const jsonStr = trimmed.slice(6);
-          if (!jsonStr || jsonStr === '[DONE]') continue;
-          try {
-            const json = JSON.parse(jsonStr);
-
-            // Check for Gemini API error embedded in SSE event
-            if (json.error) {
-              lastGeminiError = json.error.message || JSON.stringify(json.error);
-              console.error('[GENERATE] Gemini SSE error event:', lastGeminiError);
-              continue;
-            }
-
-            // Check for blocked/stopped responses
-            const candidate = json.candidates?.[0];
-            if (candidate?.finishReason && candidate.finishReason !== 'STOP' && candidate.finishReason !== 'MAX_TOKENS') {
-              lastGeminiError = `Generation blocked: ${candidate.finishReason}`;
-              console.error('[GENERATE]', lastGeminiError);
-            }
-
-            const text = candidate?.content?.parts?.[0]?.text;
-            if (text) {
-              fullReport += text;
-              await stream.write(text);
-            }
-          } catch (e) {
-            console.error('SSE JSON parse failed:', e, jsonStr);
-          }
-        }
-      }
-
-      // Flush any remaining buffer content
-      if (buffer.trim().startsWith('data: ')) {
+      // Run a single generation attempt with the given request body. Streams text
+      // chunks to the client as they arrive and accumulates them into fullReport.
+      // Returns whether any text was produced and the last server-side error, if any.
+      const runAttempt = async (body: any): Promise<{ hasText: boolean; errorMessage: string | null }> => {
+        const ctrl = new AbortController();
+        const timeout = setTimeout(() => ctrl.abort(), 120_000);
+        let res: Response | undefined;
         try {
-          const jsonStr = buffer.trim().slice(6);
-          if (jsonStr && jsonStr !== '[DONE]') {
-            const json = JSON.parse(jsonStr);
-            if (json.error) {
-              lastGeminiError = json.error.message || JSON.stringify(json.error);
+          res = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${pinnedModel}:streamGenerateContent?key=${geminiApiKey}&alt=sse`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body),
+              signal: ctrl.signal,
             }
-            const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (text) {
-              fullReport += text;
-              await stream.write(text);
+          );
+        } catch (fetchErr: any) {
+          clearTimeout(timeout);
+          console.error('[GENERATE] Gemini fetch error:', fetchErr);
+          return { hasText: false, errorMessage: fetchErr?.message || 'Failed to reach Gemini API' };
+        }
+
+        if (!res.ok) {
+          clearTimeout(timeout);
+          const errorData: any = await res.json().catch(() => ({}));
+          const errMsg = errorData.error?.message || `Gemini API error: ${res.status}`;
+          console.error('[GENERATE] Gemini API error:', errMsg);
+          return { hasText: false, errorMessage: errMsg };
+        }
+
+        const reader = res.body?.getReader();
+        if (!reader) {
+          clearTimeout(timeout);
+          return { hasText: false, errorMessage: 'Failed to get stream reader from Gemini response' };
+        }
+
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let lastError: string | null = null;
+        let hasText = false;
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+
+            // SSE format: each event is "data: {...}\n\n"
+            const lines = buffer.split('\n');
+            buffer = lines.pop() ?? '';
+
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed.startsWith('data: ')) continue;
+              const jsonStr = trimmed.slice(6);
+              if (!jsonStr || jsonStr === '[DONE]') continue;
+              try {
+                const json = JSON.parse(jsonStr);
+
+                // Check for Gemini API error embedded in SSE event
+                if (json.error) {
+                  lastError = json.error.message || JSON.stringify(json.error);
+                  console.error('[GENERATE] Gemini SSE error event:', lastError);
+                  continue;
+                }
+
+                // Check for blocked/stopped responses
+                const candidate = json.candidates?.[0];
+                if (candidate?.finishReason && candidate.finishReason !== 'STOP' && candidate.finishReason !== 'MAX_TOKENS') {
+                  lastError = `Generation blocked: ${candidate.finishReason}`;
+                  console.error('[GENERATE]', lastError);
+                }
+
+                const text = candidate?.content?.parts?.[0]?.text;
+                if (text) {
+                  hasText = true;
+                  fullReport += text;
+                  await stream.write(text);
+                }
+              } catch (e) {
+                console.error('SSE JSON parse failed:', e, jsonStr);
+              }
             }
           }
-        } catch (e) {}
+
+          // Flush any remaining buffer content
+          if (buffer.trim().startsWith('data: ')) {
+            try {
+              const jsonStr = buffer.trim().slice(6);
+              if (jsonStr && jsonStr !== '[DONE]') {
+                const json = JSON.parse(jsonStr);
+                if (json.error) {
+                  lastError = json.error.message || JSON.stringify(json.error);
+                }
+                const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (text) {
+                  hasText = true;
+                  fullReport += text;
+                  await stream.write(text);
+                }
+              }
+            } catch {}
+          }
+        } catch (streamErr: any) {
+          // reader.read() can reject on abort, timeout, or network interruption.
+          // Capture the error so the caller always receives a structured result
+          // and the cache-fallback logic can still run.
+          const msg = streamErr?.message || 'Stream read error';
+          console.error('[GENERATE] Stream read error:', streamErr);
+          lastError = lastError ?? msg;
+        } finally {
+          clearTimeout(timeout);
+        }
+
+        return { hasText, errorMessage: lastError };
+      };
+
+      const genStart = Date.now();
+      let result = await runAttempt(geminiBody);
+      let usedCachedPath = cacheName !== null;
+
+      // If the cached path returned no text, the cached content may be stale or
+      // bound to an incompatible model. Invalidate the stored cache and retry
+      // once with the full prompt inline. Safe to retry because no text was
+      // streamed yet.
+      if (cacheName && !result.hasText) {
+        console.warn('[GENERATE] Cached path produced no text; falling back to uncached. Last error:', result.errorMessage);
+        try {
+          await c.env.DB.prepare('DELETE FROM settings WHERE key = ?').bind(CACHE_SETTINGS_KEY).run();
+        } catch (e) {
+          console.warn('[GENERATE] Failed to invalidate stale cache record:', e);
+        }
+        const uncachedBody = {
+          contents: [{ parts: [{ text: `${PROMPT_TEMPLATE}\n\n${contextBlock}` }] }],
+          generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
+        };
+        result = await runAttempt(uncachedBody);
+        usedCachedPath = false;
       }
 
-      // If the stream produced no text at all, surface the error
-      if (!fullReport.trim()) {
-        const errMsg = lastGeminiError || 'Gemini returned an empty response. The model may be unavailable or the request was blocked.';
-        console.error('[GENERATE] Empty stream. Last error:', errMsg);
+      if (!result.hasText) {
+        const errMsg = result.errorMessage || 'Gemini returned an empty response. The model may be unavailable or the request was blocked.';
+        console.error('[GENERATE] No text generated. Last error:', errMsg);
         await stream.write(`__GENERATION_ERROR__: ${errMsg}`);
         return;
       }
 
       console.log(JSON.stringify({
         event: 'gemini_call', endpoint: '/generate-report',
-        model: pinnedModel, cached: cacheName !== null,
+        model: pinnedModel, cached: usedCachedPath,
         latencyMs: Date.now() - genStart,
         outputChars: fullReport.length,
       }));
@@ -970,7 +1011,7 @@ app.get('/prompt-template', verifyAdmin, (c) => {
 app.get('/model-preference', verifyAdmin, async (c) => {
   try {
     const { results } = await c.env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('ai_model_preference').all();
-    if (!results[0]) return c.json({ model: 'gemini-flash-latest' });
+    if (!results[0]) return c.json({ model: DEFAULT_MODEL });
     const val = results[0].value as string;
     let model = val;
     if (val.startsWith('"')) {
@@ -978,7 +1019,7 @@ app.get('/model-preference', verifyAdmin, async (c) => {
     }
     return c.json({ model });
   } catch (error: any) {
-    return c.json({ model: 'gemini-flash-latest' });
+    return c.json({ model: DEFAULT_MODEL });
   }
 });
 
