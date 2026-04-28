@@ -28,7 +28,9 @@ export function resolveModelId(tag: string): string {
 
 const CACHE_TTL_SECONDS = 3600;
 const CACHE_REFRESH_BEFORE_EXPIRY_MS = 5 * 60 * 1000;
-const CACHE_SETTINGS_KEY = 'gemini_system_cache';
+
+/** D1 settings key used to persist the active Gemini cachedContent record. */
+export const CACHE_SETTINGS_KEY = 'gemini_system_cache';
 
 interface CacheRecord {
   name: string;

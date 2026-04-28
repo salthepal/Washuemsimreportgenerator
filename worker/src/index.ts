@@ -10,7 +10,7 @@ import { secureHeaders } from 'hono/secure-headers';
 import { cache } from 'hono/cache';
 import { z } from 'zod';
 import { extractAndScoreLSTs } from './utils/ai';
-import { resolveModelId, getOrRefreshSystemCache } from './utils/gemini-cache';
+import { resolveModelId, getOrRefreshSystemCache, CACHE_SETTINGS_KEY } from './utils/gemini-cache';
 import { DEFAULT_MODEL, LIGHTWEIGHT_TASK_MODEL } from './utils/models';
 import { indexDocumentVector, logError, logAudit, verifyTurnstile, verifyAdmin, rateLimit } from './lib/helpers';
 
@@ -717,6 +717,13 @@ ${caseFilesContext}
               }
             } catch {}
           }
+        } catch (streamErr: any) {
+          // reader.read() can reject on abort, timeout, or network interruption.
+          // Capture the error so the caller always receives a structured result
+          // and the cache-fallback logic can still run.
+          const msg = streamErr?.message || 'Stream read error';
+          console.error('[GENERATE] Stream read error:', streamErr);
+          lastError = lastError ?? msg;
         } finally {
           clearTimeout(timeout);
         }
@@ -735,7 +742,7 @@ ${caseFilesContext}
       if (cacheName && !result.hasText) {
         console.warn('[GENERATE] Cached path produced no text; falling back to uncached. Last error:', result.errorMessage);
         try {
-          await c.env.DB.prepare('DELETE FROM settings WHERE key = ?').bind('gemini_system_cache').run();
+          await c.env.DB.prepare('DELETE FROM settings WHERE key = ?').bind(CACHE_SETTINGS_KEY).run();
         } catch (e) {
           console.warn('[GENERATE] Failed to invalidate stale cache record:', e);
         }
