@@ -12,6 +12,7 @@ import { useReports, useNotes, useCaseFiles } from '../hooks/useQueries';
 import { Turnstile } from './ui/turnstile';
 import { LayoutGrid, Cpu } from 'lucide-react';
 import { compressImage } from '../../utils/image';
+import { GEMINI_FLASH, GEMINI_FLASH_LITE, GEMINI_PRO, DEFAULT_MODEL } from '../constants/models';
 
 interface GenerateReportProps {
   selectedSite?: string;
@@ -29,7 +30,7 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
   const [extractLST, setExtractLST] = useState(true);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [turnstileKey, setTurnstileKey] = useState(0);
-  const [selectedModel, setSelectedModel] = useState<string>('gemini-flash-latest');
+  const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_MODEL);
   const [loadingModel, setLoadingModel] = useState(false);
   
   // Media Attachments & Box Integration
@@ -726,9 +727,9 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
                 </div>
                 <div className="flex gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg">
                   {[
-                    { id: 'gemini-flash-lite-latest', label: 'Lite', color: 'bg-green-600 text-white border-green-600', hover: 'hover:bg-green-50 text-green-700' },
-                    { id: 'gemini-flash-latest', label: 'Flash', color: 'bg-blue-600 text-white border-blue-600', hover: 'hover:bg-blue-50 text-blue-700' },
-                    { id: 'gemini-pro-latest', label: 'Pro', color: 'bg-indigo-600 text-white border-indigo-600', hover: 'hover:bg-indigo-50 text-indigo-700' },
+                    { id: GEMINI_FLASH_LITE, label: 'Lite', color: 'bg-green-600 text-white border-green-600', hover: 'hover:bg-green-50 text-green-700' },
+                    { id: GEMINI_FLASH, label: 'Flash', color: 'bg-blue-600 text-white border-blue-600', hover: 'hover:bg-blue-50 text-blue-700' },
+                    { id: GEMINI_PRO, label: 'Pro', color: 'bg-indigo-600 text-white border-indigo-600', hover: 'hover:bg-indigo-50 text-indigo-700' },
                   ].map((m) => (
                     <button
                       key={m.id}

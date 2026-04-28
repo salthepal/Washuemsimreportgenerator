@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { FileText, Copy, CheckCircle, AlertCircle, Eye, Code } from 'lucide-react';
 import { API_BASE, getApiHeaders } from '../api';
+import { GEMINI_FLASH, GEMINI_FLASH_LITE, GEMINI_PRO, DEFAULT_MODEL } from '../constants/models';
 import { toast } from 'sonner';
 
 export function ViewAIPrompt() {
@@ -8,7 +9,7 @@ export function ViewAIPrompt() {
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [showFormatted, setShowFormatted] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<string>('gemini-flash-latest');
+  const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_MODEL);
   const [savingModel, setSavingModel] = useState(false);
 
   useEffect(() => {
@@ -151,8 +152,8 @@ export function ViewAIPrompt() {
                   <input
                     type="radio"
                     name="model"
-                    value="gemini-flash-latest"
-                    checked={selectedModel === 'gemini-flash-latest'}
+                    value={GEMINI_FLASH}
+                    checked={selectedModel === GEMINI_FLASH}
                     onChange={(e) => handleModelChange(e.target.value)}
                     disabled={savingModel}
                     className="w-4 h-4 text-purple-600 focus:ring-2 focus:ring-purple-500"
@@ -171,8 +172,8 @@ export function ViewAIPrompt() {
                   <input
                     type="radio"
                     name="model"
-                    value="gemini-flash-lite-latest"
-                    checked={selectedModel === 'gemini-flash-lite-latest'}
+                    value={GEMINI_FLASH_LITE}
+                    checked={selectedModel === GEMINI_FLASH_LITE}
                     onChange={(e) => handleModelChange(e.target.value)}
                     disabled={savingModel}
                     className="w-4 h-4 text-purple-600 focus:ring-2 focus:ring-purple-500"
@@ -191,8 +192,8 @@ export function ViewAIPrompt() {
                   <input
                     type="radio"
                     name="model"
-                    value="gemini-pro-latest"
-                    checked={selectedModel === 'gemini-pro-latest'}
+                    value={GEMINI_PRO}
+                    checked={selectedModel === GEMINI_PRO}
                     onChange={(e) => handleModelChange(e.target.value)}
                     disabled={savingModel}
                     className="w-4 h-4 text-purple-600 focus:ring-2 focus:ring-purple-500"

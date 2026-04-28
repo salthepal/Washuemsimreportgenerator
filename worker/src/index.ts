@@ -11,6 +11,7 @@ import { cache } from 'hono/cache';
 import { z } from 'zod';
 import { extractAndScoreLSTs } from './utils/ai';
 import { resolveModelId, getOrRefreshSystemCache } from './utils/gemini-cache';
+import { DEFAULT_MODEL, LIGHTWEIGHT_TASK_MODEL } from './utils/models';
 import { indexDocumentVector, logError, logAudit, verifyTurnstile, verifyAdmin, rateLimit } from './lib/helpers';
 
 const reportUploadSchema = z.object({
@@ -295,7 +296,7 @@ ${query}
         const askStreamTimeout = setTimeout(() => askStreamCtrl.abort(), 30_000);
         try {
           const geminiRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:streamGenerateContent?key=${c.env.GEMINI_API_KEY}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/${LIGHTWEIGHT_TASK_MODEL}:streamGenerateContent?key=${c.env.GEMINI_API_KEY}`,
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -357,7 +358,7 @@ ${query}
       let askData: any;
       try {
         const geminiRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${c.env.GEMINI_API_KEY}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/${LIGHTWEIGHT_TASK_MODEL}:generateContent?key=${c.env.GEMINI_API_KEY}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -519,7 +520,7 @@ app.post('/generate-report', verifyTurnstile, rateLimit, async (c) => {
 
     // Get the user's preferred model
     const { results: modelRes } = await c.env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('ai_model_preference').all();
-    let modelPreference = 'gemini-flash-latest';
+    let modelPreference: string = DEFAULT_MODEL;
     if (modelRes[0]) {
       const val = modelRes[0].value as string;
       try {
@@ -1003,7 +1004,7 @@ app.get('/prompt-template', verifyAdmin, (c) => {
 app.get('/model-preference', verifyAdmin, async (c) => {
   try {
     const { results } = await c.env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('ai_model_preference').all();
-    if (!results[0]) return c.json({ model: 'gemini-flash-latest' });
+    if (!results[0]) return c.json({ model: DEFAULT_MODEL });
     const val = results[0].value as string;
     let model = val;
     if (val.startsWith('"')) {
@@ -1011,7 +1012,7 @@ app.get('/model-preference', verifyAdmin, async (c) => {
     }
     return c.json({ model });
   } catch (error: any) {
-    return c.json({ model: 'gemini-flash-latest' });
+    return c.json({ model: DEFAULT_MODEL });
   }
 });
 
