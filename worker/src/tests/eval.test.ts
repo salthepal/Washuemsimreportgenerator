@@ -14,7 +14,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { resolveModelId, MODEL_ALIASES } from '../utils/gemini-cache';
+import { resolveModelId } from '../utils/gemini-cache';
 
 // ─── 1. Just Culture Tone Checker ────────────────────────────────────────────
 
@@ -422,37 +422,20 @@ describe('Gemini stream chunk parser', () => {
 // ─── 6. Model Alias Resolution & Cache Record ─────────────────────────────────
 
 describe('Model alias resolution', () => {
-  it('resolves gemini-flash-latest to a pinned versioned ID', () => {
-    const resolved = resolveModelId('gemini-flash-latest');
-    expect(resolved).not.toBe('gemini-flash-latest');
-    expect(resolved).toMatch(/^\d{4}$|^gemini-/); // versioned: e.g. gemini-2.0-flash-001
+  it('passes gemini-flash-latest through as-is', () => {
+    expect(resolveModelId('gemini-flash-latest')).toBe('gemini-flash-latest');
   });
 
-  it('resolves gemini-flash-lite-latest to a pinned versioned ID', () => {
-    const resolved = resolveModelId('gemini-flash-lite-latest');
-    expect(resolved).not.toBe('gemini-flash-lite-latest');
+  it('passes gemini-flash-lite-latest through as-is', () => {
+    expect(resolveModelId('gemini-flash-lite-latest')).toBe('gemini-flash-lite-latest');
   });
 
-  it('passes through an already-pinned model ID unchanged', () => {
-    expect(resolveModelId('gemini-2.0-flash-001')).toBe('gemini-2.0-flash-001');
-    expect(resolveModelId('gemini-1.5-pro-001')).toBe('gemini-1.5-pro-001');
+  it('passes gemini-pro-latest through as-is', () => {
+    expect(resolveModelId('gemini-pro-latest')).toBe('gemini-pro-latest');
   });
 
-  it('passes through an unknown alias unchanged (safe default)', () => {
+  it('passes through any model tag unchanged', () => {
     expect(resolveModelId('some-future-model-xyz')).toBe('some-future-model-xyz');
-  });
-
-  it('MODEL_ALIASES map contains no alias that maps to itself', () => {
-    for (const [alias, resolved] of Object.entries(MODEL_ALIASES)) {
-      expect(alias).not.toBe(resolved);
-    }
-  });
-
-  it('all resolved model IDs follow the versioned naming convention', () => {
-    for (const resolved of Object.values(MODEL_ALIASES)) {
-      // Versioned IDs end in -NNN (e.g. -001, -002)
-      expect(resolved).toMatch(/-\d{3}$/);
-    }
   });
 });
 

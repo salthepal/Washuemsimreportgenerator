@@ -21,15 +21,9 @@
  * function logs a warning and returns null (graceful fallback).
  */
 
-export const MODEL_ALIASES: Record<string, string> = {
-  'gemini-flash-latest': 'gemini-2.0-flash-001',
-  'gemini-flash-lite-latest': 'gemini-2.0-flash-lite-001',
-  // Pro is NOT pinned — let the Gemini API resolve 'gemini-pro-latest' dynamically
-};
-
-/** Resolve a possibly-aliased model name to a pinned, versioned model ID. */
-export function resolveModelId(alias: string): string {
-  return MODEL_ALIASES[alias] ?? alias;
+/** Pass model tags through as-is — they are real Gemini API model identifiers. */
+export function resolveModelId(tag: string): string {
+  return tag;
 }
 
 const CACHE_TTL_SECONDS = 3600;
