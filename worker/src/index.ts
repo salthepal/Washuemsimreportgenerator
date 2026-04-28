@@ -610,7 +610,7 @@ ${caseFilesContext}
     return streamText(c, async (stream) => {
       const genCtrl = new AbortController();
       const genTimeout = setTimeout(() => genCtrl.abort(), 120_000);
-      let geminiRes: Response;
+      let geminiRes: Response | undefined;
       try {
         geminiRes = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/${pinnedModel}:streamGenerateContent?key=${geminiApiKey}&alt=sse`,
@@ -621,6 +621,11 @@ ${caseFilesContext}
             signal: genCtrl.signal,
           }
         );
+      } catch (fetchErr: any) {
+        clearTimeout(genTimeout);
+        console.error('[GENERATE] Gemini fetch error:', fetchErr);
+        await stream.write(`__GENERATION_ERROR__: ${fetchErr?.message || 'Failed to reach Gemini API'}`);
+        return;
       } finally {
         clearTimeout(genTimeout);
       }
@@ -628,11 +633,17 @@ ${caseFilesContext}
 
       if (!geminiRes.ok) {
         const errorData: any = await geminiRes.json().catch(() => ({}));
-        throw new Error(errorData.error?.message || `Gemini API error: ${geminiRes.status}`);
+        const errMsg = errorData.error?.message || `Gemini API error: ${geminiRes.status}`;
+        console.error('[GENERATE] Gemini API error:', errMsg);
+        await stream.write(`__GENERATION_ERROR__: ${errMsg}`);
+        return;
       }
 
       const reader = geminiRes.body?.getReader();
-      if (!reader) throw new Error('Failed to get stream reader');
+      if (!reader) {
+        await stream.write(`__GENERATION_ERROR__: Failed to get stream reader from Gemini response`);
+        return;
+      }
 
       let fullReport = '';
       const decoder = new TextDecoder();

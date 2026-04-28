@@ -249,10 +249,19 @@ export async function* streamGenerateReport(payload: any, token?: string): Async
   if (!reader) throw new Error('No stream reader');
 
   const decoder = new TextDecoder();
+  let accumulated = '';
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
-    yield decoder.decode(value);
+    const chunk = decoder.decode(value);
+    accumulated += chunk;
+    // Detect worker-side error sentinel written into the stream
+    if (accumulated.includes('__GENERATION_ERROR__: ')) {
+      const errStart = accumulated.indexOf('__GENERATION_ERROR__: ');
+      const errMsg = accumulated.slice(errStart + '__GENERATION_ERROR__: '.length).trim();
+      throw new Error(errMsg || 'Generation failed on the server. Please try again.');
+    }
+    yield chunk;
   }
 }
 

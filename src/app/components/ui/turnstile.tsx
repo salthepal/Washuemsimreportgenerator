@@ -10,9 +10,17 @@ export function Turnstile({ onVerify, onExpire, siteKey }: TurnstileProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
 
+  // Store callbacks in refs so the widget never needs to be re-mounted when
+  // the parent re-renders and passes new inline function references.
+  const onVerifyRef = useRef(onVerify);
+  const onExpireRef = useRef(onExpire);
+  useEffect(() => { onVerifyRef.current = onVerify; }, [onVerify]);
+  useEffect(() => { onExpireRef.current = onExpire; }, [onExpire]);
+
   // Default sitekey for WashU EM Sim Intelligence (Cloudflare managed)
   const defaultSiteKey = '0x4AAAAAAC1gQskkjSorxR2e';
 
+  // Only re-mount the widget when the siteKey changes — NOT when callbacks change.
   useEffect(() => {
     const scriptId = 'cloudflare-turnstile-script';
     let script = document.getElementById(scriptId) as HTMLScriptElement;
@@ -22,13 +30,13 @@ export function Turnstile({ onVerify, onExpire, siteKey }: TurnstileProps) {
         widgetIdRef.current = window.turnstile.render(containerRef.current, {
           sitekey: siteKey || defaultSiteKey,
           callback: (token: string) => {
-            onVerify(token);
+            onVerifyRef.current(token);
           },
           'expired-callback': () => {
-            if (onExpire) onExpire();
+            onExpireRef.current?.();
           },
           'error-callback': () => {
-            if (onExpire) onExpire();
+            onExpireRef.current?.();
           },
         });
       }
@@ -52,7 +60,8 @@ export function Turnstile({ onVerify, onExpire, siteKey }: TurnstileProps) {
         widgetIdRef.current = null;
       }
     };
-  }, [onVerify, onExpire, siteKey]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [siteKey]);
 
   return <div ref={containerRef} className="my-4" />;
 }
