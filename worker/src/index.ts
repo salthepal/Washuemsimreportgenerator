@@ -1087,7 +1087,7 @@ app.delete('/error-log', verifyAdmin, async (c) => {
 // Audit Log
 app.get('/audit-log', verifyAdmin, async (c) => {
   try {
-    const limit = Math.min(Number(c.req.query('limit') || 100), 500);
+    const limit = Math.max(1, Math.min(parseInt(c.req.query('limit') || '100', 10) || 100, 500));
     const { results } = await c.env.DB.prepare('SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT ?')
       .bind(limit)
       .all();
