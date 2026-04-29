@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Sparkles, CheckCircle2, AlertCircle, Download, Copy, Lightbulb, Target, FolderOpen, Search, Edit3, FileText, UploadCloud, X, Image as ImageIcon } from 'lucide-react';
 import { Report, SessionNote, CaseFile } from '../types';
 import { API_BASE, getApiHeaders, streamGenerateReport } from '../api';
@@ -8,6 +8,7 @@ import { useSelection } from '../hooks/useSelection';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useDebounce } from 'use-debounce';
 import jsPDF from 'jspdf';
+import { useQueryClient } from '@tanstack/react-query';
 import { useReports, useNotes, useCaseFiles } from '../hooks/useQueries';
 import { Turnstile } from './ui/turnstile';
 import { LayoutGrid, Cpu } from 'lucide-react';
@@ -20,6 +21,7 @@ interface GenerateReportProps {
 }
 
 export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps) {
+  const queryClient = useQueryClient();
   const { data: reports = [] } = useReports();
   const { data: sessionNotes = [] } = useNotes();
   const { data: caseFiles = [] } = useCaseFiles();
@@ -37,6 +39,7 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
   const [attachedImages, setAttachedImages] = useState<string[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [boxToken, setBoxToken] = useState<string | null>(null);
+  const pendingRefreshTimers = useRef<number[]>([]);
   
   // Draft Persistence: Use localStorage to persist generated report
   const [generatedReport, setGeneratedReport] = useLocalStorage<string | null>('generatedReportDraft', null);
@@ -136,6 +139,19 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
     fetchModel();
   }, []);
 
+  useEffect(() => {
+    return () => {
+      pendingRefreshTimers.current.forEach((timerId) => window.clearTimeout(timerId));
+    };
+  }, []);
+
+  const refreshGeneratedArtifacts = () => {
+    queryClient.invalidateQueries({ queryKey: ['hydration'] });
+    queryClient.invalidateQueries({ queryKey: ['lsts'] });
+    queryClient.invalidateQueries({ queryKey: ['reports'] });
+    queryClient.invalidateQueries({ queryKey: ['generatedReports'] });
+  };
+
   const handleModelChange = async (newModel: string) => {
     const previousModel = selectedModel;
     setSelectedModel(newModel);
@@ -199,6 +215,14 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
 
       toast.success('Report generated successfully!');
       onRefresh();
+      refreshGeneratedArtifacts();
+
+      // LST extraction is saved asynchronously by the Worker after the stream ends.
+      // Re-pull the tracker data shortly after the initial success refresh so the
+      // newly created safety threats appear without a manual reload.
+      pendingRefreshTimers.current.push(window.setTimeout(() => {
+        refreshGeneratedArtifacts();
+      }, 4000));
 
     } catch (error: any) {
       console.error('Generation error:', error);

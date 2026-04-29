@@ -112,7 +112,14 @@ export async function verifyAdmin(c: any, next: any) {
   await next();
 }
 
-export async function indexDocumentVector(env: Bindings, id: string, title: string, content: string, type: string) {
+export async function indexDocumentVector(
+  env: Bindings,
+  id: string,
+  title: string,
+  content: string,
+  type: string,
+  extraMetadata: Record<string, string> = {}
+) {
   if (!env.AI || !env.VECTORIZE) {
     throw new Error('Infrastructure bindings missing (AI/VECTORIZE)');
   }
@@ -131,7 +138,7 @@ export async function indexDocumentVector(env: Bindings, id: string, title: stri
       {
         id: id,
         values: values,
-        metadata: { title, type, timestamp: new Date().toISOString() }
+        metadata: { title, type, timestamp: new Date().toISOString(), ...extraMetadata }
       }
     ]);
   } catch (err: any) {
