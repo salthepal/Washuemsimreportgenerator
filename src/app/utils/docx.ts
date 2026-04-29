@@ -2,7 +2,7 @@
  * DOCX generation utilities
  * Converts Markdown-formatted text to properly structured Word documents
  */
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, ImageRun } from 'docx';
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, ImageRun, Table, TableRow, TableCell, WidthType } from 'docx';
 
 export interface DocxGenerationOptions {
   filename?: string;
@@ -49,152 +49,172 @@ function parseInlineFormatting(text: string): TextRun[] {
   return textRuns.length > 0 ? textRuns : [new TextRun(text)];
 }
 
+async function fetchImageBuffer(url: string): Promise<{ buffer: ArrayBuffer; type: 'jpg' | 'png' } | null> {
+  try {
+    const response = await fetch(url);
+    const mimeType = response.headers.get('content-type')?.split(';')[0].trim() ?? 'image/jpeg';
+    if (mimeType === 'image/png') {
+      return { buffer: await response.arrayBuffer(), type: 'png' };
+    }
+    if (mimeType === 'image/jpeg' || mimeType === 'image/jpg') {
+      return { buffer: await response.arrayBuffer(), type: 'jpg' };
+    }
+    // Convert unsupported formats to JPEG via canvas
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    try {
+      const jpegBlob = await new Promise<Blob>((res, rej) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          canvas.getContext('2d')?.drawImage(img, 0, 0);
+          canvas.toBlob((b) => b ? res(b) : rej(new Error('toBlob failed')), 'image/jpeg', 0.9);
+        };
+        img.onerror = rej;
+        img.src = objectUrl;
+      });
+      return { buffer: await jpegBlob.arrayBuffer(), type: 'jpg' };
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Converts Markdown-formatted text to DOCX paragraphs
  */
-async function markdownToDocxParagraphs(markdown: string): Promise<Paragraph[]> {
+async function markdownToDocxParagraphs(markdown: string): Promise<(Paragraph | Table)[]> {
   const lines = markdown.split('\n');
-  const children: Paragraph[] = [];
-  let currentFindingLevel = 0; // Track if we're in a ### subsection for indentation
+  const children: (Paragraph | Table)[] = [];
+  let currentFindingLevel = 0;
+  const imgRegex = /^!\[.*?\]\((.*?)\)$/;
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmedLine = line.trim();
-    
-    if (!trimmedLine) {
-      // Add spacing for empty lines
-      children.push(new Paragraph({ text: '' }));
-      currentFindingLevel = 0;
-      continue;
+  // Pre-process into segments so consecutive images can be batched into collage rows
+  type TextSeg = { kind: 'text'; line: string };
+  type ImageGroupSeg = { kind: 'images'; urls: string[] };
+  type Seg = TextSeg | ImageGroupSeg;
+
+  const segments: Seg[] = [];
+  let idx = 0;
+  while (idx < lines.length) {
+    const trimmed = lines[idx].trim();
+    if (imgRegex.test(trimmed)) {
+      const urls: string[] = [];
+      while (idx < lines.length) {
+        const l = lines[idx].trim();
+        if (imgRegex.test(l)) {
+          const m = l.match(imgRegex);
+          if (m) urls.push(m[1]);
+          idx++;
+        } else if (!l) {
+          idx++;
+        } else {
+          break;
+        }
+      }
+      segments.push({ kind: 'images', urls });
+    } else {
+      segments.push({ kind: 'text', line: trimmed });
+      idx++;
     }
+  }
 
-    // H1: Main title with # 
-    if (trimmedLine.startsWith('# ') && !trimmedLine.startsWith('##')) {
-      children.push(
-        new Paragraph({
+  for (const seg of segments) {
+    if (seg.kind === 'text') {
+      const trimmedLine = seg.line;
+
+      if (!trimmedLine) {
+        children.push(new Paragraph({ text: '' }));
+        currentFindingLevel = 0;
+        continue;
+      }
+
+      if (trimmedLine.startsWith('# ') && !trimmedLine.startsWith('##')) {
+        children.push(new Paragraph({
           text: trimmedLine.substring(2).trim(),
           heading: HeadingLevel.HEADING_1,
           spacing: { before: 240, after: 120 },
-        })
-      );
-      currentFindingLevel = 0;
-    }
-    // H2: Major sections with ##
-    else if (trimmedLine.startsWith('## ') && !trimmedLine.startsWith('###')) {
-      children.push(
-        new Paragraph({
+        }));
+        currentFindingLevel = 0;
+      } else if (trimmedLine.startsWith('## ') && !trimmedLine.startsWith('###')) {
+        children.push(new Paragraph({
           text: trimmedLine.substring(3).trim(),
           heading: HeadingLevel.HEADING_2,
           spacing: { before: 240, after: 120 },
-        })
-      );
-      currentFindingLevel = 0;
-    }
-    // H3: Specific findings with ###
-    else if (trimmedLine.startsWith('### ')) {
-      children.push(
-        new Paragraph({
+        }));
+        currentFindingLevel = 0;
+      } else if (trimmedLine.startsWith('### ')) {
+        children.push(new Paragraph({
           text: trimmedLine.substring(4).trim(),
           heading: HeadingLevel.HEADING_3,
           spacing: { before: 240, after: 120 },
-        })
-      );
-      currentFindingLevel = 1; // We're now in a finding subsection
-    }
-    // Bullet points with -, •, or *
-    else if (trimmedLine.match(/^[-•*]\s+/)) {
-      children.push(
-        new Paragraph({
+        }));
+        currentFindingLevel = 1;
+      } else if (trimmedLine.match(/^[-•*]\s+/)) {
+        children.push(new Paragraph({
           text: trimmedLine.replace(/^[-•*]\s+/, ''),
           bullet: { level: 0 },
           spacing: { after: 80 },
-        })
-      );
-    }
-    // Numbered lists (1. or 1))
-    else if (trimmedLine.match(/^\d+[\.)]\s+/)) {
-      children.push(
-        new Paragraph({
+        }));
+      } else if (trimmedLine.match(/^\d+[\.)]\s+/)) {
+        children.push(new Paragraph({
           text: trimmedLine.replace(/^\d+[\.)]\s+/, ''),
           numbering: { reference: 'default-numbering', level: 0 },
           spacing: { after: 80 },
-        })
-      );
-    }
-    // Image tags ![alt](url)
-    else if (trimmedLine.match(/^!\[.*?\]\((.*?)\)$/)) {
-      const match = trimmedLine.match(/^!\[.*?\]\((.*?)\)$/);
-      const url = match ? match[1] : null;
-      if (url) {
-        try {
-          const response = await fetch(url);
-          const mimeType = response.headers.get('content-type')?.split(';')[0].trim() ?? 'image/jpeg';
-
-          let arrayBuffer: ArrayBuffer;
-          let docxType: 'jpg' | 'png';
-
-          if (mimeType === 'image/png') {
-            arrayBuffer = await response.arrayBuffer();
-            docxType = 'png';
-          } else if (mimeType === 'image/jpeg' || mimeType === 'image/jpg') {
-            arrayBuffer = await response.arrayBuffer();
-            docxType = 'jpg';
-          } else {
-            // Convert unsupported formats (e.g. legacy WebP) to JPEG via canvas
-            const blob = await response.blob();
-            const objectUrl = URL.createObjectURL(blob);
-            try {
-              const jpegBlob = await new Promise<Blob>((res, rej) => {
-                const img = new Image();
-                img.onload = () => {
-                  const canvas = document.createElement('canvas');
-                  canvas.width = img.naturalWidth;
-                  canvas.height = img.naturalHeight;
-                  canvas.getContext('2d')?.drawImage(img, 0, 0);
-                  canvas.toBlob((b) => b ? res(b) : rej(new Error('toBlob failed')), 'image/jpeg', 0.9);
-                };
-                img.onerror = rej;
-                img.src = objectUrl;
-              });
-              arrayBuffer = await jpegBlob.arrayBuffer();
-            } finally {
-              URL.revokeObjectURL(objectUrl);
-            }
-            docxType = 'jpg';
-          }
-
-          children.push(
-            new Paragraph({
-              children: [
-                new ImageRun({
-                  data: arrayBuffer,
-                  type: docxType,
-                  transformation: { width: 500, height: 350 },
-                }),
-              ],
-              spacing: { before: 120, after: 120 },
-            })
-          );
-        } catch (err) {
-          console.warn("Failed to embed image in DOCX:", url);
-          children.push(new Paragraph({ text: `[Image unable to load: ${url}]`, italics: true }));
-        }
-      }
-    }
-    // Regular paragraphs with inline formatting
-    else {
-      const textRuns = parseInlineFormatting(trimmedLine);
-      
-      // Apply indentation for paragraphs under ### findings
-      const indentLevel = currentFindingLevel > 0 ? 720 : 0;
-
-      children.push(
-        new Paragraph({
+        }));
+      } else {
+        const textRuns = parseInlineFormatting(trimmedLine);
+        const indentLevel = currentFindingLevel > 0 ? 720 : 0;
+        children.push(new Paragraph({
           children: textRuns,
           spacing: { after: 120 },
           indent: indentLevel > 0 ? { left: indentLevel } : undefined,
-        })
-      );
+        }));
+      }
+    } else {
+      // Render images in rows of 3 using a table
+      const imagesPerRow = 3;
+      // ~150×113 px per cell for a 3-column layout (EMU: 1pt = 12700 EMU, but docx uses px at 96dpi)
+      const cellImgWidth = 150;
+      const cellImgHeight = 113;
+
+      for (let row = 0; row < seg.urls.length; row += imagesPerRow) {
+        const rowUrls = seg.urls.slice(row, row + imagesPerRow);
+        const cells: TableCell[] = [];
+
+        for (const url of rowUrls) {
+          const imgData = await fetchImageBuffer(url);
+          const cellContent = imgData
+            ? new Paragraph({
+                children: [new ImageRun({ data: imgData.buffer, type: imgData.type, transformation: { width: cellImgWidth, height: cellImgHeight } })],
+                spacing: { after: 60 },
+              })
+            : new Paragraph({ text: '[Image failed to load]', italics: true });
+
+          cells.push(new TableCell({
+            children: [cellContent],
+            width: { size: Math.floor(100 / imagesPerRow), type: WidthType.PERCENTAGE },
+          }));
+        }
+
+        // Pad row to always have imagesPerRow cells so columns align
+        while (cells.length < imagesPerRow) {
+          cells.push(new TableCell({
+            children: [new Paragraph({ text: '' })],
+            width: { size: Math.floor(100 / imagesPerRow), type: WidthType.PERCENTAGE },
+          }));
+        }
+
+        children.push(new Table({
+          rows: [new TableRow({ children: cells })],
+          width: { size: 100, type: WidthType.PERCENTAGE },
+        }));
+        children.push(new Paragraph({ text: '', spacing: { after: 120 } }));
+      }
     }
   }
 

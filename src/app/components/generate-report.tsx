@@ -276,80 +276,103 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
 
     try {
       const doc = new jsPDF();
-      
-      // Set font size and margins
+
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
       const margin = 20;
       const maxWidth = pageWidth - (margin * 2);
-      
-      // Split text by actual newlines to process paragraphs and images independently
+      const imgRegex = /^!\[.*?\]\((.*?)\)$/;
+
+      // Pre-process lines into segments: text lines or image-group batches
+      type TextSegment = { kind: 'text'; line: string };
+      type ImageGroupSegment = { kind: 'images'; urls: string[] };
+      type Segment = TextSegment | ImageGroupSegment;
+
+      const segments: Segment[] = [];
       const rawLines = generatedReport.split('\n');
-      
+      let i = 0;
+      while (i < rawLines.length) {
+        const line = rawLines[i].trim();
+        if (imgRegex.test(line)) {
+          // Collect all consecutive image lines (blank lines between them are skipped)
+          const urls: string[] = [];
+          while (i < rawLines.length) {
+            const l = rawLines[i].trim();
+            if (imgRegex.test(l)) {
+              const m = l.match(imgRegex);
+              if (m) urls.push(m[1]);
+              i++;
+            } else if (!l) {
+              i++;
+            } else {
+              break;
+            }
+          }
+          segments.push({ kind: 'images', urls });
+        } else {
+          segments.push({ kind: 'text', line });
+          i++;
+        }
+      }
+
       let y = margin;
       const lineHeight = 7;
       doc.setFontSize(11);
-      
-      for (let i = 0; i < rawLines.length; i++) {
-        const rawLine = rawLines[i].trim();
-        if (!rawLine) {
-          y += lineHeight;
-          continue;
-        }
 
-        // Check if paragraph is an image
-        if (rawLine.match(/^!\[.*?\]\((.*?)\)$/)) {
-          const match = rawLine.match(/^!\[.*?\]\((.*?)\)$/);
-          const url = match ? match[1] : null;
-
-          if (url) {
-            try {
-              // Fetch and convert image to base64
-              const response = await fetch(url);
-              const blob = await response.blob();
-              const base64 = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result as string);
-                reader.onerror = reject;
-                reader.readAsDataURL(blob);
-              });
-
-              // Assuming standard width of 120 and height of 90 (4:3 ratio) for the PDF
-              const imgWidth = 120;
-              const imgHeight = 90;
-              
-              // Add a new page if the image would bleed off the bottom
-              if (y + imgHeight + margin > pageHeight - margin) {
-                doc.addPage();
-                y = margin;
-              }
-
-              const mimeMatch = base64.match(/^data:image\/(\w+);base64,/);
-              const imgFormat = (mimeMatch?.[1] ?? 'jpeg').toUpperCase().replace('JPG', 'JPEG');
-              doc.addImage(base64, imgFormat as any, margin, y, imgWidth, imgHeight);
-              y += imgHeight + 10; // Add padding below image
-            } catch (err) {
-              console.warn("PDF Image Load Failed:", url);
-              doc.text(`[Image unable to load: ${url}]`, margin, y);
-              y += lineHeight;
+      for (const seg of segments) {
+        if (seg.kind === 'text') {
+          if (!seg.line) {
+            y += lineHeight;
+            continue;
+          }
+          const wrappedLines = doc.splitTextToSize(seg.line, maxWidth);
+          for (const wl of wrappedLines) {
+            if (y + lineHeight > pageHeight - margin) {
+              doc.addPage();
+              y = margin;
             }
+            doc.text(wl, margin, y);
+            y += lineHeight;
           }
-          continue;
-        }
+        } else {
+          // Render images in rows of 3
+          const imagesPerRow = 3;
+          const gap = 5;
+          for (let row = 0; row < seg.urls.length; row += imagesPerRow) {
+            const rowUrls = seg.urls.slice(row, row + imagesPerRow);
+            const imgWidth = (maxWidth - gap * (rowUrls.length - 1)) / rowUrls.length;
+            const imgHeight = imgWidth * 0.75;
 
-        // If not an image, safely wrap the text string to fit the page width
-        const wrappedLines = doc.splitTextToSize(rawLine, maxWidth);
-        
-        for (let j = 0; j < wrappedLines.length; j++) {
-          if (y + lineHeight > pageHeight - margin) {
-            doc.addPage();
-            y = margin;
+            if (y + imgHeight + margin > pageHeight - margin) {
+              doc.addPage();
+              y = margin;
+            }
+
+            let x = margin;
+            for (const url of rowUrls) {
+              try {
+                const response = await fetch(url);
+                const blob = await response.blob();
+                const base64 = await new Promise<string>((resolve, reject) => {
+                  const reader = new FileReader();
+                  reader.onload = () => resolve(reader.result as string);
+                  reader.onerror = reject;
+                  reader.readAsDataURL(blob);
+                });
+                const mimeMatch = base64.match(/^data:image\/(\w+);base64,/);
+                const imgFormat = (mimeMatch?.[1] ?? 'jpeg').toUpperCase().replace('JPG', 'JPEG');
+                doc.addImage(base64, imgFormat as any, x, y, imgWidth, imgHeight);
+              } catch (err) {
+                console.warn('PDF Image Load Failed:', url);
+                doc.text('[Image failed]', x, y + imgHeight / 2);
+              }
+              x += imgWidth + gap;
+            }
+            y += imgHeight + 10;
           }
-          doc.text(wrappedLines[j], margin, y);
-          y += lineHeight;
         }
       }
-      
+
       doc.save(`post-session-report-${new Date().toISOString().split('T')[0]}.pdf`);
       toast.success('Report downloaded as PDF');
     } catch (error) {
