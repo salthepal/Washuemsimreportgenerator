@@ -127,17 +127,24 @@ async function markdownToDocxParagraphs(markdown: string): Promise<(Paragraph | 
   // Hoisted outside loop: constants and helpers used by image-group segments
   const NO_BORDER = { style: BorderStyle.NONE, size: 0, color: 'auto' };
   const noBorders = { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER, insideH: NO_BORDER, insideV: NO_BORDER };
+
+  // Letter page: 12240 twips wide, 1-inch margins (1440 twips each) → 9360 twips usable
+  const CONTENT_W = 9360;
+  const COL_BIG  = Math.round(CONTENT_W * 0.6); // 5616 twips (~60%)
+  const COL_SM   = CONTENT_W - COL_BIG;         // 3744 twips (~40%)
+  const COL_HALF = Math.round(CONTENT_W / 2);   // 4680 twips (50%)
+
   const BIG_W = 350; const BIG_H = 262;
   const SM_W = 220;  const SM_H = 125;
 
-  const imgCell = (imgData: Awaited<ReturnType<typeof fetchImageBuffer>>, w: number, h: number, widthPct?: number): TableCell => {
+  const imgCell = (imgData: Awaited<ReturnType<typeof fetchImageBuffer>>, w: number, h: number, widthDxa: number): TableCell => {
     const content = imgData
       ? new Paragraph({ children: [new ImageRun({ data: imgData.buffer, type: imgData.type, transformation: { width: w, height: h } })], spacing: { after: 0 } })
       : new Paragraph({ children: [new TextRun({ text: '[Image unavailable]', italics: true })] });
     return new TableCell({
       children: [content],
       borders: noBorders,
-      ...(widthPct !== undefined ? { width: { size: widthPct, type: WidthType.PERCENTAGE } } : {}),
+      width: { size: widthDxa, type: WidthType.DXA },
     });
   };
 
@@ -205,43 +212,50 @@ async function markdownToDocxParagraphs(markdown: string): Promise<(Paragraph | 
         if (groupSize === 1) {
           const imgData = await fetchImageBuffer(group[0]);
           children.push(new Table({
-            rows: [new TableRow({ children: [imgCell(imgData, 580, 345, 100)] })],
-            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: [new TableRow({ children: [imgCell(imgData, 580, 345, CONTENT_W)] })],
+            columnWidths: [CONTENT_W],
+            width: { size: CONTENT_W, type: WidthType.DXA },
             borders: noBorders,
           }));
         } else if (groupSize === 2) {
           const [d0, d1] = await Promise.all(group.map(fetchImageBuffer));
           children.push(new Table({
-            rows: [new TableRow({ children: [imgCell(d0, 280, 210, 50), imgCell(d1, 280, 210, 50)] })],
-            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: [new TableRow({ children: [imgCell(d0, 280, 210, COL_HALF), imgCell(d1, 280, 210, COL_HALF)] })],
+            columnWidths: [COL_HALF, COL_HALF],
+            width: { size: CONTENT_W, type: WidthType.DXA },
             borders: noBorders,
           }));
         } else {
-          // 3 images: big (60%) + two stacked smalls (40%), alternating mirror
+          // 3 images: big (60%) + two stacked smalls (40%), alternating mirror.
           const [d0, d1, d2] = await Promise.all(group.map(fetchImageBuffer));
           // When mirrored: group[0]=small-top, group[1]=small-bottom, group[2]=big
           // When normal:   group[0]=big,       group[1]=small-top,    group[2]=small-bottom
-          const bigData  = mirrored ? d2 : d0;
-          const sm1Data  = mirrored ? d0 : d1;
-          const sm2Data  = mirrored ? d1 : d2;
+          const bigData = mirrored ? d2 : d0;
+          const sm1Data = mirrored ? d0 : d1;
+          const sm2Data = mirrored ? d1 : d2;
 
-          const stackedTable = new Table({
-            rows: [
-              new TableRow({ children: [imgCell(sm1Data, SM_W, SM_H, 100)] }),
-              new TableRow({ children: [imgCell(sm2Data, SM_W, SM_H, 100)] }),
-            ],
-            width: { size: 100, type: WidthType.PERCENTAGE },
-            borders: noBorders,
-          });
-          const bigImgParagraph = bigData
+          const bigPara = bigData
             ? new Paragraph({ children: [new ImageRun({ data: bigData.buffer, type: bigData.type, transformation: { width: BIG_W, height: BIG_H } })], spacing: { after: 0 } })
             : new Paragraph({ text: '' });
-          const bigCell   = new TableCell({ children: [bigImgParagraph], borders: noBorders, width: { size: 60, type: WidthType.PERCENTAGE } });
-          const stackCell = new TableCell({ children: [stackedTable], borders: noBorders, width: { size: 40, type: WidthType.PERCENTAGE } });
+
+          // Inner table holds the two small images stacked; uses explicit DXA width
+          const stackedTable = new Table({
+            rows: [
+              new TableRow({ children: [imgCell(sm1Data, SM_W, SM_H, COL_SM)] }),
+              new TableRow({ children: [imgCell(sm2Data, SM_W, SM_H, COL_SM)] }),
+            ],
+            columnWidths: [COL_SM],
+            width: { size: COL_SM, type: WidthType.DXA },
+            borders: noBorders,
+          });
+
+          const bigCell   = new TableCell({ children: [bigPara],       borders: noBorders, width: { size: COL_BIG, type: WidthType.DXA } });
+          const stackCell = new TableCell({ children: [stackedTable],  borders: noBorders, width: { size: COL_SM,  type: WidthType.DXA } });
 
           children.push(new Table({
             rows: [new TableRow({ children: mirrored ? [stackCell, bigCell] : [bigCell, stackCell] })],
-            width: { size: 100, type: WidthType.PERCENTAGE },
+            columnWidths: mirrored ? [COL_SM, COL_BIG] : [COL_BIG, COL_SM],
+            width: { size: CONTENT_W, type: WidthType.DXA },
             borders: noBorders,
           }));
         }
