@@ -88,7 +88,7 @@ async function fetchImageBuffer(url: string): Promise<{ buffer: ArrayBuffer; typ
 /**
  * Converts Markdown-formatted text to DOCX paragraphs
  */
-async function markdownToDocxParagraphs(markdown: string): Promise<(Paragraph | Table)[]> {
+async function markdownToDocxParagraphs(markdown: string, pageMargins?: DocxGenerationOptions['pageMargins']): Promise<(Paragraph | Table)[]> {
   const lines = markdown.split('\n');
   const children: (Paragraph | Table)[] = [];
   let currentFindingLevel = 0;
@@ -128,11 +128,15 @@ async function markdownToDocxParagraphs(markdown: string): Promise<(Paragraph | 
   const NO_BORDER = { style: BorderStyle.NONE, size: 0, color: 'auto' };
   const noBorders = { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER, insideH: NO_BORDER, insideV: NO_BORDER };
 
-  // Letter page: 12240 twips wide, 1-inch margins (1440 twips each) → 9360 twips usable
-  const CONTENT_W = 9360;
-  const COL_BIG  = Math.round(CONTENT_W * 0.6); // 5616 twips (~60%)
-  const COL_SM   = CONTENT_W - COL_BIG;         // 3744 twips (~40%)
-  const COL_HALF = Math.round(CONTENT_W / 2);   // 4680 twips (50%)
+  // Derive usable content width from actual margins so callers using custom pageMargins get correct table widths.
+  // Letter page = 12240 twips wide; default margins = 1440 twips (1 inch) each side.
+  const PAGE_WIDTH_TWIPS = 12240;
+  const leftMargin  = pageMargins?.left  ?? 1440;
+  const rightMargin = pageMargins?.right ?? 1440;
+  const CONTENT_W = PAGE_WIDTH_TWIPS - leftMargin - rightMargin;
+  const COL_BIG  = Math.round(CONTENT_W * 0.6);
+  const COL_SM   = CONTENT_W - COL_BIG;
+  const COL_HALF = Math.round(CONTENT_W / 2);
 
   const BIG_W = 350; const BIG_H = 262;
   const SM_W = 220;  const SM_H = 125;
@@ -234,9 +238,7 @@ async function markdownToDocxParagraphs(markdown: string): Promise<(Paragraph | 
           const sm1Data = mirrored ? d0 : d1;
           const sm2Data = mirrored ? d1 : d2;
 
-          const bigPara = bigData
-            ? new Paragraph({ children: [new ImageRun({ data: bigData.buffer, type: bigData.type, transformation: { width: BIG_W, height: BIG_H } })], spacing: { after: 0 } })
-            : new Paragraph({ text: '' });
+          const bigCell = imgCell(bigData, BIG_W, BIG_H, COL_BIG);
 
           // Inner table holds the two small images stacked; uses explicit DXA width
           const stackedTable = new Table({
@@ -249,8 +251,7 @@ async function markdownToDocxParagraphs(markdown: string): Promise<(Paragraph | 
             borders: noBorders,
           });
 
-          const bigCell   = new TableCell({ children: [bigPara],       borders: noBorders, width: { size: COL_BIG, type: WidthType.DXA } });
-          const stackCell = new TableCell({ children: [stackedTable],  borders: noBorders, width: { size: COL_SM,  type: WidthType.DXA } });
+          const stackCell = new TableCell({ children: [stackedTable], borders: noBorders, width: { size: COL_SM, type: WidthType.DXA } });
 
           children.push(new Table({
             rows: [new TableRow({ children: mirrored ? [stackCell, bigCell] : [bigCell, stackCell] })],
@@ -277,7 +278,7 @@ export async function generateDocxFromMarkdown(
   markdown: string, 
   options: DocxGenerationOptions = {}
 ): Promise<Blob> {
-  const paragraphs = await markdownToDocxParagraphs(markdown);
+  const paragraphs = await markdownToDocxParagraphs(markdown, options.pageMargins);
   
   const doc = new Document({
     numbering: {
