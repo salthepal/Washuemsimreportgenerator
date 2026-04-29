@@ -2,7 +2,7 @@
  * DOCX generation utilities
  * Converts Markdown-formatted text to properly structured Word documents
  */
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, ImageRun, Table, TableRow, TableCell, WidthType } from 'docx';
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, ImageRun, Table, TableRow, TableCell, WidthType, BorderStyle } from 'docx';
 
 export interface DocxGenerationOptions {
   filename?: string;
@@ -176,44 +176,79 @@ async function markdownToDocxParagraphs(markdown: string): Promise<(Paragraph | 
         }));
       }
     } else {
-      // Render images in rows of 3 using a table
-      const imagesPerRow = 3;
-      // ~150×113 px per cell for a 3-column layout (EMU: 1pt = 12700 EMU, but docx uses px at 96dpi)
-      const cellImgWidth = 150;
-      const cellImgHeight = 113;
+      // Render session photos as an alternating mosaic collage using nested tables
+      const NO_BORDER = { style: BorderStyle.NONE, size: 0, color: 'auto' };
+      const noBorders = { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER, insideH: NO_BORDER, insideV: NO_BORDER };
 
-      for (let row = 0; row < seg.urls.length; row += imagesPerRow) {
-        const rowUrls = seg.urls.slice(row, row + imagesPerRow);
-        const cells: TableCell[] = [];
+      const imgCell = (imgData: Awaited<ReturnType<typeof fetchImageBuffer>>, w: number, h: number, widthPct?: number): TableCell => {
+        const content = imgData
+          ? new Paragraph({ children: [new ImageRun({ data: imgData.buffer, type: imgData.type, transformation: { width: w, height: h } })], spacing: { after: 0 } })
+          : new Paragraph({ text: '' });
+        return new TableCell({
+          children: [content],
+          borders: noBorders,
+          ...(widthPct !== undefined ? { width: { size: widthPct, type: WidthType.PERCENTAGE } } : {}),
+        });
+      };
 
-        for (const url of rowUrls) {
-          const imgData = await fetchImageBuffer(url);
-          const cellContent = imgData
-            ? new Paragraph({
-                children: [new ImageRun({ data: imgData.buffer, type: imgData.type, transformation: { width: cellImgWidth, height: cellImgHeight } })],
-                spacing: { after: 60 },
-              })
-            : new Paragraph({ text: '[Image failed to load]', italics: true });
+      // Pixels at 96dpi for an A4 page with 1-inch margins (~6.27 in text width = 602px)
+      const BIG_W = 350; const BIG_H = 262; // ~60% column, 4:3
+      const SM_W = 220;  const SM_H = 125;  // ~40% column, stacked pair totals ≈ BIG_H
 
-          cells.push(new TableCell({
-            children: [cellContent],
-            width: { size: Math.floor(100 / imagesPerRow), type: WidthType.PERCENTAGE },
+      let groupIdx = 0;
+      let imgI = 0;
+      while (imgI < seg.urls.length) {
+        const groupSize = Math.min(seg.urls.length - imgI, 3);
+        const group = seg.urls.slice(imgI, imgI + groupSize);
+        const mirrored = groupIdx % 2 === 1;
+
+        if (groupSize === 1) {
+          const imgData = await fetchImageBuffer(group[0]);
+          children.push(new Table({
+            rows: [new TableRow({ children: [imgCell(imgData, 580, 345, 100)] })],
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            borders: noBorders,
+          }));
+        } else if (groupSize === 2) {
+          const [d0, d1] = await Promise.all(group.map(fetchImageBuffer));
+          children.push(new Table({
+            rows: [new TableRow({ children: [imgCell(d0, 280, 210, 50), imgCell(d1, 280, 210, 50)] })],
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            borders: noBorders,
+          }));
+        } else {
+          // 3 images: big (60%) + two stacked smalls (40%), alternating mirror
+          const [d0, d1, d2] = await Promise.all(group.map(fetchImageBuffer));
+          // When mirrored: group[0]=small-top, group[1]=small-bottom, group[2]=big
+          // When normal:   group[0]=big,       group[1]=small-top,    group[2]=small-bottom
+          const bigData  = mirrored ? d2 : d0;
+          const sm1Data  = mirrored ? d0 : d1;
+          const sm2Data  = mirrored ? d1 : d2;
+
+          const stackedTable = new Table({
+            rows: [
+              new TableRow({ children: [imgCell(sm1Data, SM_W, SM_H, 100)] }),
+              new TableRow({ children: [imgCell(sm2Data, SM_W, SM_H, 100)] }),
+            ],
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            borders: noBorders,
+          });
+          const bigImgParagraph = bigData
+            ? new Paragraph({ children: [new ImageRun({ data: bigData.buffer, type: bigData.type, transformation: { width: BIG_W, height: BIG_H } })], spacing: { after: 0 } })
+            : new Paragraph({ text: '' });
+          const bigCell   = new TableCell({ children: [bigImgParagraph], borders: noBorders, width: { size: 60, type: WidthType.PERCENTAGE } });
+          const stackCell = new TableCell({ children: [stackedTable], borders: noBorders, width: { size: 40, type: WidthType.PERCENTAGE } });
+
+          children.push(new Table({
+            rows: [new TableRow({ children: mirrored ? [stackCell, bigCell] : [bigCell, stackCell] })],
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            borders: noBorders,
           }));
         }
 
-        // Pad row to always have imagesPerRow cells so columns align
-        while (cells.length < imagesPerRow) {
-          cells.push(new TableCell({
-            children: [new Paragraph({ text: '' })],
-            width: { size: Math.floor(100 / imagesPerRow), type: WidthType.PERCENTAGE },
-          }));
-        }
-
-        children.push(new Table({
-          rows: [new TableRow({ children: cells })],
-          width: { size: 100, type: WidthType.PERCENTAGE },
-        }));
-        children.push(new Paragraph({ text: '', spacing: { after: 120 } }));
+        children.push(new Paragraph({ text: '', spacing: { after: 160 } }));
+        imgI += groupSize;
+        groupIdx++;
       }
     }
   }

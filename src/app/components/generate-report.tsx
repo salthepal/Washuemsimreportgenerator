@@ -335,41 +335,79 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
             y += lineHeight;
           }
         } else {
-          // Render images in rows of 3
-          const imagesPerRow = 3;
-          const gap = 5;
-          for (let row = 0; row < seg.urls.length; row += imagesPerRow) {
-            const rowUrls = seg.urls.slice(row, row + imagesPerRow);
-            const imgWidth = (maxWidth - gap * (rowUrls.length - 1)) / rowUrls.length;
-            const imgHeight = imgWidth * 0.75;
+          // Render session photos as an alternating mosaic collage
+          const gap = 3; // mm between tiles
+          const mosaicRowH = 75; // mm tall for a 3-image mosaic row
 
-            if (y + imgHeight + margin > pageHeight - margin) {
+          const fetchImgBase64 = async (url: string): Promise<{ b64: string; fmt: string } | null> => {
+            try {
+              const resp = await fetch(url);
+              const blob = await resp.blob();
+              const b64 = await new Promise<string>((res, rej) => {
+                const r = new FileReader();
+                r.onload = () => res(r.result as string);
+                r.onerror = rej;
+                r.readAsDataURL(blob);
+              });
+              const mimeMatch = b64.match(/^data:image\/(\w+);base64,/);
+              const fmt = (mimeMatch?.[1] ?? 'jpeg').toUpperCase().replace('JPG', 'JPEG');
+              return { b64, fmt };
+            } catch {
+              return null;
+            }
+          };
+
+          const placeImg = async (url: string, x: number, imgY: number, w: number, h: number) => {
+            const img = await fetchImgBase64(url);
+            if (img) doc.addImage(img.b64, img.fmt as any, x, imgY, w, h);
+          };
+
+          let groupIdx = 0;
+          let imgI = 0;
+          while (imgI < seg.urls.length) {
+            const groupSize = Math.min(seg.urls.length - imgI, 3);
+            const group = seg.urls.slice(imgI, imgI + groupSize);
+            const mirrored = groupIdx % 2 === 1;
+
+            // Choose row height based on group size
+            const bigW = maxWidth * 0.6 - gap / 2;
+            const smallW = maxWidth * 0.4 - gap / 2;
+            const smallH = (mosaicRowH - gap) / 2;
+            const twoColH = ((maxWidth - gap) / 2) * 0.67;
+            const neededH = groupSize === 1 ? maxWidth * 0.45 : groupSize === 2 ? twoColH : mosaicRowH;
+
+            if (y + neededH + margin > pageHeight - margin) {
               doc.addPage();
               y = margin;
             }
 
-            let x = margin;
-            for (const url of rowUrls) {
-              try {
-                const response = await fetch(url);
-                const blob = await response.blob();
-                const base64 = await new Promise<string>((resolve, reject) => {
-                  const reader = new FileReader();
-                  reader.onload = () => resolve(reader.result as string);
-                  reader.onerror = reject;
-                  reader.readAsDataURL(blob);
-                });
-                const mimeMatch = base64.match(/^data:image\/(\w+);base64,/);
-                const imgFormat = (mimeMatch?.[1] ?? 'jpeg').toUpperCase().replace('JPG', 'JPEG');
-                doc.addImage(base64, imgFormat as any, x, y, imgWidth, imgHeight);
-              } catch (err) {
-                console.warn('PDF Image Load Failed:', url);
-                doc.text('[Image failed]', x, y + imgHeight / 2);
+            if (groupSize === 1) {
+              const h = maxWidth * 0.45;
+              await placeImg(group[0], margin, y, maxWidth, h);
+              y += h + gap;
+            } else if (groupSize === 2) {
+              const w = (maxWidth - gap) / 2;
+              await placeImg(group[0], margin, y, w, twoColH);
+              await placeImg(group[1], margin + w + gap, y, w, twoColH);
+              y += twoColH + gap;
+            } else {
+              // 3 images: alternates big-left / big-right each row
+              if (!mirrored) {
+                await placeImg(group[0], margin, y, bigW, mosaicRowH);
+                await placeImg(group[1], margin + bigW + gap, y, smallW, smallH);
+                await placeImg(group[2], margin + bigW + gap, y + smallH + gap, smallW, smallH);
+              } else {
+                await placeImg(group[0], margin, y, smallW, smallH);
+                await placeImg(group[1], margin, y + smallH + gap, smallW, smallH);
+                await placeImg(group[2], margin + smallW + gap, y, bigW, mosaicRowH);
               }
-              x += imgWidth + gap;
+              y += mosaicRowH + gap;
             }
-            y += imgHeight + 10;
+
+            imgI += groupSize;
+            groupIdx++;
           }
+          y += 5;
         }
       }
 
