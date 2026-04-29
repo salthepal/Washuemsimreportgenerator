@@ -315,6 +315,42 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
         }
       }
 
+      // Hoisted outside loop: mosaic constants and helpers
+      const mosaicGap = 3; // mm between tiles
+      const mosaicRowH = 75; // mm tall for a 3-image mosaic row
+      const mosaicBigW = maxWidth * 0.6 - mosaicGap / 2;
+      const mosaicSmallW = maxWidth * 0.4 - mosaicGap / 2;
+      const mosaicSmallH = (mosaicRowH - mosaicGap) / 2;
+      const mosaicTwoColH = ((maxWidth - mosaicGap) / 2) * 0.67;
+
+      const fetchImgBase64 = async (url: string): Promise<{ b64: string; fmt: string } | null> => {
+        try {
+          const resp = await fetch(url);
+          if (!resp.ok) return null;
+          const blob = await resp.blob();
+          const b64 = await new Promise<string>((res, rej) => {
+            const r = new FileReader();
+            r.onload = () => res(r.result as string);
+            r.onerror = rej;
+            r.readAsDataURL(blob);
+          });
+          const mimeMatch = b64.match(/^data:image\/(\w+);base64,/);
+          const fmt = (mimeMatch?.[1] ?? 'jpeg').toUpperCase().replace('JPG', 'JPEG');
+          return { b64, fmt };
+        } catch {
+          return null;
+        }
+      };
+
+      const placeImg = (img: { b64: string; fmt: string } | null, x: number, imgY: number, w: number, h: number) => {
+        if (!img) return;
+        try {
+          doc.addImage(img.b64, img.fmt as any, x, imgY, w, h);
+        } catch {
+          // Unsupported/corrupt image — skip tile, layout continues
+        }
+      };
+
       let y = margin;
       const lineHeight = 7;
       doc.setFontSize(11);
@@ -336,32 +372,6 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
           }
         } else {
           // Render session photos as an alternating mosaic collage
-          const gap = 3; // mm between tiles
-          const mosaicRowH = 75; // mm tall for a 3-image mosaic row
-
-          const fetchImgBase64 = async (url: string): Promise<{ b64: string; fmt: string } | null> => {
-            try {
-              const resp = await fetch(url);
-              const blob = await resp.blob();
-              const b64 = await new Promise<string>((res, rej) => {
-                const r = new FileReader();
-                r.onload = () => res(r.result as string);
-                r.onerror = rej;
-                r.readAsDataURL(blob);
-              });
-              const mimeMatch = b64.match(/^data:image\/(\w+);base64,/);
-              const fmt = (mimeMatch?.[1] ?? 'jpeg').toUpperCase().replace('JPG', 'JPEG');
-              return { b64, fmt };
-            } catch {
-              return null;
-            }
-          };
-
-          const placeImg = async (url: string, x: number, imgY: number, w: number, h: number) => {
-            const img = await fetchImgBase64(url);
-            if (img) doc.addImage(img.b64, img.fmt as any, x, imgY, w, h);
-          };
-
           let groupIdx = 0;
           let imgI = 0;
           while (imgI < seg.urls.length) {
@@ -369,39 +379,37 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
             const group = seg.urls.slice(imgI, imgI + groupSize);
             const mirrored = groupIdx % 2 === 1;
 
-            // Choose row height based on group size
-            const bigW = maxWidth * 0.6 - gap / 2;
-            const smallW = maxWidth * 0.4 - gap / 2;
-            const smallH = (mosaicRowH - gap) / 2;
-            const twoColH = ((maxWidth - gap) / 2) * 0.67;
-            const neededH = groupSize === 1 ? maxWidth * 0.45 : groupSize === 2 ? twoColH : mosaicRowH;
+            const neededH = groupSize === 1 ? maxWidth * 0.45 : groupSize === 2 ? mosaicTwoColH : mosaicRowH;
 
             if (y + neededH + margin > pageHeight - margin) {
               doc.addPage();
               y = margin;
             }
 
+            // Fetch all images in the group in parallel
+            const imgs = await Promise.all(group.map(fetchImgBase64));
+
             if (groupSize === 1) {
               const h = maxWidth * 0.45;
-              await placeImg(group[0], margin, y, maxWidth, h);
-              y += h + gap;
+              placeImg(imgs[0], margin, y, maxWidth, h);
+              y += h + mosaicGap;
             } else if (groupSize === 2) {
-              const w = (maxWidth - gap) / 2;
-              await placeImg(group[0], margin, y, w, twoColH);
-              await placeImg(group[1], margin + w + gap, y, w, twoColH);
-              y += twoColH + gap;
+              const w = (maxWidth - mosaicGap) / 2;
+              placeImg(imgs[0], margin, y, w, mosaicTwoColH);
+              placeImg(imgs[1], margin + w + mosaicGap, y, w, mosaicTwoColH);
+              y += mosaicTwoColH + mosaicGap;
             } else {
               // 3 images: alternates big-left / big-right each row
               if (!mirrored) {
-                await placeImg(group[0], margin, y, bigW, mosaicRowH);
-                await placeImg(group[1], margin + bigW + gap, y, smallW, smallH);
-                await placeImg(group[2], margin + bigW + gap, y + smallH + gap, smallW, smallH);
+                placeImg(imgs[0], margin, y, mosaicBigW, mosaicRowH);
+                placeImg(imgs[1], margin + mosaicBigW + mosaicGap, y, mosaicSmallW, mosaicSmallH);
+                placeImg(imgs[2], margin + mosaicBigW + mosaicGap, y + mosaicSmallH + mosaicGap, mosaicSmallW, mosaicSmallH);
               } else {
-                await placeImg(group[0], margin, y, smallW, smallH);
-                await placeImg(group[1], margin, y + smallH + gap, smallW, smallH);
-                await placeImg(group[2], margin + smallW + gap, y, bigW, mosaicRowH);
+                placeImg(imgs[0], margin, y, mosaicSmallW, mosaicSmallH);
+                placeImg(imgs[1], margin, y + mosaicSmallH + mosaicGap, mosaicSmallW, mosaicSmallH);
+                placeImg(imgs[2], margin + mosaicSmallW + mosaicGap, y, mosaicBigW, mosaicRowH);
               }
-              y += mosaicRowH + gap;
+              y += mosaicRowH + mosaicGap;
             }
 
             imgI += groupSize;

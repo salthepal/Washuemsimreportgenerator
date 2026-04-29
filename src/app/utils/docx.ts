@@ -52,6 +52,7 @@ function parseInlineFormatting(text: string): TextRun[] {
 async function fetchImageBuffer(url: string): Promise<{ buffer: ArrayBuffer; type: 'jpg' | 'png' } | null> {
   try {
     const response = await fetch(url);
+    if (!response.ok) return null;
     const mimeType = response.headers.get('content-type')?.split(';')[0].trim() ?? 'image/jpeg';
     if (mimeType === 'image/png') {
       return { buffer: await response.arrayBuffer(), type: 'png' };
@@ -123,6 +124,23 @@ async function markdownToDocxParagraphs(markdown: string): Promise<(Paragraph | 
     }
   }
 
+  // Hoisted outside loop: constants and helpers used by image-group segments
+  const NO_BORDER = { style: BorderStyle.NONE, size: 0, color: 'auto' };
+  const noBorders = { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER, insideH: NO_BORDER, insideV: NO_BORDER };
+  const BIG_W = 350; const BIG_H = 262;
+  const SM_W = 220;  const SM_H = 125;
+
+  const imgCell = (imgData: Awaited<ReturnType<typeof fetchImageBuffer>>, w: number, h: number, widthPct?: number): TableCell => {
+    const content = imgData
+      ? new Paragraph({ children: [new ImageRun({ data: imgData.buffer, type: imgData.type, transformation: { width: w, height: h } })], spacing: { after: 0 } })
+      : new Paragraph({ children: [new TextRun({ text: '[Image unavailable]', italics: true })] });
+    return new TableCell({
+      children: [content],
+      borders: noBorders,
+      ...(widthPct !== undefined ? { width: { size: widthPct, type: WidthType.PERCENTAGE } } : {}),
+    });
+  };
+
   for (const seg of segments) {
     if (seg.kind === 'text') {
       const trimmedLine = seg.line;
@@ -177,24 +195,6 @@ async function markdownToDocxParagraphs(markdown: string): Promise<(Paragraph | 
       }
     } else {
       // Render session photos as an alternating mosaic collage using nested tables
-      const NO_BORDER = { style: BorderStyle.NONE, size: 0, color: 'auto' };
-      const noBorders = { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER, insideH: NO_BORDER, insideV: NO_BORDER };
-
-      const imgCell = (imgData: Awaited<ReturnType<typeof fetchImageBuffer>>, w: number, h: number, widthPct?: number): TableCell => {
-        const content = imgData
-          ? new Paragraph({ children: [new ImageRun({ data: imgData.buffer, type: imgData.type, transformation: { width: w, height: h } })], spacing: { after: 0 } })
-          : new Paragraph({ text: '' });
-        return new TableCell({
-          children: [content],
-          borders: noBorders,
-          ...(widthPct !== undefined ? { width: { size: widthPct, type: WidthType.PERCENTAGE } } : {}),
-        });
-      };
-
-      // Pixels at 96dpi for an A4 page with 1-inch margins (~6.27 in text width = 602px)
-      const BIG_W = 350; const BIG_H = 262; // ~60% column, 4:3
-      const SM_W = 220;  const SM_H = 125;  // ~40% column, stacked pair totals ≈ BIG_H
-
       let groupIdx = 0;
       let imgI = 0;
       while (imgI < seg.urls.length) {

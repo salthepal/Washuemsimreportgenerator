@@ -198,7 +198,7 @@ app.post('/upload-file', verifyTurnstile, async (c) => {
 
     const file = fileItem as unknown as File;
     const name = (formData.get('name') as string) || file.name;
-    const uniqueSuffix = Math.random().toString(36).slice(2, 8);
+    const uniqueSuffix = crypto.randomUUID().slice(0, 8);
     const key = `${Date.now()}_${uniqueSuffix}_${name}`;
 
     // Save to R2
