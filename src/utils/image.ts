@@ -1,15 +1,15 @@
 export async function compressImage(file: File, maxWidth = 1024, quality = 0.8): Promise<File> {
-  if (!file.type.startsWith('image/')) {
-    return file;
-  }
-
-  // HEIC/HEIF files cannot be decoded by the Canvas API on non-Safari browsers.
-  // Convert to JPEG first using heic2any before passing to canvas.
+  // HEIC/HEIF detection by name is needed because Chrome/Firefox set file.type = ""
+  // for HEIC files, causing the image/* check below to bail out prematurely.
   const isHeic =
     file.type === 'image/heic' ||
     file.type === 'image/heif' ||
     /\.heic$/i.test(file.name) ||
     /\.heif$/i.test(file.name);
+
+  if (!file.type.startsWith('image/') && !isHeic) {
+    return file;
+  }
 
   let processedFile = file;
   if (isHeic) {

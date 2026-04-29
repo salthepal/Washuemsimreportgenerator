@@ -198,7 +198,8 @@ app.post('/upload-file', verifyTurnstile, async (c) => {
 
     const file = fileItem as unknown as File;
     const name = (formData.get('name') as string) || file.name;
-    const key = `${Date.now()}_${name}`;
+    const uniqueSuffix = crypto.randomUUID().slice(0, 8);
+    const key = `${Date.now()}_${uniqueSuffix}_${name}`;
 
     // Save to R2
     await c.env.BUCKET.put(key, await file.arrayBuffer(), {

@@ -2,7 +2,7 @@
  * DOCX generation utilities
  * Converts Markdown-formatted text to properly structured Word documents
  */
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, ImageRun } from 'docx';
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, ImageRun, Table, TableRow, TableCell, WidthType, BorderStyle } from 'docx';
 
 export interface DocxGenerationOptions {
   filename?: string;
@@ -49,152 +49,207 @@ function parseInlineFormatting(text: string): TextRun[] {
   return textRuns.length > 0 ? textRuns : [new TextRun(text)];
 }
 
+async function fetchImageBuffer(url: string): Promise<{ buffer: ArrayBuffer; type: 'jpg' | 'png' } | null> {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    const mimeType = response.headers.get('content-type')?.split(';')[0].trim() ?? 'image/jpeg';
+    if (mimeType === 'image/png') {
+      return { buffer: await response.arrayBuffer(), type: 'png' };
+    }
+    if (mimeType === 'image/jpeg' || mimeType === 'image/jpg') {
+      return { buffer: await response.arrayBuffer(), type: 'jpg' };
+    }
+    // Convert unsupported formats to JPEG via canvas
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    try {
+      const jpegBlob = await new Promise<Blob>((res, rej) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          canvas.getContext('2d')?.drawImage(img, 0, 0);
+          canvas.toBlob((b) => b ? res(b) : rej(new Error('toBlob failed')), 'image/jpeg', 0.9);
+        };
+        img.onerror = rej;
+        img.src = objectUrl;
+      });
+      return { buffer: await jpegBlob.arrayBuffer(), type: 'jpg' };
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Converts Markdown-formatted text to DOCX paragraphs
  */
-async function markdownToDocxParagraphs(markdown: string): Promise<Paragraph[]> {
+async function markdownToDocxParagraphs(markdown: string): Promise<(Paragraph | Table)[]> {
   const lines = markdown.split('\n');
-  const children: Paragraph[] = [];
-  let currentFindingLevel = 0; // Track if we're in a ### subsection for indentation
+  const children: (Paragraph | Table)[] = [];
+  let currentFindingLevel = 0;
+  const imgRegex = /^!\[.*?\]\((.*?)\)$/;
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmedLine = line.trim();
-    
-    if (!trimmedLine) {
-      // Add spacing for empty lines
-      children.push(new Paragraph({ text: '' }));
-      currentFindingLevel = 0;
-      continue;
+  // Pre-process into segments so consecutive images can be batched into collage rows
+  type TextSeg = { kind: 'text'; line: string };
+  type ImageGroupSeg = { kind: 'images'; urls: string[] };
+  type Seg = TextSeg | ImageGroupSeg;
+
+  const segments: Seg[] = [];
+  let idx = 0;
+  while (idx < lines.length) {
+    const trimmed = lines[idx].trim();
+    if (imgRegex.test(trimmed)) {
+      const urls: string[] = [];
+      while (idx < lines.length) {
+        const l = lines[idx].trim();
+        if (imgRegex.test(l)) {
+          const m = l.match(imgRegex);
+          if (m) urls.push(m[1]);
+          idx++;
+        } else if (!l) {
+          idx++;
+        } else {
+          break;
+        }
+      }
+      segments.push({ kind: 'images', urls });
+    } else {
+      segments.push({ kind: 'text', line: trimmed });
+      idx++;
     }
+  }
 
-    // H1: Main title with # 
-    if (trimmedLine.startsWith('# ') && !trimmedLine.startsWith('##')) {
-      children.push(
-        new Paragraph({
+  // Hoisted outside loop: constants and helpers used by image-group segments
+  const NO_BORDER = { style: BorderStyle.NONE, size: 0, color: 'auto' };
+  const noBorders = { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER, insideH: NO_BORDER, insideV: NO_BORDER };
+  const BIG_W = 350; const BIG_H = 262;
+  const SM_W = 220;  const SM_H = 125;
+
+  const imgCell = (imgData: Awaited<ReturnType<typeof fetchImageBuffer>>, w: number, h: number, widthPct?: number): TableCell => {
+    const content = imgData
+      ? new Paragraph({ children: [new ImageRun({ data: imgData.buffer, type: imgData.type, transformation: { width: w, height: h } })], spacing: { after: 0 } })
+      : new Paragraph({ children: [new TextRun({ text: '[Image unavailable]', italics: true })] });
+    return new TableCell({
+      children: [content],
+      borders: noBorders,
+      ...(widthPct !== undefined ? { width: { size: widthPct, type: WidthType.PERCENTAGE } } : {}),
+    });
+  };
+
+  for (const seg of segments) {
+    if (seg.kind === 'text') {
+      const trimmedLine = seg.line;
+
+      if (!trimmedLine) {
+        children.push(new Paragraph({ text: '' }));
+        currentFindingLevel = 0;
+        continue;
+      }
+
+      if (trimmedLine.startsWith('# ') && !trimmedLine.startsWith('##')) {
+        children.push(new Paragraph({
           text: trimmedLine.substring(2).trim(),
           heading: HeadingLevel.HEADING_1,
           spacing: { before: 240, after: 120 },
-        })
-      );
-      currentFindingLevel = 0;
-    }
-    // H2: Major sections with ##
-    else if (trimmedLine.startsWith('## ') && !trimmedLine.startsWith('###')) {
-      children.push(
-        new Paragraph({
+        }));
+        currentFindingLevel = 0;
+      } else if (trimmedLine.startsWith('## ') && !trimmedLine.startsWith('###')) {
+        children.push(new Paragraph({
           text: trimmedLine.substring(3).trim(),
           heading: HeadingLevel.HEADING_2,
           spacing: { before: 240, after: 120 },
-        })
-      );
-      currentFindingLevel = 0;
-    }
-    // H3: Specific findings with ###
-    else if (trimmedLine.startsWith('### ')) {
-      children.push(
-        new Paragraph({
+        }));
+        currentFindingLevel = 0;
+      } else if (trimmedLine.startsWith('### ')) {
+        children.push(new Paragraph({
           text: trimmedLine.substring(4).trim(),
           heading: HeadingLevel.HEADING_3,
           spacing: { before: 240, after: 120 },
-        })
-      );
-      currentFindingLevel = 1; // We're now in a finding subsection
-    }
-    // Bullet points with -, •, or *
-    else if (trimmedLine.match(/^[-•*]\s+/)) {
-      children.push(
-        new Paragraph({
+        }));
+        currentFindingLevel = 1;
+      } else if (trimmedLine.match(/^[-•*]\s+/)) {
+        children.push(new Paragraph({
           text: trimmedLine.replace(/^[-•*]\s+/, ''),
           bullet: { level: 0 },
           spacing: { after: 80 },
-        })
-      );
-    }
-    // Numbered lists (1. or 1))
-    else if (trimmedLine.match(/^\d+[\.)]\s+/)) {
-      children.push(
-        new Paragraph({
+        }));
+      } else if (trimmedLine.match(/^\d+[\.)]\s+/)) {
+        children.push(new Paragraph({
           text: trimmedLine.replace(/^\d+[\.)]\s+/, ''),
           numbering: { reference: 'default-numbering', level: 0 },
           spacing: { after: 80 },
-        })
-      );
-    }
-    // Image tags ![alt](url)
-    else if (trimmedLine.match(/^!\[.*?\]\((.*?)\)$/)) {
-      const match = trimmedLine.match(/^!\[.*?\]\((.*?)\)$/);
-      const url = match ? match[1] : null;
-      if (url) {
-        try {
-          const response = await fetch(url);
-          const mimeType = response.headers.get('content-type')?.split(';')[0].trim() ?? 'image/jpeg';
-
-          let arrayBuffer: ArrayBuffer;
-          let docxType: 'jpg' | 'png';
-
-          if (mimeType === 'image/png') {
-            arrayBuffer = await response.arrayBuffer();
-            docxType = 'png';
-          } else if (mimeType === 'image/jpeg' || mimeType === 'image/jpg') {
-            arrayBuffer = await response.arrayBuffer();
-            docxType = 'jpg';
-          } else {
-            // Convert unsupported formats (e.g. legacy WebP) to JPEG via canvas
-            const blob = await response.blob();
-            const objectUrl = URL.createObjectURL(blob);
-            try {
-              const jpegBlob = await new Promise<Blob>((res, rej) => {
-                const img = new Image();
-                img.onload = () => {
-                  const canvas = document.createElement('canvas');
-                  canvas.width = img.naturalWidth;
-                  canvas.height = img.naturalHeight;
-                  canvas.getContext('2d')?.drawImage(img, 0, 0);
-                  canvas.toBlob((b) => b ? res(b) : rej(new Error('toBlob failed')), 'image/jpeg', 0.9);
-                };
-                img.onerror = rej;
-                img.src = objectUrl;
-              });
-              arrayBuffer = await jpegBlob.arrayBuffer();
-            } finally {
-              URL.revokeObjectURL(objectUrl);
-            }
-            docxType = 'jpg';
-          }
-
-          children.push(
-            new Paragraph({
-              children: [
-                new ImageRun({
-                  data: arrayBuffer,
-                  type: docxType,
-                  transformation: { width: 500, height: 350 },
-                }),
-              ],
-              spacing: { before: 120, after: 120 },
-            })
-          );
-        } catch (err) {
-          console.warn("Failed to embed image in DOCX:", url);
-          children.push(new Paragraph({ text: `[Image unable to load: ${url}]`, italics: true }));
-        }
-      }
-    }
-    // Regular paragraphs with inline formatting
-    else {
-      const textRuns = parseInlineFormatting(trimmedLine);
-      
-      // Apply indentation for paragraphs under ### findings
-      const indentLevel = currentFindingLevel > 0 ? 720 : 0;
-
-      children.push(
-        new Paragraph({
+        }));
+      } else {
+        const textRuns = parseInlineFormatting(trimmedLine);
+        const indentLevel = currentFindingLevel > 0 ? 720 : 0;
+        children.push(new Paragraph({
           children: textRuns,
           spacing: { after: 120 },
           indent: indentLevel > 0 ? { left: indentLevel } : undefined,
-        })
-      );
+        }));
+      }
+    } else {
+      // Render session photos as an alternating mosaic collage using nested tables
+      let groupIdx = 0;
+      let imgI = 0;
+      while (imgI < seg.urls.length) {
+        const groupSize = Math.min(seg.urls.length - imgI, 3);
+        const group = seg.urls.slice(imgI, imgI + groupSize);
+        const mirrored = groupIdx % 2 === 1;
+
+        if (groupSize === 1) {
+          const imgData = await fetchImageBuffer(group[0]);
+          children.push(new Table({
+            rows: [new TableRow({ children: [imgCell(imgData, 580, 345, 100)] })],
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            borders: noBorders,
+          }));
+        } else if (groupSize === 2) {
+          const [d0, d1] = await Promise.all(group.map(fetchImageBuffer));
+          children.push(new Table({
+            rows: [new TableRow({ children: [imgCell(d0, 280, 210, 50), imgCell(d1, 280, 210, 50)] })],
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            borders: noBorders,
+          }));
+        } else {
+          // 3 images: big (60%) + two stacked smalls (40%), alternating mirror
+          const [d0, d1, d2] = await Promise.all(group.map(fetchImageBuffer));
+          // When mirrored: group[0]=small-top, group[1]=small-bottom, group[2]=big
+          // When normal:   group[0]=big,       group[1]=small-top,    group[2]=small-bottom
+          const bigData  = mirrored ? d2 : d0;
+          const sm1Data  = mirrored ? d0 : d1;
+          const sm2Data  = mirrored ? d1 : d2;
+
+          const stackedTable = new Table({
+            rows: [
+              new TableRow({ children: [imgCell(sm1Data, SM_W, SM_H, 100)] }),
+              new TableRow({ children: [imgCell(sm2Data, SM_W, SM_H, 100)] }),
+            ],
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            borders: noBorders,
+          });
+          const bigImgParagraph = bigData
+            ? new Paragraph({ children: [new ImageRun({ data: bigData.buffer, type: bigData.type, transformation: { width: BIG_W, height: BIG_H } })], spacing: { after: 0 } })
+            : new Paragraph({ text: '' });
+          const bigCell   = new TableCell({ children: [bigImgParagraph], borders: noBorders, width: { size: 60, type: WidthType.PERCENTAGE } });
+          const stackCell = new TableCell({ children: [stackedTable], borders: noBorders, width: { size: 40, type: WidthType.PERCENTAGE } });
+
+          children.push(new Table({
+            rows: [new TableRow({ children: mirrored ? [stackCell, bigCell] : [bigCell, stackCell] })],
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            borders: noBorders,
+          }));
+        }
+
+        children.push(new Paragraph({ text: '', spacing: { after: 160 } }));
+        imgI += groupSize;
+        groupIdx++;
+      }
     }
   }
 

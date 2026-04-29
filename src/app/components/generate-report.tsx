@@ -276,80 +276,149 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
 
     try {
       const doc = new jsPDF();
-      
-      // Set font size and margins
+
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
       const margin = 20;
       const maxWidth = pageWidth - (margin * 2);
-      
-      // Split text by actual newlines to process paragraphs and images independently
+      const imgRegex = /^!\[.*?\]\((.*?)\)$/;
+
+      // Pre-process lines into segments: text lines or image-group batches
+      type TextSegment = { kind: 'text'; line: string };
+      type ImageGroupSegment = { kind: 'images'; urls: string[] };
+      type Segment = TextSegment | ImageGroupSegment;
+
+      const segments: Segment[] = [];
       const rawLines = generatedReport.split('\n');
-      
+      let i = 0;
+      while (i < rawLines.length) {
+        const line = rawLines[i].trim();
+        if (imgRegex.test(line)) {
+          // Collect all consecutive image lines (blank lines between them are skipped)
+          const urls: string[] = [];
+          while (i < rawLines.length) {
+            const l = rawLines[i].trim();
+            if (imgRegex.test(l)) {
+              const m = l.match(imgRegex);
+              if (m) urls.push(m[1]);
+              i++;
+            } else if (!l) {
+              i++;
+            } else {
+              break;
+            }
+          }
+          segments.push({ kind: 'images', urls });
+        } else {
+          segments.push({ kind: 'text', line });
+          i++;
+        }
+      }
+
+      // Hoisted outside loop: mosaic constants and helpers
+      const mosaicGap = 3; // mm between tiles
+      const mosaicRowH = 75; // mm tall for a 3-image mosaic row
+      const mosaicBigW = maxWidth * 0.6 - mosaicGap / 2;
+      const mosaicSmallW = maxWidth * 0.4 - mosaicGap / 2;
+      const mosaicSmallH = (mosaicRowH - mosaicGap) / 2;
+      const mosaicTwoColH = ((maxWidth - mosaicGap) / 2) * 0.67;
+
+      const fetchImgBase64 = async (url: string): Promise<{ b64: string; fmt: string } | null> => {
+        try {
+          const resp = await fetch(url);
+          if (!resp.ok) return null;
+          const blob = await resp.blob();
+          const b64 = await new Promise<string>((res, rej) => {
+            const r = new FileReader();
+            r.onload = () => res(r.result as string);
+            r.onerror = rej;
+            r.readAsDataURL(blob);
+          });
+          const mimeMatch = b64.match(/^data:image\/(\w+);base64,/);
+          const fmt = (mimeMatch?.[1] ?? 'jpeg').toUpperCase().replace('JPG', 'JPEG');
+          return { b64, fmt };
+        } catch {
+          return null;
+        }
+      };
+
+      const placeImg = (img: { b64: string; fmt: string } | null, x: number, imgY: number, w: number, h: number) => {
+        if (!img) return;
+        try {
+          doc.addImage(img.b64, img.fmt as any, x, imgY, w, h);
+        } catch {
+          // Unsupported/corrupt image — skip tile, layout continues
+        }
+      };
+
       let y = margin;
       const lineHeight = 7;
       doc.setFontSize(11);
-      
-      for (let i = 0; i < rawLines.length; i++) {
-        const rawLine = rawLines[i].trim();
-        if (!rawLine) {
-          y += lineHeight;
-          continue;
-        }
 
-        // Check if paragraph is an image
-        if (rawLine.match(/^!\[.*?\]\((.*?)\)$/)) {
-          const match = rawLine.match(/^!\[.*?\]\((.*?)\)$/);
-          const url = match ? match[1] : null;
-
-          if (url) {
-            try {
-              // Fetch and convert image to base64
-              const response = await fetch(url);
-              const blob = await response.blob();
-              const base64 = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result as string);
-                reader.onerror = reject;
-                reader.readAsDataURL(blob);
-              });
-
-              // Assuming standard width of 120 and height of 90 (4:3 ratio) for the PDF
-              const imgWidth = 120;
-              const imgHeight = 90;
-              
-              // Add a new page if the image would bleed off the bottom
-              if (y + imgHeight + margin > pageHeight - margin) {
-                doc.addPage();
-                y = margin;
-              }
-
-              const mimeMatch = base64.match(/^data:image\/(\w+);base64,/);
-              const imgFormat = (mimeMatch?.[1] ?? 'jpeg').toUpperCase().replace('JPG', 'JPEG');
-              doc.addImage(base64, imgFormat as any, margin, y, imgWidth, imgHeight);
-              y += imgHeight + 10; // Add padding below image
-            } catch (err) {
-              console.warn("PDF Image Load Failed:", url);
-              doc.text(`[Image unable to load: ${url}]`, margin, y);
-              y += lineHeight;
+      for (const seg of segments) {
+        if (seg.kind === 'text') {
+          if (!seg.line) {
+            y += lineHeight;
+            continue;
+          }
+          const wrappedLines = doc.splitTextToSize(seg.line, maxWidth);
+          for (const wl of wrappedLines) {
+            if (y + lineHeight > pageHeight - margin) {
+              doc.addPage();
+              y = margin;
             }
+            doc.text(wl, margin, y);
+            y += lineHeight;
           }
-          continue;
-        }
+        } else {
+          // Render session photos as an alternating mosaic collage
+          let groupIdx = 0;
+          let imgI = 0;
+          while (imgI < seg.urls.length) {
+            const groupSize = Math.min(seg.urls.length - imgI, 3);
+            const group = seg.urls.slice(imgI, imgI + groupSize);
+            const mirrored = groupIdx % 2 === 1;
 
-        // If not an image, safely wrap the text string to fit the page width
-        const wrappedLines = doc.splitTextToSize(rawLine, maxWidth);
-        
-        for (let j = 0; j < wrappedLines.length; j++) {
-          if (y + lineHeight > pageHeight - margin) {
-            doc.addPage();
-            y = margin;
+            const neededH = groupSize === 1 ? maxWidth * 0.45 : groupSize === 2 ? mosaicTwoColH : mosaicRowH;
+
+            if (y + neededH + margin > pageHeight - margin) {
+              doc.addPage();
+              y = margin;
+            }
+
+            // Fetch all images in the group in parallel
+            const imgs = await Promise.all(group.map(fetchImgBase64));
+
+            if (groupSize === 1) {
+              const h = maxWidth * 0.45;
+              placeImg(imgs[0], margin, y, maxWidth, h);
+              y += h + mosaicGap;
+            } else if (groupSize === 2) {
+              const w = (maxWidth - mosaicGap) / 2;
+              placeImg(imgs[0], margin, y, w, mosaicTwoColH);
+              placeImg(imgs[1], margin + w + mosaicGap, y, w, mosaicTwoColH);
+              y += mosaicTwoColH + mosaicGap;
+            } else {
+              // 3 images: alternates big-left / big-right each row
+              if (!mirrored) {
+                placeImg(imgs[0], margin, y, mosaicBigW, mosaicRowH);
+                placeImg(imgs[1], margin + mosaicBigW + mosaicGap, y, mosaicSmallW, mosaicSmallH);
+                placeImg(imgs[2], margin + mosaicBigW + mosaicGap, y + mosaicSmallH + mosaicGap, mosaicSmallW, mosaicSmallH);
+              } else {
+                placeImg(imgs[0], margin, y, mosaicSmallW, mosaicSmallH);
+                placeImg(imgs[1], margin, y + mosaicSmallH + mosaicGap, mosaicSmallW, mosaicSmallH);
+                placeImg(imgs[2], margin + mosaicSmallW + mosaicGap, y, mosaicBigW, mosaicRowH);
+              }
+              y += mosaicRowH + mosaicGap;
+            }
+
+            imgI += groupSize;
+            groupIdx++;
           }
-          doc.text(wrappedLines[j], margin, y);
-          y += lineHeight;
+          y += 5;
         }
       }
-      
+
       doc.save(`post-session-report-${new Date().toISOString().split('T')[0]}.pdf`);
       toast.success('Report downloaded as PDF');
     } catch (error) {
