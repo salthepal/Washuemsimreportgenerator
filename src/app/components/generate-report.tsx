@@ -733,10 +733,16 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
                     // and send the same single-use token during the upload.
                     setTurnstileToken(null);
                     try {
-                      // Compress all files in parallel; collect failures so one bad file
-                      // doesn't sink the whole batch.
+                      // Compress files with bounded concurrency (max 4 at once) to avoid
+                      // allocating N canvases + FileReaders simultaneously for large batches.
                       const fileArr = Array.from(files);
-                      const compressionResults = await Promise.allSettled(fileArr.map(f => compressImage(f)));
+                      const CONCURRENCY = 4;
+                      const compressionResults: PromiseSettledResult<File>[] = [];
+                      for (let start = 0; start < fileArr.length; start += CONCURRENCY) {
+                        const batch = fileArr.slice(start, start + CONCURRENCY);
+                        const batchResults = await Promise.allSettled(batch.map(f => compressImage(f)));
+                        compressionResults.push(...batchResults);
+                      }
                       const compressed: File[] = [];
                       compressionResults.forEach((res, idx) => {
                         if (res.status === 'fulfilled') {
