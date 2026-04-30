@@ -22,6 +22,7 @@ export default defineConfig({
   assetsInclude: ['**/*.svg', '**/*.csv'],
 
   build: {
+    target: 'es2020', // removes unnecessary legacy polyfills for modern browsers
     rollupOptions: {
       output: {
         manualChunks: {

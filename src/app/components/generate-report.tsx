@@ -36,7 +36,10 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
   const [loadingModel, setLoadingModel] = useState(false);
   
   // Media Attachments & Box Integration
+  // attachedImages: R2 URLs used in report markdown
+  // imagePreviews: local blob URLs for instant thumbnail display (parallel array)
   const [attachedImages, setAttachedImages] = useState<string[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [boxToken, setBoxToken] = useState<string | null>(null);
   const pendingRefreshTimers = useRef<number[]>([]);
@@ -46,7 +49,6 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
   
   const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
   const [similarReports, setSimilarReports] = useState<Report[]>([]);
-  const [recommendations, setRecommendations] = useState<string[]>([]);
   
   // Search & Filter: Search queries with 300ms debounce
   const [reportSearchQuery, setReportSearchQuery] = useState('');
@@ -97,28 +99,6 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
     caseFiles.filter(c => caseSelection.selected.includes(c.id)), 
     [caseFiles, caseSelection.selected]
   );
-
-  // Load smart recommendations when notes selection changes
-  useEffect(() => {
-    const loadRecommendations = async () => {
-      if (noteSelection.selected.length > 0) {
-        try {
-          const response = await fetch(`${API_BASE}/recommend-reports`, {
-            method: 'POST',
-            headers: getApiHeaders(),
-            body: JSON.stringify({ noteIds: noteSelection.selected }),
-          });
-          if (response.ok) {
-            const data = await response.json();
-            setRecommendations(data.recommendations || []);
-          }
-        } catch (error) {
-          console.error('Failed to load recommendations:', error);
-        }
-      }
-    };
-    loadRecommendations();
-  }, [noteSelection.selected]);
 
   // Sync model preference
   useEffect(() => {
@@ -674,11 +654,15 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
             <div className="space-y-4">
               {attachedImages.length > 0 && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
-                  {attachedImages.map((url, idx) => (
+                  {attachedImages.map((_, idx) => (
                     <div key={idx} className="relative aspect-square rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden group">
-                      <img src={url} alt={`Attachment ${idx + 1}`} className="w-full h-full object-cover" />
+                      <img src={imagePreviews[idx]} alt={`Attachment ${idx + 1}`} className="w-full h-full object-cover" />
                       <button
-                        onClick={() => setAttachedImages(prev => prev.filter((_, i) => i !== idx))}
+                        onClick={() => {
+                          URL.revokeObjectURL(imagePreviews[idx]);
+                          setAttachedImages(prev => prev.filter((_, i) => i !== idx));
+                          setImagePreviews(prev => prev.filter((_, i) => i !== idx));
+                        }}
                         className="absolute top-1 right-1 p-1 bg-black/50 hover:bg-red-600 text-white rounded-full transition-colors opacity-0 group-hover:opacity-100"
                       >
                         <X className="w-3 h-3" />
@@ -788,7 +772,15 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
                         return;
                       }
 
+                      // Create local blob URLs for instant thumbnail display. Pairing is
+                      // index-based: compressed[i] corresponds to fullUrls[i] in the common
+                      // (no-partial-failure) case. Extra previews are revoked immediately.
+                      const previews = compressed.map(f => URL.createObjectURL(f));
+                      previews.slice(fullUrls.length).forEach(u => URL.revokeObjectURL(u));
+                      const usedPreviews = previews.slice(0, fullUrls.length);
+
                       setAttachedImages(prev => [...prev, ...fullUrls]);
+                      setImagePreviews(prev => [...prev, ...usedPreviews]);
 
                       // Report any per-file failures the server surfaced alongside successes
                       if (Array.isArray(data.errors) && data.errors.length > 0) {
