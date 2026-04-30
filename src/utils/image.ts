@@ -1,11 +1,15 @@
 export async function compressImage(file: File, maxWidth = 1024, quality = 0.8): Promise<File> {
-  // HEIC/HEIF detection by name is needed because Chrome/Firefox set file.type = ""
-  // for HEIC files, causing the image/* check below to bail out prematurely.
+  // HEIC/HEIF detection: trust an explicit HEIC MIME type, otherwise fall back to the
+  // filename extension only when the MIME type is missing/unknown. iOS sometimes
+  // auto-converts HEIC photos to JPEG on upload while keeping the .heic extension —
+  // in that case file.type is 'image/jpeg' and heic2any would throw
+  // "ERR_USER Image is already browser readable: image/jpeg".
+  const hasHeicExt = /\.(heic|heif)$/i.test(file.name);
+  const mimeUnknown = !file.type || file.type === 'application/octet-stream';
   const isHeic =
     file.type === 'image/heic' ||
     file.type === 'image/heif' ||
-    /\.heic$/i.test(file.name) ||
-    /\.heif$/i.test(file.name);
+    (hasHeicExt && mimeUnknown);
 
   if (!file.type.startsWith('image/') && !isHeic) {
     return file;

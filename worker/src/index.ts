@@ -187,27 +187,63 @@ app.route('/lsts', lstsRouter);
 
 
 // R2 Object Storage (File Handling)
+// Accepts one or more files under the 'file' field. A single Turnstile token
+// covers the whole batch since tokens are single-use.
+// NOTE: multipart uploads must send the token via X-Turnstile-Token header;
+// verifyTurnstile only falls back to reading the body when the header is absent,
+// which would consume the stream before this handler can call formData() again.
 app.post('/upload-file', verifyTurnstile, async (c) => {
   try {
     const formData = await c.req.formData();
-    const fileItem = formData.get('file');
-    
-    if (!fileItem || typeof fileItem === 'string') {
+    const fileItems = formData.getAll('file').filter((f): f is File => typeof f !== 'string' && f != null);
+
+    if (fileItems.length === 0) {
       return c.json({ error: 'No file provided' }, 400);
     }
 
-    const file = fileItem as unknown as File;
-    const name = (formData.get('name') as string) || file.name;
-    const uniqueSuffix = crypto.randomUUID().slice(0, 8);
-    const key = `${Date.now()}_${uniqueSuffix}_${name}`;
+    // Validate name override — formData.get() can return a File, guard with typeof.
+    const rawName = formData.get('name');
+    const overrideName = typeof rawName === 'string' ? rawName : null;
 
-    // Save to R2
-    await c.env.BUCKET.put(key, await file.arrayBuffer(), {
-      httpMetadata: { contentType: file.type }
+    const uploaded: { key: string; url: string; name: string }[] = [];
+    const uploadErrors: { name: string; error: string }[] = [];
+
+    for (const file of fileItems) {
+      try {
+        const rawFileName = (fileItems.length === 1 && overrideName) ? overrideName : file.name;
+        // Sanitize filename so the R2 key and derived URL never contain spaces or
+        // other reserved characters that would produce ambiguous URLs.
+        const safeName = rawFileName.replace(/[^\w.\-]/g, '_');
+        const uniqueSuffix = crypto.randomUUID().slice(0, 8);
+        const key = `${Date.now()}_${uniqueSuffix}_${safeName}`;
+
+        await c.env.BUCKET.put(key, await file.arrayBuffer(), {
+          httpMetadata: { contentType: file.type }
+        });
+
+        await logAudit(c.env.DB, 'upload', 'file', rawFileName, key);
+        uploaded.push({ key, url: `/files/${key}`, name: rawFileName });
+      } catch (fileErr: any) {
+        console.error(`Failed to upload ${file.name}:`, fileErr);
+        uploadErrors.push({ name: file.name, error: fileErr?.message || 'Upload failed' });
+      }
+    }
+
+    if (uploaded.length === 0) {
+      return c.json({ error: 'All uploads failed', details: uploadErrors }, 500);
+    }
+
+    // Backward-compatible response: single-file callers can still read .url/.key,
+    // multi-file callers use .urls/.files. Partial failures reported in .errors.
+    const first = uploaded[0];
+    return c.json({
+      success: true,
+      key: first.key,
+      url: first.url,
+      urls: uploaded.map(u => u.url),
+      files: uploaded,
+      ...(uploadErrors.length > 0 ? { errors: uploadErrors } : {}),
     });
-
-    await logAudit(c.env.DB, 'upload', 'file', name, key);
-    return c.json({ success: true, key, url: `/files/${key}` });
   } catch (error: any) {
     console.error(error);
     return c.json({ error: 'Internal server error' }, 500);
