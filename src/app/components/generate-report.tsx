@@ -729,6 +729,9 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
 
                     setUploadingImage(true);
                     const tokenForUpload = turnstileToken;
+                    // Consume the token immediately so the Generate button can't race
+                    // and send the same single-use token during the upload.
+                    setTurnstileToken(null);
                     try {
                       // Compress all files in parallel; collect failures so one bad file
                       // doesn't sink the whole batch.
@@ -780,7 +783,16 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
                       }
 
                       setAttachedImages(prev => [...prev, ...fullUrls]);
-                      toast.success(`Attached ${fullUrls.length} image${fullUrls.length === 1 ? '' : 's'}`);
+
+                      // Report any per-file failures the server surfaced alongside successes
+                      if (Array.isArray(data.errors) && data.errors.length > 0) {
+                        data.errors.forEach((e: { name: string; error: string }) => {
+                          toast.error(`Failed to upload ${e.name}`, { description: e.error });
+                        });
+                        toast.success(`Attached ${fullUrls.length} image${fullUrls.length === 1 ? '' : 's'} (${data.errors.length} failed)`);
+                      } else {
+                        toast.success(`Attached ${fullUrls.length} image${fullUrls.length === 1 ? '' : 's'}`);
+                      }
                     } catch (err: any) {
                       console.error('Upload error:', err);
                       const msg = err?.message || (typeof err === 'string' ? err : 'Unknown error');
