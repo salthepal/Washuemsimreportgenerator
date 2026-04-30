@@ -20,23 +20,23 @@ export async function compressImage(file: File, maxWidth = 1024, quality = 0.8):
   // don't call heic2any on a JPEG that just happens to have a .heic filename.
   const hasHeicExt = /\.(heic|heif)$/i.test(file.name);
   const mimeUnknown = !file.type || file.type === 'application/octet-stream';
-  let isHeic =
-    file.type === 'image/heic' ||
-    file.type === 'image/heif' ||
-    (hasHeicExt && mimeUnknown);
 
-  // Magic bytes check: if extension/type says HEIC but bytes are JPEG, treat as JPEG.
-  if (isHeic && mimeUnknown && await hasJpegMagicBytes(file)) {
-    isHeic = false;
-  }
+  // Read magic bytes once (only when MIME is absent) to avoid redundant file reads.
+  const isActuallyJpeg = mimeUnknown ? await hasJpegMagicBytes(file) : false;
 
-  // Non-image, non-HEIC files pass through unchanged.
-  // Exception: files with an unknown/empty MIME type that turn out to be JPEG
-  // (magic bytes FF D8 FF) still get run through canvas compression so the upload
-  // receives a properly-typed image/jpeg File.
+  // A file is HEIC when type/extension indicates it AND it isn't actually JPEG data.
+  const isHeic =
+    (file.type === 'image/heic' ||
+      file.type === 'image/heif' ||
+      (hasHeicExt && mimeUnknown)) &&
+    !isActuallyJpeg;
+
+  // Non-image, non-HEIC files pass through unchanged, except files with unknown MIME
+  // that turn out to be JPEG (magic bytes) — those go through canvas compression so
+  // the upload receives a properly-typed image/jpeg File.
   if (!file.type.startsWith('image/') && !isHeic) {
-    if (mimeUnknown && await hasJpegMagicBytes(file)) {
-      // Fall through to canvas compression — the output File will have type: 'image/jpeg'.
+    if (isActuallyJpeg) {
+      // Fall through to canvas compression.
     } else {
       return file;
     }
@@ -49,6 +49,11 @@ export async function compressImage(file: File, maxWidth = 1024, quality = 0.8):
     const blob = Array.isArray(converted) ? converted[0] : converted;
     const jpegName = file.name.replace(/\.[^/.]+$/, '') + '.jpg';
     processedFile = new File([blob], jpegName, { type: 'image/jpeg', lastModified: Date.now() });
+  } else if (isActuallyJpeg && !file.type.startsWith('image/')) {
+    // Normalize missing MIME so FileReader.readAsDataURL produces an image data URL
+    // that new Image() can reliably decode (avoids application/octet-stream data URLs).
+    const jpgName = file.name.replace(/\.[^/.]+$/, '.jpg');
+    processedFile = new File([file], jpgName, { type: 'image/jpeg', lastModified: file.lastModified });
   }
 
   return new Promise((resolve, reject) => {
