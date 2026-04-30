@@ -718,48 +718,78 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
                   onChange={async (e) => {
                     const files = e.target.files;
                     if (!files || files.length === 0) return;
-                    
+
+                    if (!turnstileToken) {
+                      toast.error('Security check not ready', {
+                        description: 'Wait for the security check below the upload area to finish, then try again.',
+                      });
+                      e.target.value = '';
+                      return;
+                    }
+
                     setUploadingImage(true);
+                    const tokenForUpload = turnstileToken;
                     try {
-                      const newUrls = [];
-                      for (let i = 0; i < files.length; i++) {
-                        // 1. Compress image in browser
-                        const compressed = await compressImage(files[i]);
-                        
-                        // 2. Upload to Cloudflare worker
-                        const formData = new FormData();
-                        formData.append('file', compressed);
-                        formData.append('turnstileToken', turnstileToken || '');
-                        
-                        const response = await fetch(`${API_BASE}/upload-file`, {
-                          method: 'POST',
-                          headers: {
-                            'X-Turnstile-Token': turnstileToken || '',
-                          },
-                          body: formData
-                        });
-                        
-                        if (response.ok) {
-                          const data = await response.json();
-                          // Construct full URL using our custom R2.dev domain or worker route
-                          // The endpoint returns url: '/files/xyz'
-                          const fileUrl = `${API_BASE}${data.url}`;
-                          newUrls.push(fileUrl);
+                      // Compress all files in parallel; collect failures so one bad file
+                      // doesn't sink the whole batch.
+                      const fileArr = Array.from(files);
+                      const compressionResults = await Promise.allSettled(fileArr.map(f => compressImage(f)));
+                      const compressed: File[] = [];
+                      compressionResults.forEach((res, idx) => {
+                        if (res.status === 'fulfilled') {
+                          compressed.push(res.value);
                         } else {
-                          toast.error(`Failed to upload ${files[i].name}`);
+                          const reason = res.reason?.message || String(res.reason);
+                          toast.error(`Could not process ${fileArr[idx].name}`, { description: reason });
                         }
+                      });
+
+                      if (compressed.length === 0) {
+                        return;
                       }
-                      
-                      setAttachedImages(prev => [...prev, ...newUrls]);
-                      if (newUrls.length > 0) {
-                        toast.success(`Successfully attached ${newUrls.length} image(s)`);
+
+                      // Single multipart request — Turnstile tokens are single-use, so
+                      // batching avoids the 2nd file failing with a 403.
+                      const formData = new FormData();
+                      compressed.forEach(f => formData.append('file', f));
+                      formData.append('turnstileToken', tokenForUpload);
+
+                      const response = await fetch(`${API_BASE}/upload-file`, {
+                        method: 'POST',
+                        headers: { 'X-Turnstile-Token': tokenForUpload },
+                        body: formData,
+                      });
+
+                      if (!response.ok) {
+                        let serverMsg = `HTTP ${response.status}`;
+                        try {
+                          const body = await response.json();
+                          if (body?.error) serverMsg = body.error;
+                        } catch {}
+                        toast.error('Upload failed', { description: serverMsg });
+                        return;
                       }
-                    } catch (err) {
+
+                      const data = await response.json();
+                      const urls: string[] = Array.isArray(data.urls) ? data.urls : (data.url ? [data.url] : []);
+                      const fullUrls = urls.map((u: string) => `${API_BASE}${u}`);
+
+                      if (fullUrls.length === 0) {
+                        toast.error('Upload returned no files');
+                        return;
+                      }
+
+                      setAttachedImages(prev => [...prev, ...fullUrls]);
+                      toast.success(`Attached ${fullUrls.length} image${fullUrls.length === 1 ? '' : 's'}`);
+                    } catch (err: any) {
                       console.error('Upload error:', err);
-                      toast.error('An error occurred during upload');
+                      const msg = err?.message || (typeof err === 'string' ? err : 'Unknown error');
+                      toast.error('Upload error', { description: msg });
                     } finally {
                       setUploadingImage(false);
-                      // Clear the input
+                      // The Turnstile token we used is now consumed; force the widget to issue a fresh one
+                      setTurnstileToken(null);
+                      setTurnstileKey(k => k + 1);
                       e.target.value = '';
                     }
                   }}
