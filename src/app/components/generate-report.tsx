@@ -40,6 +40,8 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
   // imagePreviews: local blob URLs for instant thumbnail display (parallel array)
   const [attachedImages, setAttachedImages] = useState<string[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  // Ref tracks current previews so the unmount cleanup can revoke them all.
+  const imagePreviewsRef = useRef<string[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [boxToken, setBoxToken] = useState<string | null>(null);
   const pendingRefreshTimers = useRef<number[]>([]);
@@ -99,6 +101,11 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
     caseFiles.filter(c => caseSelection.selected.includes(c.id)), 
     [caseFiles, caseSelection.selected]
   );
+
+  // Keep the previews ref in sync so the unmount cleanup sees the latest list.
+  useEffect(() => { imagePreviewsRef.current = imagePreviews; }, [imagePreviews]);
+  // Revoke all blob URLs when the component unmounts to avoid memory leaks.
+  useEffect(() => { return () => { imagePreviewsRef.current.forEach(u => URL.revokeObjectURL(u)); }; }, []);
 
   // Sync model preference
   useEffect(() => {
@@ -772,12 +779,21 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
                         return;
                       }
 
-                      // Create local blob URLs for instant thumbnail display. Pairing is
-                      // index-based: compressed[i] corresponds to fullUrls[i] in the common
-                      // (no-partial-failure) case. Extra previews are revoked immediately.
-                      const previews = compressed.map(f => URL.createObjectURL(f));
-                      previews.slice(fullUrls.length).forEach(u => URL.revokeObjectURL(u));
-                      const usedPreviews = previews.slice(0, fullUrls.length);
+                      // Build a per-filename queue of blob URLs so we can match each
+                      // successfully uploaded file to the correct preview even when a
+                      // middle file fails (index truncation would mis-pair the rest).
+                      const previewQueues = new Map<string, string[]>();
+                      for (const f of compressed) {
+                        if (!previewQueues.has(f.name)) previewQueues.set(f.name, []);
+                        previewQueues.get(f.name)!.push(URL.createObjectURL(f));
+                      }
+                      const successFiles: { name: string }[] = Array.isArray(data.files) ? data.files : [];
+                      const usedPreviews: string[] = successFiles.map(f => {
+                        const queue = previewQueues.get(f.name);
+                        return (queue && queue.length > 0) ? queue.shift()! : '';
+                      });
+                      // Revoke any blob URLs that weren't matched to a successful upload.
+                      for (const queue of previewQueues.values()) queue.forEach(u => URL.revokeObjectURL(u));
 
                       setAttachedImages(prev => [...prev, ...fullUrls]);
                       setImagePreviews(prev => [...prev, ...usedPreviews]);
