@@ -20,6 +20,11 @@ interface GenerateReportProps {
   onRefresh: () => void;
 }
 
+interface AttachedImage {
+  previewUrl: string; // local blob URL for display
+  reportUrl: string;  // R2 worker URL embedded in report markdown
+}
+
 export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps) {
   const queryClient = useQueryClient();
   const { data: reports = [] } = useReports();
@@ -36,7 +41,9 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
   const [loadingModel, setLoadingModel] = useState(false);
   
   // Media Attachments & Box Integration
-  const [attachedImages, setAttachedImages] = useState<string[]>([]);
+  const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
+  // Ref used only to revoke blob URLs on unmount (can't read state in cleanup).
+  const attachedImagesRef = useRef<AttachedImage[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [boxToken, setBoxToken] = useState<string | null>(null);
   const pendingRefreshTimers = useRef<number[]>([]);
@@ -46,7 +53,6 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
   
   const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
   const [similarReports, setSimilarReports] = useState<Report[]>([]);
-  const [recommendations, setRecommendations] = useState<string[]>([]);
   
   // Search & Filter: Search queries with 300ms debounce
   const [reportSearchQuery, setReportSearchQuery] = useState('');
@@ -98,27 +104,10 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
     [caseFiles, caseSelection.selected]
   );
 
-  // Load smart recommendations when notes selection changes
-  useEffect(() => {
-    const loadRecommendations = async () => {
-      if (noteSelection.selected.length > 0) {
-        try {
-          const response = await fetch(`${API_BASE}/recommend-reports`, {
-            method: 'POST',
-            headers: getApiHeaders(),
-            body: JSON.stringify({ noteIds: noteSelection.selected }),
-          });
-          if (response.ok) {
-            const data = await response.json();
-            setRecommendations(data.recommendations || []);
-          }
-        } catch (error) {
-          console.error('Failed to load recommendations:', error);
-        }
-      }
-    };
-    loadRecommendations();
-  }, [noteSelection.selected]);
+  // Keep the ref in sync so the unmount cleanup sees the latest list.
+  useEffect(() => { attachedImagesRef.current = attachedImages; }, [attachedImages]);
+  // Revoke all blob preview URLs when the component unmounts to avoid memory leaks.
+  useEffect(() => { return () => { attachedImagesRef.current.forEach(img => URL.revokeObjectURL(img.previewUrl)); }; }, []);
 
   // Sync model preference
   useEffect(() => {
@@ -208,7 +197,7 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
 
       // Append images if there are any
       if (attachedImages.length > 0) {
-        const imageMarkdown = '\n\n### Session Photos\n\n' + attachedImages.map(url => `![Session Photo](${url})`).join('\n\n');
+        const imageMarkdown = '\n\n### Session Photos\n\n' + attachedImages.map(img => `![Session Photo](${img.reportUrl})`).join('\n\n');
         fullContent += imageMarkdown;
         setGeneratedReport(fullContent);
       }
@@ -674,11 +663,14 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
             <div className="space-y-4">
               {attachedImages.length > 0 && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
-                  {attachedImages.map((url, idx) => (
+                  {attachedImages.map((img, idx) => (
                     <div key={idx} className="relative aspect-square rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden group">
-                      <img src={url} alt={`Attachment ${idx + 1}`} className="w-full h-full object-cover" />
+                      <img src={img.previewUrl} alt={`Attachment ${idx + 1}`} className="w-full h-full object-cover" />
                       <button
-                        onClick={() => setAttachedImages(prev => prev.filter((_, i) => i !== idx))}
+                        onClick={() => {
+                          URL.revokeObjectURL(img.previewUrl);
+                          setAttachedImages(prev => prev.filter((_, i) => i !== idx));
+                        }}
                         className="absolute top-1 right-1 p-1 bg-black/50 hover:bg-red-600 text-white rounded-full transition-colors opacity-0 group-hover:opacity-100"
                       >
                         <X className="w-3 h-3" />
@@ -780,24 +772,40 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
                       }
 
                       const data = await response.json();
-                      const urls: string[] = Array.isArray(data.urls) ? data.urls : (data.url ? [data.url] : []);
-                      const fullUrls = urls.map((u: string) => `${API_BASE}${u}`);
+                      const successFiles: { name: string; url: string }[] = Array.isArray(data.files) ? data.files : [];
 
-                      if (fullUrls.length === 0) {
+                      if (successFiles.length === 0) {
                         toast.error('Upload returned no files');
                         return;
                       }
 
-                      setAttachedImages(prev => [...prev, ...fullUrls]);
+                      // Build per-filename queues of blob URLs so each successful file
+                      // gets the correct preview even if a middle file failed on the server.
+                      const previewQueues = new Map<string, string[]>();
+                      for (const f of compressed) {
+                        if (!previewQueues.has(f.name)) previewQueues.set(f.name, []);
+                        previewQueues.get(f.name)!.push(URL.createObjectURL(f));
+                      }
+                      const newImages: AttachedImage[] = successFiles.map(f => {
+                        const queue = previewQueues.get(f.name);
+                        return {
+                          previewUrl: (queue && queue.length > 0) ? queue.shift()! : '',
+                          reportUrl: `${API_BASE}${f.url}`,
+                        };
+                      });
+                      // Revoke blob URLs for files that didn't make it to the server.
+                      for (const queue of previewQueues.values()) queue.forEach(u => URL.revokeObjectURL(u));
+
+                      setAttachedImages(prev => [...prev, ...newImages]);
 
                       // Report any per-file failures the server surfaced alongside successes
                       if (Array.isArray(data.errors) && data.errors.length > 0) {
                         data.errors.forEach((e: { name: string; error: string }) => {
                           toast.error(`Failed to upload ${e.name}`, { description: e.error });
                         });
-                        toast.success(`Attached ${fullUrls.length} image${fullUrls.length === 1 ? '' : 's'} (${data.errors.length} failed)`);
+                        toast.success(`Attached ${newImages.length} image${newImages.length === 1 ? '' : 's'} (${data.errors.length} failed)`);
                       } else {
-                        toast.success(`Attached ${fullUrls.length} image${fullUrls.length === 1 ? '' : 's'}`);
+                        toast.success(`Attached ${newImages.length} image${newImages.length === 1 ? '' : 's'}`);
                       }
                     } catch (err: any) {
                       console.error('Upload error:', err);
