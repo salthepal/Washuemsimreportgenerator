@@ -82,15 +82,24 @@ async function createPhotoCollage(urls: string[]): Promise<{ buffer: ArrayBuffer
 
   if (images.length === 0) return null;
 
-  const columns = images.length <= 2 ? images.length : images.length <= 4 ? 2 : 3;
-  const rows = Math.ceil(images.length / columns);
-  const tileWidth = 640;
-  const tileHeight = 430;
-  const gap = 24;
-  const padding = 28;
+  const columns = images.length <= 4 ? 2 : 3;
+  const rowCounts: number[] = [];
+  let remaining = images.length;
+  while (remaining > 0) {
+    let count = Math.min(columns, remaining);
+    if (remaining === columns + 1 && columns > 2) count = 2;
+    rowCounts.push(count);
+    remaining -= count;
+  }
+
+  const canvasWidth = 1800;
+  const gap = 14;
+  const padding = 18;
+  const rowHeight = 390;
+  const contentWidth = canvasWidth - padding * 2;
   const canvas = document.createElement('canvas');
-  canvas.width = columns * tileWidth + (columns - 1) * gap + padding * 2;
-  canvas.height = rows * tileHeight + (rows - 1) * gap + padding * 2;
+  canvas.width = canvasWidth;
+  canvas.height = rowCounts.length * rowHeight + (rowCounts.length - 1) * gap + padding * 2;
 
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
@@ -98,33 +107,32 @@ async function createPhotoCollage(urls: string[]): Promise<{ buffer: ArrayBuffer
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  images.forEach((img, index) => {
-    const row = Math.floor(index / columns);
-    const col = index % columns;
-    const itemsInRow = row === rows - 1 ? images.length - row * columns : columns;
-    const rowOffset = itemsInRow < columns ? ((columns - itemsInRow) * (tileWidth + gap)) / 2 : 0;
-    const x = padding + rowOffset + col * (tileWidth + gap);
-    const y = padding + row * (tileHeight + gap);
+  let imageIndex = 0;
+  rowCounts.forEach((count, row) => {
+    const tileWidth = (contentWidth - gap * (count - 1)) / count;
+    const y = padding + row * (rowHeight + gap);
 
-    ctx.fillStyle = '#f8fafc';
-    ctx.fillRect(x, y, tileWidth, tileHeight);
+    for (let col = 0; col < count; col++) {
+      const img = images[imageIndex++];
+      const x = padding + col * (tileWidth + gap);
 
-    const scale = Math.min(tileWidth / img.naturalWidth, tileHeight / img.naturalHeight);
-    const drawWidth = img.naturalWidth * scale;
-    const drawHeight = img.naturalHeight * scale;
-    const drawX = x + (tileWidth - drawWidth) / 2;
-    const drawY = y + (tileHeight - drawHeight) / 2;
-    ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+      const scale = Math.max(tileWidth / img.naturalWidth, rowHeight / img.naturalHeight);
+      const sourceWidth = tileWidth / scale;
+      const sourceHeight = rowHeight / scale;
+      const sourceX = Math.max(0, (img.naturalWidth - sourceWidth) / 2);
+      const sourceY = Math.max(0, (img.naturalHeight - sourceHeight) / 2);
+      ctx.drawImage(img, sourceX, sourceY, sourceWidth, sourceHeight, x, y, tileWidth, rowHeight);
 
-    ctx.strokeStyle = '#d7dee8';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(x, y, tileWidth, tileHeight);
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x + 1, y + 1, tileWidth - 2, rowHeight - 2);
+    }
   });
 
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
   if (!blob) return null;
 
-  const displayWidth = 580;
+  const displayWidth = 610;
   return {
     buffer: await blob.arrayBuffer(),
     type: 'jpg',
