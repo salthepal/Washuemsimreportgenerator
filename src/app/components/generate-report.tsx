@@ -724,6 +724,7 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
                     // Consume the token immediately so the Generate button can't race
                     // and send the same single-use token during the upload.
                     setTurnstileToken(null);
+                    let uploadItems: Array<{ file: File; clientId: string; previewUrl: string }> = [];
                     try {
                       // Compress files with bounded concurrency (max 4 at once) to avoid
                       // allocating N canvases + FileReaders simultaneously for large batches.
@@ -749,10 +750,19 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
                         return;
                       }
 
+                      uploadItems = compressed.map((file, index) => ({
+                        file,
+                        clientId: `${Date.now()}-${index}-${crypto.randomUUID()}`,
+                        previewUrl: URL.createObjectURL(file),
+                      }));
+
                       // Single multipart request — Turnstile tokens are single-use, so
                       // batching avoids the 2nd file failing with a 403.
                       const formData = new FormData();
-                      compressed.forEach(f => formData.append('file', f));
+                      uploadItems.forEach(({ file, clientId }) => {
+                        formData.append('file', file);
+                        formData.append('clientId', clientId);
+                      });
                       formData.append('turnstileToken', tokenForUpload);
 
                       const response = await fetch(`${API_BASE}/upload-file`, {
@@ -767,12 +777,13 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
                           const body = await response.json();
                           if (body?.error) serverMsg = body.error;
                         } catch {}
+                        uploadItems.forEach(item => URL.revokeObjectURL(item.previewUrl));
                         toast.error('Upload failed', { description: serverMsg });
                         return;
                       }
 
                       const data = await response.json();
-                      const successFiles: { name: string; url: string }[] = Array.isArray(data.files)
+                      const successFiles: { name: string; url: string; clientId?: string }[] = Array.isArray(data.files)
                         ? data.files
                         : Array.isArray(data.urls)
                           ? data.urls.map((url: string, idx: number) => ({ name: compressed[idx]?.name || `image-${idx + 1}`, url }))
@@ -781,26 +792,25 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
                             : [];
 
                       if (successFiles.length === 0) {
+                        uploadItems.forEach(item => URL.revokeObjectURL(item.previewUrl));
                         toast.error('Upload returned no files');
                         return;
                       }
 
-                      // Build per-filename queues of blob URLs so each successful file
-                      // gets the correct preview even if a middle file failed on the server.
-                      const previewQueues = new Map<string, string[]>();
-                      for (const f of compressed) {
-                        if (!previewQueues.has(f.name)) previewQueues.set(f.name, []);
-                        previewQueues.get(f.name)!.push(URL.createObjectURL(f));
-                      }
-                      const newImages: AttachedImage[] = successFiles.map(f => {
-                        const queue = previewQueues.get(f.name);
-                        return {
-                          previewUrl: (queue && queue.length > 0) ? queue.shift()! : '',
+                      const uploadItemsById = new Map(uploadItems.map(item => [item.clientId, item]));
+                      const usedPreviewUrls = new Set<string>();
+                      const newImages: AttachedImage[] = successFiles.flatMap((f, idx) => {
+                        const item = f.clientId ? uploadItemsById.get(f.clientId) : uploadItems[idx];
+                        if (!item) return [];
+                        usedPreviewUrls.add(item.previewUrl);
+                        return [{
+                          previewUrl: item.previewUrl,
                           reportUrl: `${API_BASE}${f.url}`,
-                        };
+                        }];
                       });
-                      // Revoke blob URLs for files that didn't make it to the server.
-                      for (const queue of previewQueues.values()) queue.forEach(u => URL.revokeObjectURL(u));
+                      uploadItems
+                        .filter(item => !usedPreviewUrls.has(item.previewUrl))
+                        .forEach(item => URL.revokeObjectURL(item.previewUrl));
 
                       setAttachedImages(prev => [...prev, ...newImages]);
 
@@ -814,6 +824,7 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
                         toast.success(`Attached ${newImages.length} image${newImages.length === 1 ? '' : 's'}`);
                       }
                     } catch (err: any) {
+                      uploadItems.forEach(item => URL.revokeObjectURL(item.previewUrl));
                       console.error('Upload error:', err);
                       const msg = err?.message || (typeof err === 'string' ? err : 'Unknown error');
                       toast.error('Upload error', { description: msg });

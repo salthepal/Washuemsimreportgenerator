@@ -195,7 +195,8 @@ app.route('/lsts', lstsRouter);
 app.post('/upload-file', verifyTurnstile, async (c) => {
   try {
     const formData = await c.req.formData();
-    const fileItems = formData.getAll('file').filter((f): f is File => typeof f !== 'string' && f != null);
+    const fileItems = formData.getAll('file').filter(f => typeof f !== 'string' && f != null) as unknown as File[];
+    const clientIds = formData.getAll('clientId').map(v => typeof v === 'string' ? v : undefined);
 
     if (fileItems.length === 0) {
       return c.json({ error: 'No file provided' }, 400);
@@ -205,10 +206,11 @@ app.post('/upload-file', verifyTurnstile, async (c) => {
     const rawName = formData.get('name');
     const overrideName = typeof rawName === 'string' ? rawName : null;
 
-    const uploaded: { key: string; url: string; name: string }[] = [];
-    const uploadErrors: { name: string; error: string }[] = [];
+    const uploaded: { key: string; url: string; name: string; clientId?: string }[] = [];
+    const uploadErrors: { name: string; error: string; clientId?: string }[] = [];
 
-    for (const file of fileItems) {
+    for (const [index, file] of fileItems.entries()) {
+      const clientId = clientIds[index];
       try {
         const rawFileName = (fileItems.length === 1 && overrideName) ? overrideName : file.name;
         // Sanitize filename so the R2 key and derived URL never contain spaces or
@@ -222,10 +224,10 @@ app.post('/upload-file', verifyTurnstile, async (c) => {
         });
 
         await logAudit(c.env.DB, 'upload', 'file', rawFileName, key);
-        uploaded.push({ key, url: `/files/${key}`, name: rawFileName });
+        uploaded.push({ key, url: `/files/${key}`, name: rawFileName, clientId });
       } catch (fileErr: any) {
         console.error(`Failed to upload ${file.name}:`, fileErr);
-        uploadErrors.push({ name: file.name, error: fileErr?.message || 'Upload failed' });
+        uploadErrors.push({ name: file.name, error: fileErr?.message || 'Upload failed', clientId });
       }
     }
 

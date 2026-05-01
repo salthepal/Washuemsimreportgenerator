@@ -2,7 +2,7 @@
  * DOCX generation utilities
  * Converts Markdown-formatted text to properly structured Word documents
  */
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, ImageRun, Table, TableRow, TableCell, WidthType, BorderStyle } from 'docx';
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, ImageRun } from 'docx';
 
 export interface DocxGenerationOptions {
   filename?: string;
@@ -53,48 +53,92 @@ function parseInlineFormatting(text: string): TextRun[] {
   return textRuns.length > 0 ? textRuns : [new TextRun(text)];
 }
 
-async function fetchImageBuffer(url: string): Promise<{ buffer: ArrayBuffer; type: 'jpg' | 'png' } | null> {
+async function blobToImage(blob: Blob): Promise<HTMLImageElement> {
+  const objectUrl = URL.createObjectURL(blob);
   try {
-    const response = await fetch(url);
-    if (!response.ok) return null;
-    const mimeType = response.headers.get('content-type')?.split(';')[0].trim() ?? 'image/jpeg';
-    if (mimeType === 'image/png') {
-      return { buffer: await response.arrayBuffer(), type: 'png' };
-    }
-    if (mimeType === 'image/jpeg' || mimeType === 'image/jpg') {
-      return { buffer: await response.arrayBuffer(), type: 'jpg' };
-    }
-    // Convert unsupported formats to JPEG via canvas
-    const blob = await response.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    try {
-      const jpegBlob = await new Promise<Blob>((res, rej) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          canvas.width = img.naturalWidth;
-          canvas.height = img.naturalHeight;
-          canvas.getContext('2d')?.drawImage(img, 0, 0);
-          canvas.toBlob((b) => b ? res(b) : rej(new Error('toBlob failed')), 'image/jpeg', 0.9);
-        };
-        img.onerror = rej;
-        img.src = objectUrl;
-      });
-      return { buffer: await jpegBlob.arrayBuffer(), type: 'jpg' };
-    } finally {
-      URL.revokeObjectURL(objectUrl);
-    }
-  } catch {
-    return null;
+    return await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('Image decode failed'));
+      img.src = objectUrl;
+    });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
   }
+}
+
+async function createPhotoCollage(urls: string[]): Promise<{ buffer: ArrayBuffer; type: 'jpg'; width: number; height: number } | null> {
+  const images = (
+    await Promise.all(urls.map(async (url) => {
+      try {
+        const response = await fetch(url);
+        if (!response.ok) return null;
+        return await blobToImage(await response.blob());
+      } catch {
+        return null;
+      }
+    }))
+  ).filter((img): img is HTMLImageElement => Boolean(img));
+
+  if (images.length === 0) return null;
+
+  const columns = images.length <= 2 ? images.length : images.length <= 4 ? 2 : 3;
+  const rows = Math.ceil(images.length / columns);
+  const tileWidth = 640;
+  const tileHeight = 430;
+  const gap = 24;
+  const padding = 28;
+  const canvas = document.createElement('canvas');
+  canvas.width = columns * tileWidth + (columns - 1) * gap + padding * 2;
+  canvas.height = rows * tileHeight + (rows - 1) * gap + padding * 2;
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  images.forEach((img, index) => {
+    const row = Math.floor(index / columns);
+    const col = index % columns;
+    const itemsInRow = row === rows - 1 ? images.length - row * columns : columns;
+    const rowOffset = itemsInRow < columns ? ((columns - itemsInRow) * (tileWidth + gap)) / 2 : 0;
+    const x = padding + rowOffset + col * (tileWidth + gap);
+    const y = padding + row * (tileHeight + gap);
+
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(x, y, tileWidth, tileHeight);
+
+    const scale = Math.min(tileWidth / img.naturalWidth, tileHeight / img.naturalHeight);
+    const drawWidth = img.naturalWidth * scale;
+    const drawHeight = img.naturalHeight * scale;
+    const drawX = x + (tileWidth - drawWidth) / 2;
+    const drawY = y + (tileHeight - drawHeight) / 2;
+    ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+
+    ctx.strokeStyle = '#d7dee8';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(x, y, tileWidth, tileHeight);
+  });
+
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+  if (!blob) return null;
+
+  const displayWidth = 580;
+  return {
+    buffer: await blob.arrayBuffer(),
+    type: 'jpg',
+    width: displayWidth,
+    height: Math.round(displayWidth * (canvas.height / canvas.width)),
+  };
 }
 
 /**
  * Converts Markdown-formatted text to DOCX paragraphs
  */
-async function markdownToDocxParagraphs(markdown: string, pageMargins?: DocxGenerationOptions['pageMargins'], pageSize?: DocxGenerationOptions['pageSize']): Promise<(Paragraph | Table)[]> {
+async function markdownToDocxParagraphs(markdown: string): Promise<Paragraph[]> {
   const lines = markdown.split('\n');
-  const children: (Paragraph | Table)[] = [];
+  const children: Paragraph[] = [];
   let currentFindingLevel = 0;
   const imgRegex = /^!\[.*?\]\((.*?)\)$/;
 
@@ -127,34 +171,6 @@ async function markdownToDocxParagraphs(markdown: string, pageMargins?: DocxGene
       idx++;
     }
   }
-
-  // Hoisted outside loop: constants and helpers used by image-group segments
-  const NO_BORDER = { style: BorderStyle.NONE, size: 0, color: 'auto' };
-  const noBorders = { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER, insideH: NO_BORDER, insideV: NO_BORDER };
-
-  // Derive usable content width from actual page size and margins.
-  // Defaults: Letter 8.5" wide = 12240 twips, 1-inch margins = 1440 twips each side.
-  const pageWidthTwips = pageSize?.width ?? 12240;
-  const leftMargin     = pageMargins?.left  ?? 1440;
-  const rightMargin    = pageMargins?.right ?? 1440;
-  const CONTENT_W = pageWidthTwips - leftMargin - rightMargin;
-  const COL_BIG  = Math.round(CONTENT_W * 0.6);
-  const COL_SM   = CONTENT_W - COL_BIG;
-  const COL_HALF = Math.round(CONTENT_W / 2);
-
-  const BIG_W = 350; const BIG_H = 262;
-  const SM_W = 220;  const SM_H = 125;
-
-  const imgCell = (imgData: Awaited<ReturnType<typeof fetchImageBuffer>>, w: number, h: number, widthDxa: number): TableCell => {
-    const content = imgData
-      ? new Paragraph({ children: [new ImageRun({ data: imgData.buffer, type: imgData.type, transformation: { width: w, height: h } })], spacing: { after: 0 } })
-      : new Paragraph({ children: [new TextRun({ text: '[Image unavailable]', italics: true })] });
-    return new TableCell({
-      children: [content],
-      borders: noBorders,
-      width: { size: widthDxa, type: WidthType.DXA },
-    });
-  };
 
   for (const seg of segments) {
     if (seg.kind === 'text') {
@@ -209,65 +225,20 @@ async function markdownToDocxParagraphs(markdown: string, pageMargins?: DocxGene
         }));
       }
     } else {
-      // Render session photos as an alternating mosaic collage using nested tables
-      let groupIdx = 0;
-      let imgI = 0;
-      while (imgI < seg.urls.length) {
-        const groupSize = Math.min(seg.urls.length - imgI, 3);
-        const group = seg.urls.slice(imgI, imgI + groupSize);
-        const mirrored = groupIdx % 2 === 1;
-
-        if (groupSize === 1) {
-          const imgData = await fetchImageBuffer(group[0]);
-          children.push(new Table({
-            rows: [new TableRow({ children: [imgCell(imgData, 580, 345, CONTENT_W)] })],
-            columnWidths: [CONTENT_W],
-            width: { size: CONTENT_W, type: WidthType.DXA },
-            borders: noBorders,
-          }));
-        } else if (groupSize === 2) {
-          const [d0, d1] = await Promise.all(group.map(fetchImageBuffer));
-          children.push(new Table({
-            rows: [new TableRow({ children: [imgCell(d0, 280, 210, COL_HALF), imgCell(d1, 280, 210, COL_HALF)] })],
-            columnWidths: [COL_HALF, COL_HALF],
-            width: { size: CONTENT_W, type: WidthType.DXA },
-            borders: noBorders,
-          }));
-        } else {
-          // 3 images: big (60%) + two stacked smalls (40%), alternating mirror.
-          const [d0, d1, d2] = await Promise.all(group.map(fetchImageBuffer));
-          // When mirrored: group[0]=small-top, group[1]=small-bottom, group[2]=big
-          // When normal:   group[0]=big,       group[1]=small-top,    group[2]=small-bottom
-          const bigData = mirrored ? d2 : d0;
-          const sm1Data = mirrored ? d0 : d1;
-          const sm2Data = mirrored ? d1 : d2;
-
-          const bigCell = imgCell(bigData, BIG_W, BIG_H, COL_BIG);
-
-          // Inner table holds the two small images stacked; uses explicit DXA width
-          const stackedTable = new Table({
-            rows: [
-              new TableRow({ children: [imgCell(sm1Data, SM_W, SM_H, COL_SM)] }),
-              new TableRow({ children: [imgCell(sm2Data, SM_W, SM_H, COL_SM)] }),
-            ],
-            columnWidths: [COL_SM],
-            width: { size: COL_SM, type: WidthType.DXA },
-            borders: noBorders,
-          });
-
-          const stackCell = new TableCell({ children: [stackedTable], borders: noBorders, width: { size: COL_SM, type: WidthType.DXA } });
-
-          children.push(new Table({
-            rows: [new TableRow({ children: mirrored ? [stackCell, bigCell] : [bigCell, stackCell] })],
-            columnWidths: mirrored ? [COL_SM, COL_BIG] : [COL_BIG, COL_SM],
-            width: { size: CONTENT_W, type: WidthType.DXA },
-            borders: noBorders,
-          }));
-        }
-
-        children.push(new Paragraph({ text: '', spacing: { after: 160 } }));
-        imgI += groupSize;
-        groupIdx++;
+      const collage = await createPhotoCollage(seg.urls);
+      if (collage) {
+        children.push(new Paragraph({
+          children: [
+            new ImageRun({
+              data: collage.buffer,
+              type: collage.type,
+              transformation: { width: collage.width, height: collage.height },
+            }),
+          ],
+          spacing: { before: 120, after: 160 },
+        }));
+      } else {
+        children.push(new Paragraph({ children: [new TextRun({ text: '[Images unavailable]', italics: true })] }));
       }
     }
   }
@@ -282,7 +253,7 @@ export async function generateDocxFromMarkdown(
   markdown: string, 
   options: DocxGenerationOptions = {}
 ): Promise<Blob> {
-  const paragraphs = await markdownToDocxParagraphs(markdown, options.pageMargins, options.pageSize);
+  const paragraphs = await markdownToDocxParagraphs(markdown);
   
   const doc = new Document({
     numbering: {
