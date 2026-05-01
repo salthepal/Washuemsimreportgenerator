@@ -178,7 +178,7 @@ washusimintelligence/
 │   ├── src/
 │   │   ├── index.ts            # Hono entry point
 │   │   ├── types.ts            # Backend types
-│   │   ├── routes/             # API routes (reports, lsts, notes, case-files, ai)
+│   │   ├── routes/             # Shared route modules
 │   │   ├── utils/              # AI integration, Gemini caching
 │   │   └── lib/                # Helpers (vectorization, auditing, rate limiting)
 │   ├── schema.sql              # D1 database schema
@@ -264,6 +264,7 @@ Use the D1 binding available on the Hono context (`c.env.DB`) within worker rout
 #### API Connection Issues
 - Confirm the Worker is running: `cd worker && npx wrangler dev`
 - Check Cloudflare binding IDs in `worker/wrangler.toml`
+- Confirm Cloudflare Pages has `BACKEND_URL` set to the deployed Worker URL
 - Verify secrets are set: `npx wrangler secret list`
 
 #### Dark Mode Issues
@@ -313,6 +314,7 @@ Use the D1 binding available on the Hono context (`c.env.DB`) within worker rout
 
 ### Backend Security
 - Secrets managed via `npx wrangler secret put`
+- Clinical data endpoints require `X-Admin-Token`
 - Validate all incoming requests with Zod schemas
 - Use parameterized D1 queries to prevent SQL injection
 - Log security-relevant events to the audit_logs table
@@ -322,6 +324,7 @@ Use the D1 binding available on the Hono context (`c.env.DB`) within worker rout
 - Follow HIPAA compliance guidelines
 - Regular security audits
 - Base64 image data stripped before SQL persistence
+- Avoid entering patient identifiers or protected health information unless the deployment is approved for that data
 
 ## 📝 Maintenance
 

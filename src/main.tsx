@@ -3,7 +3,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import { HashRouter } from "react-router-dom";
-import App from "./app/App.tsx";
+import App from "./app/App";
 import "./styles/index.css";
 
 const queryClient = new QueryClient({

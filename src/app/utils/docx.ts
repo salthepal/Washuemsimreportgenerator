@@ -3,6 +3,7 @@
  * Converts Markdown-formatted text to properly structured Word documents
  */
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, ImageRun } from 'docx';
+import { getApiHeaders } from '../api';
 
 export interface DocxGenerationOptions {
   filename?: string;
@@ -71,7 +72,7 @@ async function createPhotoCollage(urls: string[]): Promise<{ buffer: ArrayBuffer
   const images = (
     await Promise.all(urls.map(async (url) => {
       try {
-        const response = await fetch(url);
+        const response = await fetch(url, { headers: getApiHeaders() });
         if (!response.ok) return null;
         return await blobToImage(await response.blob());
       } catch {

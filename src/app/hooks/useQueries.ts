@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchReports, fetchGeneratedReports, fetchNotes, fetchCaseFiles, fetchLSTs, updateLst, addLst, deleteLst, mergeLsts, fetchErrorLog, clearErrorLog, fetchHydration, fetchLstHistory, deleteReport } from '../api';
-import { LST, Report } from '../types';
+import { fetchReports, fetchGeneratedReports, fetchNotes, fetchCaseFiles, fetchLSTs, updateLst, addLst, deleteLst, mergeLsts, fetchErrorLog, clearErrorLog, fetchHydration, fetchLstHistory, deleteReport, updateReport, updateCaseFile, updateNote } from '../api';
+import { CaseFile, LST, Report, SessionNote } from '../types';
 
 export function useHydration() {
   return useQuery({ queryKey: ['hydration'], queryFn: fetchHydration });

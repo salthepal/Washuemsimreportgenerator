@@ -10,7 +10,6 @@ dist
 .vscode
 .idea
 build
-package-lock.json
 yarn-error.log
 npm-debug.log
 worker/*.txt

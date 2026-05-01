@@ -24,6 +24,14 @@ The frontend is built using Vite and deployed directly to the Cloudflare network
 ### Automated Deployment
 Connecting the GitHub repository to Cloudflare Pages handles all production builds and edge deployments automatically on push.
 
+### Pages Environment Variables
+Configure the Pages Function proxy with the production Worker URL:
+```bash
+BACKEND_URL=https://washu-em-sim-intelligence.sphadnisuf.workers.dev
+```
+
+If `BACKEND_URL` is not set, the checked-in Pages Function falls back to the current production workers.dev endpoint.
+
 ---
 
 ## ⚡ 2. Backend Deployment (Cloudflare Workers)
@@ -37,11 +45,17 @@ Connecting the GitHub repository to Cloudflare Pages handles all production buil
     ```bash
     npx wrangler d1 create washusim-db
     ```
-2.  **Initialize Schema**:
+2.  **Initialize Schema for a New Database**:
     ```bash
     cd worker
     npx wrangler d1 execute washusim-db --file=./schema.sql --remote
     ```
+3.  **Apply Migrations for an Existing Database**:
+    ```bash
+    cd worker
+    npx wrangler d1 migrations apply washu_sim_db --remote
+    ```
+    Do not apply historical migrations immediately after loading the current `schema.sql` into a brand-new database; the schema already includes those columns.
 
 ### Storage Setup (R2)
 1.  **Create Bucket**:
@@ -84,13 +98,15 @@ npx wrangler secret put ADMIN_TOKEN
 ```
 
 ### Frontend Configuration
-The frontend automatically connects to the backend in production using the same domain context. For local development, update the API URL in `src/app/utils/api.ts` if needed.
+The frontend uses `/api` in production so requests pass through the Cloudflare Pages Function proxy. For local development, set `VITE_API_BASE` or run the Worker at `http://localhost:8787`.
 
 ---
 
 ## 🔒 Security & Governance
 - **Data Minimization**: Automatically strips base64 image data before SQL persistence to optimize D1 storage and improve UI response times.
 - **Audit Logging**: All administrative actions are recorded in the central D1 `audit_logs` table.
+- **Administrative Access**: Clinical data endpoints require `X-Admin-Token`; upload and generation writes also require `X-Turnstile-Token`.
+- **Clinical Data Handling**: Do not enter patient identifiers or protected health information unless the deployment has been reviewed under the institution's privacy, retention, and access-control requirements.
 - **Zero Trust**: For enterprise environments, we recommend deploying **Cloudflare Access** in front of the application dashboard.
 
 ---

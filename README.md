@@ -56,6 +56,7 @@ Built on a Cloudflare-native stack for reliability, fast access, and secure clin
 - **Secrets**: 
   - `GEMINI_API_KEY`: For report generation.
   - `TURNSTILE_SECRET_KEY`: For spam protection on generation endpoints.
+  - `ADMIN_TOKEN`: For protected clinical data and administrative API access.
 
 ### Local Development
 
@@ -93,7 +94,9 @@ The system uses GitHub Actions for continuous delivery:
 
 - **Just Culture**: Reports prioritize growth and systemic fixes over individual blame.
 - **Data Sovereignty**: Leverages regional storage primitives to maintain clinical data control.
-- **Spam Protection**: All generation endpoints protected by **Cloudflare Turnstile**.
+- **Administrative Access**: Clinical data reads and writes require an admin token.
+- **Spam Protection**: Upload and generation endpoints are protected by **Cloudflare Turnstile**.
+- **Clinical Data Handling**: Avoid entering patient identifiers or protected health information unless your Cloudflare deployment has been approved for that use.
 
 ---
 
