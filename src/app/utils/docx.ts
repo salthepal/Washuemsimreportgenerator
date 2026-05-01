@@ -222,13 +222,13 @@ async function markdownToDocxParagraphs(markdown: string): Promise<Paragraph[]> 
         currentFindingLevel = 1;
       } else if (trimmedLine.match(/^[-•*]\s+/)) {
         children.push(new Paragraph({
-          text: trimmedLine.replace(/^[-•*]\s+/, ''),
+          children: parseInlineFormatting(trimmedLine.replace(/^[-•*]\s+/, '')),
           bullet: { level: 0 },
           spacing: { after: 80 },
         }));
       } else if (trimmedLine.match(/^\d+[\.)]\s+/)) {
         children.push(new Paragraph({
-          text: trimmedLine.replace(/^\d+[\.)]\s+/, ''),
+          children: parseInlineFormatting(trimmedLine.replace(/^\d+[\.)]\s+/, '')),
           numbering: { reference: 'default-numbering', level: 0 },
           spacing: { after: 80 },
         }));
