@@ -82,12 +82,12 @@ async function createPhotoCollage(urls: string[]): Promise<{ buffer: ArrayBuffer
 
   if (images.length === 0) return null;
 
-  const columns = images.length <= 4 ? 2 : 3;
+  const maxColumns = images.length <= 4 ? 2 : 3;
   const rowCounts: number[] = [];
   let remaining = images.length;
   while (remaining > 0) {
-    let count = Math.min(columns, remaining);
-    if (remaining === columns + 1 && columns > 2) count = 2;
+    let count = Math.min(maxColumns, remaining);
+    if (remaining === maxColumns + 1 && maxColumns > 2) count = 2;
     rowCounts.push(count);
     remaining -= count;
   }
@@ -95,11 +95,28 @@ async function createPhotoCollage(urls: string[]): Promise<{ buffer: ArrayBuffer
   const canvasWidth = 1800;
   const gap = 14;
   const padding = 18;
-  const rowHeight = 390;
+  const targetRowHeight = 360;
   const contentWidth = canvasWidth - padding * 2;
+  const rows = rowCounts.map((count, rowIndex) => {
+    const rowImages = images.slice(
+      rowCounts.slice(0, rowIndex).reduce((sum, n) => sum + n, 0),
+      rowCounts.slice(0, rowIndex).reduce((sum, n) => sum + n, 0) + count,
+    );
+    const aspectSum = rowImages.reduce((sum, img) => sum + (img.naturalWidth / img.naturalHeight), 0);
+    const availableWidth = contentWidth - gap * (count - 1);
+    const naturalRowHeight = availableWidth / aspectSum;
+    const rowHeight = Math.max(300, Math.min(420, naturalRowHeight || targetRowHeight));
+    const widths = rowImages.map(img => rowHeight * (img.naturalWidth / img.naturalHeight));
+    const widthScale = availableWidth / widths.reduce((sum, width) => sum + width, 0);
+    return {
+      images: rowImages,
+      height: rowHeight * widthScale,
+      widths: widths.map(width => width * widthScale),
+    };
+  });
   const canvas = document.createElement('canvas');
   canvas.width = canvasWidth;
-  canvas.height = rowCounts.length * rowHeight + (rowCounts.length - 1) * gap + padding * 2;
+  canvas.height = Math.ceil(rows.reduce((sum, row) => sum + row.height, 0) + (rows.length - 1) * gap + padding * 2);
 
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
@@ -107,26 +124,18 @@ async function createPhotoCollage(urls: string[]): Promise<{ buffer: ArrayBuffer
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  let imageIndex = 0;
-  rowCounts.forEach((count, row) => {
-    const tileWidth = (contentWidth - gap * (count - 1)) / count;
-    const y = padding + row * (rowHeight + gap);
-
-    for (let col = 0; col < count; col++) {
-      const img = images[imageIndex++];
-      const x = padding + col * (tileWidth + gap);
-
-      const scale = Math.max(tileWidth / img.naturalWidth, rowHeight / img.naturalHeight);
-      const sourceWidth = tileWidth / scale;
-      const sourceHeight = rowHeight / scale;
-      const sourceX = Math.max(0, (img.naturalWidth - sourceWidth) / 2);
-      const sourceY = Math.max(0, (img.naturalHeight - sourceHeight) / 2);
-      ctx.drawImage(img, sourceX, sourceY, sourceWidth, sourceHeight, x, y, tileWidth, rowHeight);
-
+  let y = padding;
+  rows.forEach((row) => {
+    let x = padding;
+    row.images.forEach((img, col) => {
+      const width = row.widths[col];
+      ctx.drawImage(img, x, y, width, row.height);
       ctx.strokeStyle = '#e2e8f0';
       ctx.lineWidth = 2;
-      ctx.strokeRect(x + 1, y + 1, tileWidth - 2, rowHeight - 2);
-    }
+      ctx.strokeRect(x + 1, y + 1, width - 2, row.height - 2);
+      x += width + gap;
+    });
+    y += row.height + gap;
   });
 
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
