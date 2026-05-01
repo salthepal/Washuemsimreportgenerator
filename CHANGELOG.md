@@ -5,6 +5,22 @@ All notable changes to the WashU EM Sim Intelligence Platform will be documented
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.1] - 2026-05-01
+
+### 🧾 Report Export & Photo Collage Stability
+A patch release focused on making session photo upload, preview, and exported report formatting reliable and polished.
+
+### 🐛 Fixed
+- **Session Photo Upload Pairing**: Added per-file client IDs to multipart uploads so each uploaded image maps back to the correct local preview and report URL.
+- **Upload Response Compatibility**: The frontend now handles both legacy single-file upload responses and newer batch upload responses.
+- **Duplicate Photo Output**: Fixed cases where DOCX exports could embed the same session photo multiple times after batch uploads.
+- **DOCX Photo Collage Layout**: Reworked session photo export into a justified, no-crop collage that preserves full photo content while reducing unused whitespace.
+- **DOCX Inline Formatting**: Bullet and numbered list items now render inline Markdown, so labels like `**Transfer Logistics:**` become proper bold text instead of literal asterisks.
+- **Preview Cleanup**: Improved blob URL lifecycle handling so failed uploads do not leave broken preview cards behind.
+
+### 🛡️ Changed
+- **Worker Upload Contract**: `/upload-file` now returns optional `clientId` metadata for each uploaded file while preserving backward-compatible `url`, `urls`, and `files` response shapes.
+
 ## [3.4.0] - 2026-04-07
 
 ### 🧠 Hybrid Intelligent Search & Vector Intelligence
