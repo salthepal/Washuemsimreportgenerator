@@ -772,7 +772,13 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
                       }
 
                       const data = await response.json();
-                      const successFiles: { name: string; url: string }[] = Array.isArray(data.files) ? data.files : [];
+                      const successFiles: { name: string; url: string }[] = Array.isArray(data.files)
+                        ? data.files
+                        : Array.isArray(data.urls)
+                          ? data.urls.map((url: string, idx: number) => ({ name: compressed[idx]?.name || `image-${idx + 1}`, url }))
+                          : typeof data.url === 'string'
+                            ? [{ name: compressed[0]?.name || 'image', url: data.url }]
+                            : [];
 
                       if (successFiles.length === 0) {
                         toast.error('Upload returned no files');
