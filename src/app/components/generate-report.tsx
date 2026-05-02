@@ -314,7 +314,7 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
 
       const fetchImgBase64 = async (url: string): Promise<{ b64: string; fmt: string } | null> => {
         try {
-          const resp = await fetch(url, { headers: getApiHeaders() });
+          const resp = await fetch(url, { headers: getAdminAuthHeaders() });
           if (!resp.ok) return null;
           const blob = await resp.blob();
           const b64 = await new Promise<string>((res, rej) => {

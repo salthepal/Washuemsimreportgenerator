@@ -183,11 +183,9 @@ app.route('/lsts', lstsRouter);
 
 
 // R2 Object Storage (File Handling)
-// Accepts one or more files under the 'file' field. A single Turnstile token
-// covers the whole batch since tokens are single-use.
-// NOTE: multipart uploads must send the token via X-Turnstile-Token header;
-// verifyTurnstile only falls back to reading the body when the header is absent,
-// which would consume the stream before this handler can call formData() again.
+// Accepts one or more files under the 'file' field. Multipart uploads must send
+// the single-use Turnstile token via X-Turnstile-Token so the request body can be
+// parsed exactly once by this handler.
 app.post('/upload-file', verifyAdmin, verifyTurnstile, async (c) => {
   try {
     const formData = await c.req.formData();
@@ -1290,7 +1288,7 @@ app.post('/restore', verifyAdmin, async (c) => {
     for (const report of reports) {
       if (!report?.id) continue;
       addStatement('reports', c.env.DB.prepare(`
-        INSERT OR IGNORE INTO reports (id, title, content, type, metadata, created_at)
+        INSERT OR REPLACE INTO reports (id, title, content, type, metadata, created_at)
         VALUES (?, ?, ?, ?, ?, COALESCE(?, ?))
       `)
         .bind(
@@ -1307,7 +1305,7 @@ app.post('/restore', verifyAdmin, async (c) => {
     for (const lst of lsts) {
       if (!lst?.id) continue;
       addStatement('lsts', c.env.DB.prepare(`
-        INSERT OR IGNORE INTO lsts (
+        INSERT OR REPLACE INTO lsts (
           id, title, description, recommendation, severity, status, category, location,
           resolution_note, resolved_date, assignee, parent_issue_id, location_statuses,
           related_report_id, recurrence_count, identified_date, last_seen_date, created_at
@@ -1340,7 +1338,7 @@ app.post('/restore', verifyAdmin, async (c) => {
     for (const note of notes) {
       if (!note?.id) continue;
       addStatement('sessionNotes', c.env.DB.prepare(`
-        INSERT OR IGNORE INTO session_notes (id, session_name, notes, participants, tags, metadata, created_at)
+        INSERT OR REPLACE INTO session_notes (id, session_name, notes, participants, tags, metadata, created_at)
         VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, ?))
       `)
         .bind(
@@ -1358,7 +1356,7 @@ app.post('/restore', verifyAdmin, async (c) => {
     for (const caseFile of cases) {
       if (!caseFile?.id) continue;
       addStatement('caseFiles', c.env.DB.prepare(`
-        INSERT OR IGNORE INTO case_files (id, title, content, html_content, date, uploader_name, case_type, created_at)
+        INSERT OR REPLACE INTO case_files (id, title, content, html_content, date, uploader_name, case_type, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, ?))
       `)
         .bind(
@@ -1377,7 +1375,7 @@ app.post('/restore', verifyAdmin, async (c) => {
     for (const entry of auditLogs) {
       if (!entry?.id) continue;
       addStatement('auditLog', c.env.DB.prepare(`
-        INSERT OR IGNORE INTO audit_logs (id, action, type, target, target_id, timestamp)
+        INSERT OR REPLACE INTO audit_logs (id, action, type, target, target_id, timestamp)
         VALUES (?, ?, ?, ?, ?, COALESCE(?, ?))
       `)
         .bind(
