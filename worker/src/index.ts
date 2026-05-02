@@ -1278,17 +1278,20 @@ app.post('/restore', verifyAdmin, async (c) => {
       : Array.isArray(backup.cases) ? backup.cases : [];
     const auditLogs = Array.isArray(backup.auditLog) ? backup.auditLog : [];
 
-    let restoredReports = 0;
-    let restoredLsts = 0;
-    let restoredNotes = 0;
-    let restoredCases = 0;
-    let restoredAuditLogs = 0;
+    const now = new Date().toISOString();
+    type RestoreBucket = 'reports' | 'lsts' | 'sessionNotes' | 'caseFiles' | 'auditLog';
+    const statements: D1PreparedStatement[] = [];
+    const statementBuckets: RestoreBucket[] = [];
+    const addStatement = (bucket: RestoreBucket, statement: D1PreparedStatement) => {
+      statements.push(statement);
+      statementBuckets.push(bucket);
+    };
 
     for (const report of reports) {
       if (!report?.id) continue;
-      const result = await c.env.DB.prepare(`
+      addStatement('reports', c.env.DB.prepare(`
         INSERT OR IGNORE INTO reports (id, title, content, type, metadata, created_at)
-        VALUES (?, ?, ?, ?, ?, COALESCE(?, strftime('%Y-%m-%dT%H:%M:%f', 'now', 'utc')))
+        VALUES (?, ?, ?, ?, ?, COALESCE(?, ?))
       `)
         .bind(
           report.id,
@@ -1296,21 +1299,20 @@ app.post('/restore', verifyAdmin, async (c) => {
           report.content || '',
           report.type || 'prior_report',
           toJsonText(report.metadata, {}),
-          report.created_at || report.createdAt || null
-        )
-        .run();
-      restoredReports += result.meta?.changes || 0;
+          report.created_at || report.createdAt || null,
+          now
+        ));
     }
 
     for (const lst of lsts) {
       if (!lst?.id) continue;
-      const result = await c.env.DB.prepare(`
+      addStatement('lsts', c.env.DB.prepare(`
         INSERT OR IGNORE INTO lsts (
           id, title, description, recommendation, severity, status, category, location,
           resolution_note, resolved_date, assignee, parent_issue_id, location_statuses,
           related_report_id, recurrence_count, identified_date, last_seen_date, created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, strftime('%Y-%m-%dT%H:%M:%f', 'now', 'utc')))
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, ?))
       `)
         .bind(
           lst.id,
@@ -1327,20 +1329,19 @@ app.post('/restore', verifyAdmin, async (c) => {
           lst.parent_issue_id || lst.parentIssueId || null,
           toJsonText(lst.location_statuses ?? lst.locationStatuses, {}),
           lst.related_report_id || lst.relatedReportId || null,
-          Number(lst.recurrence_count || lst.recurrenceCount || 1),
-          lst.identified_date || lst.identifiedDate || new Date().toISOString(),
-          lst.last_seen_date || lst.lastSeenDate || new Date().toISOString(),
-          lst.created_at || lst.createdAt || null
-        )
-        .run();
-      restoredLsts += result.meta?.changes || 0;
+          Number(lst.recurrence_count ?? lst.recurrenceCount ?? 1),
+          lst.identified_date || lst.identifiedDate || now,
+          lst.last_seen_date || lst.lastSeenDate || now,
+          lst.created_at || lst.createdAt || null,
+          now
+        ));
     }
 
     for (const note of notes) {
       if (!note?.id) continue;
-      const result = await c.env.DB.prepare(`
+      addStatement('sessionNotes', c.env.DB.prepare(`
         INSERT OR IGNORE INTO session_notes (id, session_name, notes, participants, tags, metadata, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, strftime('%Y-%m-%dT%H:%M:%f', 'now', 'utc')))
+        VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, ?))
       `)
         .bind(
           note.id,
@@ -1349,37 +1350,35 @@ app.post('/restore', verifyAdmin, async (c) => {
           toJsonText(note.participants, []),
           toJsonText(note.tags, []),
           toJsonText(note.metadata, {}),
-          note.created_at || note.createdAt || null
-        )
-        .run();
-      restoredNotes += result.meta?.changes || 0;
+          note.created_at || note.createdAt || null,
+          now
+        ));
     }
 
     for (const caseFile of cases) {
       if (!caseFile?.id) continue;
-      const result = await c.env.DB.prepare(`
+      addStatement('caseFiles', c.env.DB.prepare(`
         INSERT OR IGNORE INTO case_files (id, title, content, html_content, date, uploader_name, case_type, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, strftime('%Y-%m-%dT%H:%M:%f', 'now', 'utc')))
+        VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, ?))
       `)
         .bind(
           caseFile.id,
           caseFile.title || 'Untitled Case',
           caseFile.content || '',
           caseFile.html_content || caseFile.htmlContent || '',
-          caseFile.date || new Date().toISOString(),
+          caseFile.date || now,
           caseFile.uploader_name || caseFile.metadata?.uploaderName || '',
           caseFile.case_type || caseFile.metadata?.caseType || '',
-          caseFile.created_at || caseFile.createdAt || null
-        )
-        .run();
-      restoredCases += result.meta?.changes || 0;
+          caseFile.created_at || caseFile.createdAt || null,
+          now
+        ));
     }
 
     for (const entry of auditLogs) {
       if (!entry?.id) continue;
-      const result = await c.env.DB.prepare(`
+      addStatement('auditLog', c.env.DB.prepare(`
         INSERT OR IGNORE INTO audit_logs (id, action, type, target, target_id, timestamp)
-        VALUES (?, ?, ?, ?, ?, COALESCE(?, strftime('%Y-%m-%dT%H:%M:%f', 'now', 'utc')))
+        VALUES (?, ?, ?, ?, ?, COALESCE(?, ?))
       `)
         .bind(
           entry.id,
@@ -1387,22 +1386,27 @@ app.post('/restore', verifyAdmin, async (c) => {
           entry.type || 'backup',
           entry.target || 'Restored backup entry',
           entry.target_id || entry.targetId || null,
-          entry.timestamp || null
-        )
-        .run();
-      restoredAuditLogs += result.meta?.changes || 0;
+          entry.timestamp || null,
+          now
+        ));
     }
+
+    const restored = {
+      reports: 0,
+      lsts: 0,
+      sessionNotes: 0,
+      caseFiles: 0,
+      auditLog: 0,
+    };
+    const results = statements.length > 0 ? await c.env.DB.batch(statements) : [];
+    results.forEach((result, index) => {
+      restored[statementBuckets[index]] += result.meta?.changes || 0;
+    });
 
     await logAudit(c.env.DB, 'restore', 'backup', 'Restored backup data', 'backup');
     return c.json({
       success: true,
-      restored: {
-        reports: restoredReports,
-        lsts: restoredLsts,
-        sessionNotes: restoredNotes,
-        caseFiles: restoredCases,
-        auditLog: restoredAuditLogs,
-      }
+      restored
     });
   } catch (error: any) {
     await logError(c.env.DB, 'backup_restore', error);
