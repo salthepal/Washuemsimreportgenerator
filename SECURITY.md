@@ -33,9 +33,10 @@ We will acknowledge your report within **48 hours** and provide an estimated tim
 
 WashU Sim Intelligence leverages several Cloudflare security primitives:
 - **XSS Protection**: Inputs are sanitized via **DOMPurify** before rendering.
-- **CSRF Protection**: All API endpoints require custom headers.
-- **Spam Prevention**: Protected by **Cloudflare Turnstile** on all generation and upload routes.
-- **D1/R2 Isolation**: Minimal database permissions and signed-url access for assets.
+- **Administrative Access**: Clinical data endpoints require a configured admin token.
+- **CSRF/Abuse Protection**: Sensitive write endpoints require custom headers and upload/generation routes require **Cloudflare Turnstile**.
+- **D1/R2 Isolation**: Minimal database permissions and authenticated access for assets.
+- **Clinical Data Handling**: Do not enter patient identifiers or protected health information unless your deployment has completed institutional privacy and access-control review.
 
 ---
 

@@ -39,6 +39,13 @@ CREATE TABLE IF NOT EXISTS lsts (
   status TEXT NOT NULL, -- 'Active', 'Resolved'
   category TEXT,
   location TEXT,
+  resolution_note TEXT,
+  resolved_date TEXT,
+  assignee TEXT,
+  parent_issue_id TEXT,
+  location_statuses TEXT,
+  related_report_id TEXT,
+  recurrence_count INTEGER DEFAULT 1,
   identified_date TEXT, -- ISO Date
   last_seen_date TEXT, -- ISO Date
   created_at DATETIME DEFAULT (strftime('%Y-%m-%dT%H:%M:%f', 'now', 'utc'))
@@ -89,6 +96,7 @@ CREATE INDEX IF NOT EXISTS idx_reports_site ON reports(metadata->>'location');
 CREATE INDEX IF NOT EXISTS idx_notes_site ON session_notes(metadata->>'location');
 CREATE INDEX IF NOT EXISTS idx_lsts_site ON lsts(location);
 CREATE INDEX IF NOT EXISTS idx_lsts_status ON lsts(status);
+CREATE INDEX IF NOT EXISTS idx_lsts_related_report ON lsts(related_report_id);
 
 -- New Indexes for Performance
 CREATE INDEX IF NOT EXISTS idx_reports_type ON reports(type);

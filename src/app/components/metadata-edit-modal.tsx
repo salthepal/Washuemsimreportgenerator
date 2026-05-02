@@ -69,10 +69,11 @@ export function MetadataEditModal({ isOpen, onClose, onSave, document, type }: M
       
       // Update metadata blob for consistency where applicable
       if (type !== 'case') {
+        const metadata = document.metadata as any;
         payload.metadata = {
-          ...document.metadata,
-          uploaderName: uploaderName || document.metadata?.uploaderName,
-          sessionName: type === 'note' ? title : document.metadata?.sessionName,
+          ...metadata,
+          uploaderName: uploaderName || metadata?.uploaderName,
+          sessionName: type === 'note' ? title : metadata?.sessionName,
           sessionDate: date
         };
       }

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Sparkles, CheckCircle2, AlertCircle, Download, Copy, Lightbulb, Target, FolderOpen, Search, Edit3, FileText, UploadCloud, X, Image as ImageIcon } from 'lucide-react';
 import { Report, SessionNote, CaseFile } from '../types';
-import { API_BASE, getApiHeaders, streamGenerateReport } from '../api';
+import { API_BASE, getAdminAuthHeaders, getApiHeaders, streamGenerateReport } from '../api';
 import { toast } from 'sonner';
 import { downloadDocxFromMarkdown } from '../utils/docx';
 import { useSelection } from '../hooks/useSelection';
@@ -314,7 +314,7 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
 
       const fetchImgBase64 = async (url: string): Promise<{ b64: string; fmt: string } | null> => {
         try {
-          const resp = await fetch(url);
+          const resp = await fetch(url, { headers: getAdminAuthHeaders() });
           if (!resp.ok) return null;
           const blob = await resp.blob();
           const b64 = await new Promise<string>((res, rej) => {
@@ -767,7 +767,10 @@ export function GenerateReport({ selectedSite, onRefresh }: GenerateReportProps)
 
                       const response = await fetch(`${API_BASE}/upload-file`, {
                         method: 'POST',
-                        headers: { 'X-Turnstile-Token': tokenForUpload },
+                        headers: {
+                          ...getAdminAuthHeaders(),
+                          'X-Turnstile-Token': tokenForUpload,
+                        },
                         body: formData,
                       });
 

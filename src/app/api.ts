@@ -5,7 +5,7 @@ import type { Report, SessionNote, CaseFile, LST } from './types';
 export const API_BASE = import.meta.env.VITE_API_BASE || (
   window.location.hostname === 'localhost' 
     ? 'http://localhost:8787' 
-    : 'https://washu-em-sim-intelligence.sphadnisuf.workers.dev'
+    : '/api'
 );
 
 export const getApiHeaders = () => {
@@ -18,6 +18,15 @@ export const getApiHeaders = () => {
     headers['X-Admin-Token'] = adminToken;
   }
   
+  return headers;
+};
+
+export const getAdminAuthHeaders = () => {
+  const headers: Record<string, string> = {};
+  const adminToken = localStorage.getItem('washu_admin_token');
+  if (adminToken) {
+    headers['X-Admin-Token'] = adminToken;
+  }
   return headers;
 };
 

@@ -7,7 +7,6 @@ import { streamText } from 'hono/streaming';
 import { cors } from 'hono/cors';
 import { logger as honoLogger } from 'hono/logger';
 import { secureHeaders } from 'hono/secure-headers';
-import { cache } from 'hono/cache';
 import { z } from 'zod';
 import { extractAndScoreLSTs } from './utils/ai';
 import { buildGeneratedReportTitle } from './utils/document-titles';
@@ -15,7 +14,7 @@ import { resolveModelId, getOrRefreshSystemCache, CACHE_SETTINGS_KEY } from './u
 import { DEFAULT_MODEL, LIGHTWEIGHT_TASK_MODEL } from './utils/models';
 import { buildReportMarkdownDocument, chooseCanonicalReportTitle, ensureReportContentTitle, getReportR2Key } from './utils/report-identity';
 import { hydrateVectorMatches } from './utils/retrieval';
-import { indexDocumentVector, logError, logAudit, verifyTurnstile, verifyAdmin, rateLimit } from './lib/helpers';
+import { indexDocumentVector, logError, logAudit, verifyTurnstile, verifyAdmin, rateLimit, noStore } from './lib/helpers';
 
 const reportUploadSchema = z.object({
   id: z.string().optional(),
@@ -75,11 +74,8 @@ app.use('*', cors({
   credentials: true,
 }));
 
-// 3. Edge Caching Middleware (Only applies to GET requests automatically)
-app.use('*', cache({
-  cacheName: 'washusim-api-cache',
-  cacheControl: 'max-age=30', // Cache for 30 seconds to optimize D1 reads while keeping data relatively fresh
-}));
+// 3. Clinical and administrative API responses must not be cached by shared intermediaries.
+app.use('*', noStore);
 
 app.get('/', (c) => {
   return c.json({
@@ -187,12 +183,10 @@ app.route('/lsts', lstsRouter);
 
 
 // R2 Object Storage (File Handling)
-// Accepts one or more files under the 'file' field. A single Turnstile token
-// covers the whole batch since tokens are single-use.
-// NOTE: multipart uploads must send the token via X-Turnstile-Token header;
-// verifyTurnstile only falls back to reading the body when the header is absent,
-// which would consume the stream before this handler can call formData() again.
-app.post('/upload-file', verifyTurnstile, async (c) => {
+// Accepts one or more files under the 'file' field. Multipart uploads must send
+// the single-use Turnstile token via X-Turnstile-Token so the request body can be
+// parsed exactly once by this handler.
+app.post('/upload-file', verifyAdmin, verifyTurnstile, async (c) => {
   try {
     const formData = await c.req.formData();
     const fileItems = formData.getAll('file').filter(f => typeof f !== 'string' && f != null) as unknown as File[];
@@ -252,7 +246,7 @@ app.post('/upload-file', verifyTurnstile, async (c) => {
   }
 });
 
-app.get('/files/:path{.+}', async (c) => {
+app.get('/files/:path{.+}', verifyAdmin, async (c) => {
   const rawPath = c.req.param('path');
   const path = decodeURIComponent(rawPath);
   if (path.includes('..') || path.startsWith('/')) {
@@ -291,7 +285,7 @@ app.get('/files/:path{.+}', async (c) => {
 
 // AI Search (RAG) — Powered by Cloudflare AI Search (AutoRAG)
 // Uses Workers AI binding to query the 'washu-sim-ssearch' instance
-app.post('/ask', rateLimit, async (c) => {
+app.post('/ask', verifyAdmin, rateLimit, async (c) => {
   try {
     const rawData = await c.req.json();
     const parseResult = askSchema.safeParse(rawData);
@@ -542,12 +536,19 @@ app.get('/search', verifyAdmin, rateLimit, async (c) => {
 });
 
 // Report Generation (Gemini AI Implementation & Streaming)
-app.post('/generate-report', verifyTurnstile, rateLimit, async (c) => {
+app.post('/generate-report', verifyAdmin, verifyTurnstile, rateLimit, async (c) => {
   try {
     const { selectedReports, selectedNotes, selectedCases, extractLST } = await c.req.json();
+    const selectedReportIds = Array.isArray(selectedReports) ? selectedReports : [];
+    const selectedNoteIds = Array.isArray(selectedNotes) ? selectedNotes : [];
+    const selectedCaseIds = Array.isArray(selectedCases) ? selectedCases : [];
     
-    if (!selectedNotes || selectedNotes.length === 0) {
+    if (selectedNoteIds.length === 0) {
       return c.json({ error: 'At least one session note must be selected' }, 400);
+    }
+
+    if (selectedReportIds.length === 0) {
+      return c.json({ error: 'At least one prior report must be selected' }, 400);
     }
 
     const geminiApiKey = c.env.GEMINI_API_KEY;
@@ -573,24 +574,24 @@ app.post('/generate-report', verifyTurnstile, rateLimit, async (c) => {
     }
 
     // Fetch the context
-    const reportsRes = await c.env.DB.prepare(`SELECT * FROM reports WHERE id IN (${selectedReports.map(() => '?').join(',')})`).bind(...selectedReports).all();
-    const notesRes = await c.env.DB.prepare(`SELECT * FROM session_notes WHERE id IN (${selectedNotes.map(() => '?').join(',')})`).bind(...selectedNotes).all();
+    const reportsRes = await c.env.DB.prepare(`SELECT * FROM reports WHERE id IN (${selectedReportIds.map(() => '?').join(',')})`).bind(...selectedReportIds).all();
+    const notesRes = await c.env.DB.prepare(`SELECT * FROM session_notes WHERE id IN (${selectedNoteIds.map(() => '?').join(',')})`).bind(...selectedNoteIds).all();
     // Fetch the context for case files
     let cases: any[] = [];
-    if (selectedCases && selectedCases.length > 0) {
+    if (selectedCaseIds.length > 0) {
       // 1. Try relational table
-      const relCases = await c.env.DB.prepare(`SELECT * FROM case_files WHERE id IN (${selectedCases.map(() => '?').join(',')})`).bind(...selectedCases).all();
+      const relCases = await c.env.DB.prepare(`SELECT * FROM case_files WHERE id IN (${selectedCaseIds.map(() => '?').join(',')})`).bind(...selectedCaseIds).all();
       if (relCases.results) {
         cases = [...relCases.results];
       }
       
       // 2. Fallback to settings blob for missing cases
-      if (cases.length < selectedCases.length) {
+      if (cases.length < selectedCaseIds.length) {
         const { results: fallbackRes } = await c.env.DB.prepare(`SELECT value FROM settings WHERE key = 'case_files'`).all();
         if (fallbackRes[0]) {
           const allLegacy = JSON.parse(fallbackRes[0].value as string);
           const legacyMatches = allLegacy.filter((cf: any) => 
-            selectedCases.includes(cf.id) && !cases.some(c => c.id === cf.id)
+            selectedCaseIds.includes(cf.id) && !cases.some(c => c.id === cf.id)
           );
           cases = [...cases, ...legacyMatches];
         }
@@ -899,7 +900,7 @@ app.get('/reports/generated', verifyAdmin, async (c) => {
   }
 });
 
-app.post('/reports/upload', verifyTurnstile, async (c) => {
+app.post('/reports/upload', verifyAdmin, verifyTurnstile, async (c) => {
   try {
     const rawData = await c.req.json();
     const parseResult = reportUploadSchema.safeParse(rawData);
@@ -1120,7 +1121,7 @@ app.get('/case-files', verifyAdmin, async (c) => {
   }
 });
 
-app.post('/case-files/upload', verifyTurnstile, async (c) => {
+app.post('/case-files/upload', verifyAdmin, verifyTurnstile, async (c) => {
   try {
     const rawData = await c.req.json();
     const parseResult = caseFileUploadSchema.safeParse(rawData);
@@ -1232,10 +1233,11 @@ app.get('/audit-log', verifyAdmin, async (c) => {
 // Backup & Restore
 app.get('/backup', verifyAdmin, async (c) => {
   try {
-    const [reports, lsts, notes, audit] = await c.env.DB.batch([
+    const [reports, lsts, notes, cases, audit] = await c.env.DB.batch([
       c.env.DB.prepare('SELECT * FROM reports'),
       c.env.DB.prepare('SELECT * FROM lsts'),
       c.env.DB.prepare('SELECT * FROM session_notes'),
+      c.env.DB.prepare('SELECT * FROM case_files'),
       c.env.DB.prepare('SELECT * FROM audit_logs')
     ]);
     
@@ -1245,12 +1247,167 @@ app.get('/backup', verifyAdmin, async (c) => {
       reports: reports.results,
       lsts: lsts.results,
       sessionNotes: notes.results,
+      caseFiles: cases.results,
       auditLog: audit.results
     };
     
     await logAudit(c.env.DB, 'export', 'backup', 'Full System Backup (Cloudflare)', 'backup');
     return c.json(backup);
   } catch (error: any) {
+    console.error(error);
+    return c.json({ error: 'Internal server error' }, 500);
+  }
+});
+
+app.post('/restore', verifyAdmin, async (c) => {
+  try {
+    const backup = await c.req.json();
+    if (!backup || typeof backup !== 'object') {
+      return c.json({ error: 'Invalid backup payload' }, 400);
+    }
+
+    const toJsonText = (value: any, fallback: any) =>
+      typeof value === 'string' ? value : JSON.stringify(value ?? fallback);
+    const reports = Array.isArray(backup.reports) ? backup.reports : [];
+    const lsts = Array.isArray(backup.lsts) ? backup.lsts : [];
+    const notes = Array.isArray(backup.sessionNotes) ? backup.sessionNotes : [];
+    const cases = Array.isArray(backup.caseFiles)
+      ? backup.caseFiles
+      : Array.isArray(backup.cases) ? backup.cases : [];
+    const auditLogs = Array.isArray(backup.auditLog) ? backup.auditLog : [];
+
+    const now = new Date().toISOString();
+    type RestoreBucket = 'reports' | 'lsts' | 'sessionNotes' | 'caseFiles' | 'auditLog';
+    const statements: D1PreparedStatement[] = [];
+    const statementBuckets: RestoreBucket[] = [];
+    const addStatement = (bucket: RestoreBucket, statement: D1PreparedStatement) => {
+      statements.push(statement);
+      statementBuckets.push(bucket);
+    };
+
+    for (const report of reports) {
+      if (!report?.id) continue;
+      addStatement('reports', c.env.DB.prepare(`
+        INSERT OR REPLACE INTO reports (id, title, content, type, metadata, created_at)
+        VALUES (?, ?, ?, ?, ?, COALESCE(?, ?))
+      `)
+        .bind(
+          report.id,
+          report.title || 'Untitled Report',
+          report.content || '',
+          report.type || 'prior_report',
+          toJsonText(report.metadata, {}),
+          report.created_at || report.createdAt || null,
+          now
+        ));
+    }
+
+    for (const lst of lsts) {
+      if (!lst?.id) continue;
+      addStatement('lsts', c.env.DB.prepare(`
+        INSERT OR REPLACE INTO lsts (
+          id, title, description, recommendation, severity, status, category, location,
+          resolution_note, resolved_date, assignee, parent_issue_id, location_statuses,
+          related_report_id, recurrence_count, identified_date, last_seen_date, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, ?))
+      `)
+        .bind(
+          lst.id,
+          lst.title || 'Untitled LST',
+          lst.description || '',
+          lst.recommendation || '',
+          lst.severity || 'Medium',
+          lst.status || 'Identified',
+          lst.category || '',
+          lst.location || '',
+          lst.resolution_note || lst.resolutionNote || null,
+          lst.resolved_date || lst.resolvedDate || null,
+          lst.assignee || null,
+          lst.parent_issue_id || lst.parentIssueId || null,
+          toJsonText(lst.location_statuses ?? lst.locationStatuses, {}),
+          lst.related_report_id || lst.relatedReportId || null,
+          Number(lst.recurrence_count ?? lst.recurrenceCount ?? 1),
+          lst.identified_date || lst.identifiedDate || now,
+          lst.last_seen_date || lst.lastSeenDate || now,
+          lst.created_at || lst.createdAt || null,
+          now
+        ));
+    }
+
+    for (const note of notes) {
+      if (!note?.id) continue;
+      addStatement('sessionNotes', c.env.DB.prepare(`
+        INSERT OR REPLACE INTO session_notes (id, session_name, notes, participants, tags, metadata, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, ?))
+      `)
+        .bind(
+          note.id,
+          note.session_name || note.sessionName || 'Untitled Session',
+          note.notes || '',
+          toJsonText(note.participants, []),
+          toJsonText(note.tags, []),
+          toJsonText(note.metadata, {}),
+          note.created_at || note.createdAt || null,
+          now
+        ));
+    }
+
+    for (const caseFile of cases) {
+      if (!caseFile?.id) continue;
+      addStatement('caseFiles', c.env.DB.prepare(`
+        INSERT OR REPLACE INTO case_files (id, title, content, html_content, date, uploader_name, case_type, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, ?))
+      `)
+        .bind(
+          caseFile.id,
+          caseFile.title || 'Untitled Case',
+          caseFile.content || '',
+          caseFile.html_content || caseFile.htmlContent || '',
+          caseFile.date || now,
+          caseFile.uploader_name || caseFile.metadata?.uploaderName || '',
+          caseFile.case_type || caseFile.metadata?.caseType || '',
+          caseFile.created_at || caseFile.createdAt || null,
+          now
+        ));
+    }
+
+    for (const entry of auditLogs) {
+      if (!entry?.id) continue;
+      addStatement('auditLog', c.env.DB.prepare(`
+        INSERT OR REPLACE INTO audit_logs (id, action, type, target, target_id, timestamp)
+        VALUES (?, ?, ?, ?, ?, COALESCE(?, ?))
+      `)
+        .bind(
+          entry.id,
+          entry.action || 'restore',
+          entry.type || 'backup',
+          entry.target || 'Restored backup entry',
+          entry.target_id || entry.targetId || null,
+          entry.timestamp || null,
+          now
+        ));
+    }
+
+    const restored = {
+      reports: 0,
+      lsts: 0,
+      sessionNotes: 0,
+      caseFiles: 0,
+      auditLog: 0,
+    };
+    const results = statements.length > 0 ? await c.env.DB.batch(statements) : [];
+    results.forEach((result, index) => {
+      restored[statementBuckets[index]] += result.meta?.changes || 0;
+    });
+
+    await logAudit(c.env.DB, 'restore', 'backup', 'Restored backup data', 'backup');
+    return c.json({
+      success: true,
+      restored
+    });
+  } catch (error: any) {
+    await logError(c.env.DB, 'backup_restore', error);
     console.error(error);
     return c.json({ error: 'Internal server error' }, 500);
   }

@@ -1,11 +1,28 @@
 "use client";
 
 import * as React from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react";
 import { DayPicker } from "react-day-picker";
 
 import { cn } from "./utils";
 import { buttonVariants } from "./button";
+
+const calendarComponents = {
+  Chevron: ({ className, orientation, size = 16 }: {
+    className?: string;
+    size?: number;
+    disabled?: boolean;
+    orientation?: "up" | "down" | "left" | "right";
+  }) => {
+    const Icon =
+      orientation === "left" ? ChevronLeft :
+      orientation === "right" ? ChevronRight :
+      orientation === "up" ? ChevronUp :
+      ChevronDown;
+
+    return <Icon className={cn("size-4", className)} size={size} aria-hidden="true" />;
+  },
+} satisfies NonNullable<React.ComponentProps<typeof DayPicker>["components"]>;
 
 function Calendar({
   className,
@@ -59,14 +76,7 @@ function Calendar({
         day_hidden: "invisible",
         ...classNames,
       }}
-      components={{
-        IconLeft: ({ className, ...props }) => (
-          <ChevronLeft className={cn("size-4", className)} {...props} />
-        ),
-        IconRight: ({ className, ...props }) => (
-          <ChevronRight className={cn("size-4", className)} {...props} />
-        ),
-      }}
+      components={calendarComponents}
       {...props}
     />
   );

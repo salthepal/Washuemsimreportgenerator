@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Upload, Trash2, Calendar, Eye, FolderOpen, User, CheckCircle, Save } from 'lucide-react';
-import { SessionNote, CaseFile, API_BASE, getApiHeaders, updateCaseFile } from '../api';
+import { API_BASE, getApiHeaders, updateCaseFile } from '../api';
 import { toast } from 'sonner';
 import { useConfirmDialog } from './ui/confirm-dialog';
 import { DocumentPreviewModal } from './document-preview-modal';

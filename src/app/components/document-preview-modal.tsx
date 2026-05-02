@@ -19,6 +19,7 @@ export function DocumentPreviewModal({
   type,
 }: DocumentPreviewModalProps) {
   if (!document) return null;
+  const metadata = document.metadata as any;
 
   const handleCopy = async () => {
     let content = '';
@@ -85,21 +86,21 @@ export function DocumentPreviewModal({
 
         <div className="flex-1 overflow-y-auto mt-4 space-y-4">
           {/* Metadata Section */}
-          {document.metadata && Object.keys(document.metadata).length > 1 && (
+          {metadata && Object.keys(metadata).length > 1 && (
             <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
               <h3 className="font-semibold text-sm mb-2">Session Details</h3>
               <div className="grid grid-cols-2 gap-2 text-sm">
-                {document.metadata.sessionName && (
+                {metadata.sessionName && (
                   <div>
                     <span className="text-slate-600 dark:text-slate-400">Session:</span>
-                    <span className="ml-2 text-slate-900 dark:text-slate-100">{document.metadata.sessionName}</span>
+                    <span className="ml-2 text-slate-900 dark:text-slate-100">{metadata.sessionName}</span>
                   </div>
                 )}
-                {document.metadata.sessionDate && (
+                {metadata.sessionDate && (
                   <div>
                     <span className="text-slate-600 dark:text-slate-400">Date:</span>
                     <span className="ml-2 text-slate-900 dark:text-slate-100">
-                      {new Date(document.metadata.sessionDate).toLocaleDateString()}
+                      {new Date(metadata.sessionDate).toLocaleDateString()}
                     </span>
                   </div>
                 )}

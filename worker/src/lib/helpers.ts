@@ -44,21 +44,7 @@ export async function logAudit(db: D1Database, action: string, type: string, tar
 }
 
 export async function verifyTurnstile(c: any, next: any) {
-  const headerToken = c.req.header('X-Turnstile-Token');
-  let token = headerToken;
-
-  if (!token) {
-    try {
-      const contentType = c.req.header('Content-Type') || '';
-      if (contentType.includes('multipart/form-data')) {
-        const formData = await c.req.formData();
-        token = formData.get('turnstileToken') as string;
-      } else {
-        const body = await c.req.json();
-        token = body.turnstileToken;
-      }
-    } catch (e) {}
-  }
+  const token = c.req.header('X-Turnstile-Token');
 
   const secret = c.env.TURNSTILE_SECRET_KEY;
 
@@ -163,4 +149,10 @@ export async function rateLimit(c: any, next: any) {
 
   await c.env.RATELIMIT.put(key, (count + 1).toString(), { expirationTtl: window });
   return next();
+}
+
+export async function noStore(c: any, next: any) {
+  await next();
+  c.res.headers.set('Cache-Control', 'no-store');
+  c.res.headers.set('Pragma', 'no-cache');
 }

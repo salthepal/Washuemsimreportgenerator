@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, Trash2, Users, Calendar, User, Save, Eye, Edit2 } from 'lucide-react';
-import { SessionNote, API_BASE, getApiHeaders, updateNote } from '../api';
+import type { SessionNote } from '../types';
+import { API_BASE, getApiHeaders, updateNote } from '../api';
 import { toast } from 'sonner';
 import { useConfirmDialog } from './ui/confirm-dialog';
 import { DocumentPreviewModal } from './document-preview-modal';

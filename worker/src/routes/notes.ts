@@ -39,7 +39,7 @@ notesRouter.get('/', verifyAdmin, async (c) => {
   }
 });
 
-notesRouter.post('/add', verifyTurnstile, async (c) => {
+notesRouter.post('/add', verifyAdmin, verifyTurnstile, async (c) => {
   try {
     const rawNote = await c.req.json();
     const parseResult = noteSchema.safeParse(rawNote);

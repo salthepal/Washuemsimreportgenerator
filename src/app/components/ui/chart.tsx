@@ -46,6 +46,7 @@ function ChartContainer({
     typeof RechartsPrimitive.ResponsiveContainer
   >["children"];
 }) {
+  const uniqueId = React.useId();
   // Sanitize ID to prevent XSS/Injection in style tags
   const safeId = React.useMemo(() => (id || uniqueId).replace(/[^a-zA-Z0-9-]/g, ""), [id, uniqueId]);
   const chartId = `chart-${safeId}`;
